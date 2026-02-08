@@ -1,0 +1,38 @@
+{
+  "version": "2026-02-07",
+  "project": {
+    "name": "AI Music Video Project",
+    "created": "2026-02-07",
+    "phase": "1_INFRASTRUCTURE",
+    "description": "Fully AI-generated cinematic music video pipeline. Art-piece focused on high-quality, consistent output while learning disciplined AI creative workflows."
+  },
+  "tools": {
+    "video": {
+      "name": "Kling",
+      "version": "3.0",
+      "interface": "UI"
+    },
+    "image": {
+      "name": "Google Flow UI",
+      "model": "Nano Banana Pro 3",
+      "interface": "UI"
+    },
+    "music": {
+      "name": "Suno",
+      "interface": "UI"
+    }
+  },
+  "music": {
+    "_TODO_PHASE_2": "Fill in during Phase 2 init after music is generated (duration, bpm, sections)"
+  },
+  "assembly": {
+    "editingSoftware": "CapCut",
+    "workflow": "Manual assembly by human in CapCut"
+  },
+  "priorities": {
+    "consistency": 9,
+    "speed": "low",
+    "notes": "Quality > speed. Consistency is critical (9/10). Human choice preserved - system proposes, not dictates."
+  },
+  "notes": "Phase 1: Infrastructure only. No creative prompts generated. Phase 2: Triggered after user provides song duration + section timestamps."
+}

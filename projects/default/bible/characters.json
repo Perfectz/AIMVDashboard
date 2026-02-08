@@ -1,0 +1,56 @@
+{
+  "version": "2026-02-07",
+  "_TODO_PHASE_2": "Replace CHAR_PROTAGONIST with actual character definitions before Phase 2 production",
+  "characters": [
+    {
+      "id": "CHAR_PROTAGONIST",
+      "name": "TODO: Character Name",
+      "physicalCore": {
+        "age": "TODO: e.g., 'early 30s', 'mid-20s'",
+        "build": "TODO: e.g., 'athletic', 'slender', 'stocky'",
+        "height": "TODO: e.g., 'tall', 'average', 'short'",
+        "skinTone": "TODO: Skin tone description",
+        "additionalFeatures": [
+          "TODO: Add unchanging physical traits (scars, tattoos, etc.)"
+        ]
+      },
+      "faceSignature": {
+        "structure": "TODO: e.g., 'angular jawline, high cheekbones'",
+        "eyes": "TODO: Eye color and characteristics",
+        "hair": "TODO: Hair color, length, style",
+        "distinctiveFeatures": [
+          "TODO: Memorable facial features"
+        ]
+      },
+      "costume": {
+        "default": {
+          "description": "TODO: Main outfit description",
+          "colorPalette": [
+            "TODO: Color 1",
+            "TODO: Color 2"
+          ],
+          "signature": "TODO: Signature wardrobe item that should always appear"
+        },
+        "variations": []
+      },
+      "allowedVariation": {
+        "lighting": true,
+        "expression": true,
+        "pose": true,
+        "distance": true
+      },
+      "referenceImages": [
+        "ref_01.png",
+        "ref_02.png",
+        "ref_03.png"
+      ],
+      "notes": "TODO: Internal notes about this character. This template is a placeholder - replace with actual character definition before generating prompts."
+    }
+  ],
+  "_INSTRUCTIONS": {
+    "howToAddCharacter": "Copy the CHAR_PROTAGONIST object, change the 'id' to CHAR_YOURNAME, fill in all TODO fields, and add to the characters array.",
+    "namingConvention": "Character IDs must start with CHAR_ followed by uppercase name (e.g., CHAR_DETECTIVE, CHAR_HACKER)",
+    "referenceImageRequirement": "Each character MUST have exactly 3 reference images in reference/characters/{id}/ directory",
+    "invariantRule": "physicalCore and faceSignature define identity anchors that MUST appear in every prompt featuring this character"
+  }
+}

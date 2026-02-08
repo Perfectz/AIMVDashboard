@@ -1,0 +1,74 @@
+{
+  "version": "2026-02-07",
+  "overallStyle": "Stylized cyberpunk with cinematic realism",
+  "influences": [
+    {
+      "source": "Blade Runner",
+      "aspect": "lighting + mood"
+    },
+    {
+      "source": "Christopher Nolan",
+      "aspect": "scale + seriousness"
+    },
+    {
+      "source": "Expedition 33 + What Dreams May Come",
+      "aspect": "dreamlike surreal color"
+    },
+    {
+      "source": "1990s anime",
+      "aspect": "expressive silhouettes, emotion"
+    }
+  ],
+  "colorPalette": {
+    "primary": [
+      "deep blues",
+      "electric purple",
+      "acid green"
+    ],
+    "accent": [
+      "hot pink",
+      "amber orange"
+    ],
+    "mood": "high-contrast night with saturated neons"
+  },
+  "lightingSignature": {
+    "quality": "cinematic dramatic, high-contrast moody",
+    "sources": [
+      "neon signs",
+      "street lights",
+      "holographic displays",
+      "scattered urban glow"
+    ],
+    "contrast": "high",
+    "signature": "neon reflections on wet surfaces, rim lighting from city glow"
+  },
+  "texture": {
+    "quality": "cinematic realism with slight stylization",
+    "emphasis": [
+      "rain on glass",
+      "weathered concrete",
+      "glowing holograms",
+      "atmospheric depth"
+    ]
+  },
+  "atmosphere": {
+    "depth": "atmospheric depth with layered fog and light",
+    "effects": [
+      "rain",
+      "fog",
+      "steam",
+      "volumetric light rays"
+    ]
+  },
+  "forbiddenElements": [
+    "cartoon comedy style",
+    "flat lighting",
+    "plastic skin",
+    "distorted anatomy",
+    "visible text/logos",
+    "watermarks",
+    "camera shake"
+  ],
+  "negativePromptBase": "no text, logos, watermarks, distorted anatomy, cartoon style, flat lighting, plastic skin",
+  "notes": "Prompt minimalism rule: Prefer clarity over prose. Remove decorative adjectives that do not affect motion, composition, lighting, or identity."
+}

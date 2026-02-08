@@ -1,0 +1,179 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://aimusicvideo.local/schemas/project.json",
+  "title": "Project Metadata Schema",
+  "description": "Top-level project configuration and metadata",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "Project version date in YYYY-MM-DD format"
+    },
+    "project": {
+      "type": "object",
+      "required": ["name", "created", "phase"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Project name"
+        },
+        "created": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "Project creation date (YYYY-MM-DD)"
+        },
+        "phase": {
+          "type": "string",
+          "enum": ["1_INFRASTRUCTURE", "2_PRODUCTION"],
+          "description": "Current project phase"
+        },
+        "description": {
+          "type": "string",
+          "description": "Project description and goals"
+        }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "description": "AI tools used in this project",
+      "required": ["video", "image", "music"],
+      "properties": {
+        "video": {
+          "type": "object",
+          "required": ["name", "version"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "examples": ["Kling"]
+            },
+            "version": {
+              "type": "string",
+              "examples": ["3.0"]
+            },
+            "interface": {
+              "type": "string",
+              "enum": ["UI", "API"],
+              "examples": ["UI"]
+            }
+          }
+        },
+        "image": {
+          "type": "object",
+          "required": ["name", "model"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "examples": ["Google Flow UI"]
+            },
+            "model": {
+              "type": "string",
+              "examples": ["Nano Banana Pro 3"]
+            },
+            "interface": {
+              "type": "string",
+              "enum": ["UI", "API"],
+              "examples": ["UI"]
+            }
+          }
+        },
+        "music": {
+          "type": "object",
+          "required": ["name"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "examples": ["Suno"]
+            },
+            "interface": {
+              "type": "string",
+              "enum": ["UI", "API"],
+              "examples": ["UI"]
+            }
+          }
+        }
+      }
+    },
+    "music": {
+      "type": "object",
+      "description": "Music metadata - filled in during Phase 2 init",
+      "properties": {
+        "duration": {
+          "type": "number",
+          "description": "Song duration in seconds"
+        },
+        "bpm": {
+          "type": "number",
+          "description": "Beats per minute"
+        },
+        "sections": {
+          "type": "array",
+          "description": "Song sections with timestamps",
+          "items": {
+            "type": "object",
+            "required": ["name", "start", "end"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "examples": ["intro", "verse_1", "chorus_1", "bridge", "outro"]
+              },
+              "start": {
+                "type": "number",
+                "description": "Start time in seconds"
+              },
+              "end": {
+                "type": "number",
+                "description": "End time in seconds"
+              },
+              "mood": {
+                "type": "string",
+                "description": "Emotional quality of this section"
+              }
+            }
+          }
+        }
+      }
+    },
+    "assembly": {
+      "type": "object",
+      "description": "Final assembly configuration",
+      "properties": {
+        "editingSoftware": {
+          "type": "string",
+          "examples": ["CapCut"]
+        },
+        "workflow": {
+          "type": "string",
+          "description": "Assembly workflow notes",
+          "examples": ["Manual assembly by human in CapCut"]
+        }
+      }
+    },
+    "priorities": {
+      "type": "object",
+      "description": "Project priorities and constraints",
+      "properties": {
+        "consistency": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 10,
+          "examples": [9]
+        },
+        "speed": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "examples": ["low"]
+        },
+        "notes": {
+          "type": "string",
+          "examples": ["Quality > speed. Consistency is critical. Human choice preserved."]
+        }
+      }
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional project notes"
+    }
+  },
+  "required": ["version", "project", "tools"]
+}

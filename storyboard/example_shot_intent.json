@@ -1,0 +1,84 @@
+{
+  "version": "2026-02-07",
+  "_NOTE": "This is an EXAMPLE template showing shot intent structure. DO NOT use as actual shot plan. Create real shot intents in Phase 2 after music is generated.",
+  "shots": [
+    {
+      "id": "SHOT_01",
+      "shotNumber": 1,
+      "timing": {
+        "start": 0,
+        "duration": 8,
+        "end": 8,
+        "musicSection": "intro"
+      },
+      "intent": {
+        "what": "TODO: Describe what physically happens in this shot (e.g., 'Protagonist walks through neon-lit alley, looking up at holographic signs')",
+        "why": "TODO: Narrative or emotional purpose (e.g., 'Establish the cyberpunk world and protagonist's isolation')",
+        "emotionalBeat": "TODO: Emotional quality (e.g., 'Contemplative loneliness')"
+      },
+      "characters": [
+        {
+          "id": "CHAR_PROTAGONIST",
+          "prominence": "primary",
+          "action": "TODO: Character-specific action (e.g., 'walking slowly, head tilted upward')",
+          "costumeVariation": "DEFAULT"
+        }
+      ],
+      "location": {
+        "id": "LOC_NEON_ALLEY",
+        "specificArea": "TODO: Specific area within location (e.g., 'main street intersection, near flickering ECHO sign')"
+      },
+      "cameraIntent": {
+        "feeling": "TODO: What camera should convey (e.g., 'intimate and personal' or 'vast and overwhelming')",
+        "movement": "TODO: Intended movement (e.g., 'slow push in' or 'tracking alongside')",
+        "focus": "subject"
+      },
+      "transitionTo": "hard cut",
+      "notes": "EXAMPLE ONLY - Replace with actual shot intent in Phase 2",
+      "status": "draft"
+    },
+    {
+      "id": "SHOT_02",
+      "shotNumber": 2,
+      "timing": {
+        "start": 8,
+        "duration": 8,
+        "end": 16,
+        "musicSection": "intro"
+      },
+      "intent": {
+        "what": "TODO: Second shot action",
+        "why": "TODO: Purpose of second shot",
+        "emotionalBeat": "TODO: Emotional quality"
+      },
+      "characters": [
+        {
+          "id": "CHAR_PROTAGONIST",
+          "prominence": "primary",
+          "action": "TODO: Different action from SHOT_01"
+        }
+      ],
+      "location": {
+        "id": "LOC_NEON_ALLEY",
+        "specificArea": "TODO: Different area or angle"
+      },
+      "cameraIntent": {
+        "feeling": "TODO: Camera feeling",
+        "movement": "TODO: Camera movement",
+        "focus": "environment"
+      },
+      "transitionTo": "hard cut",
+      "notes": "EXAMPLE ONLY",
+      "status": "draft"
+    }
+  ],
+  "_INSTRUCTIONS": {
+    "howToUse": "This file defines WHAT happens in each shot and WHY, but does NOT contain camera specifics or final prompts. It's the creative intent layer.",
+    "timing": "Align shot start times with music beat map created in Phase 2 init. Default duration is 8 seconds per shot.",
+    "characters": "Reference character IDs from bible/characters.json. Multiple characters can appear in one shot.",
+    "locations": "Reference location IDs from bible/locations.json. Only ONE location per shot.",
+    "cameraIntent": "Describe feeling and approach, not technical camera specs. Technical specs go in prompt compilation.",
+    "status": "Track production status: draft → approved → prompts_generated → rendered → final",
+    "phase2Workflow": "1) Generate music in Suno, 2) Note timestamps, 3) Create beat_map.json, 4) Create shot_plan.json with all shots, 5) Fill in shot intents"
+  }
+}

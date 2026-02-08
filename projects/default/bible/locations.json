@@ -1,0 +1,52 @@
+{
+  "version": "2026-02-07",
+  "_TODO_PHASE_2": "Replace LOC_NEON_ALLEY with actual location definitions before Phase 2 production",
+  "locations": [
+    {
+      "id": "LOC_NEON_ALLEY",
+      "name": "TODO: Location Name",
+      "setting": {
+        "type": "TODO: e.g., 'city street', 'interior apartment', 'rooftop'",
+        "scale": "TODO: e.g., 'intimate', 'expansive', 'claustrophobic'",
+        "architecture": "TODO: Architectural style and key structural elements",
+        "timeOfDay": "TODO: e.g., 'night', 'twilight', 'pre-dawn'"
+      },
+      "atmosphere": {
+        "lighting": "TODO: e.g., 'harsh neon', 'soft twilight', 'dramatic chiaroscuro'",
+        "weather": "TODO: e.g., 'rain-slicked', 'fog-heavy', 'clear'",
+        "colorPalette": [
+          "TODO: Dominant color 1",
+          "TODO: Dominant color 2",
+          "TODO: Accent color"
+        ],
+        "mood": "TODO: e.g., 'tense', 'melancholic', 'hopeful'"
+      },
+      "visualAnchors": [
+        "TODO: Signature visual element 1 that identifies this location",
+        "TODO: Signature visual element 2 that identifies this location"
+      ],
+      "soundscape": {
+        "ambient": "TODO: Background sound environment (reference only)",
+        "signature": "TODO: Distinctive sound (reference only)"
+      },
+      "allowedVariation": {
+        "cameraAngle": true,
+        "timeOfDay": false,
+        "crowdDensity": true,
+        "weatherIntensity": true
+      },
+      "referenceImages": [
+        "ref_01.png",
+        "ref_02.png",
+        "ref_03.png"
+      ],
+      "notes": "TODO: Internal notes about this location. This template is a placeholder - replace with actual location definition before generating prompts."
+    }
+  ],
+  "_INSTRUCTIONS": {
+    "howToAddLocation": "Copy the LOC_NEON_ALLEY object, change the 'id' to LOC_YOURNAME, fill in all TODO fields, and add to the locations array.",
+    "namingConvention": "Location IDs must start with LOC_ followed by uppercase name (e.g., LOC_ROOFTOP, LOC_SUBWAY, LOC_APARTMENT)",
+    "referenceImageRequirement": "Each location MUST have exactly 3 reference images in reference/locations/{id}/ directory",
+    "invariantRule": "visualAnchors define signature elements that MUST appear in every shot at this location for consistency"
+  }
+}

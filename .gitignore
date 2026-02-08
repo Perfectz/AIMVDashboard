@@ -1,0 +1,68 @@
+# AI Music Video - .gitignore
+# Version: 2026-02-07
+
+# Node modules
+node_modules/
+package-lock.json
+
+# Generated files
+prompts_index.json
+lint/report.json
+
+# Actual prompts (generated in Phase 2)
+prompts/kling/*.txt
+prompts/nanobanana/*.txt
+prompts/suno/*.txt
+
+# Keep template files
+!prompts/**/_template.md
+
+# Reference images (large files)
+reference/characters/**/*.png
+reference/characters/**/*.jpg
+reference/characters/**/*.jpeg
+reference/locations/**/*.png
+reference/locations/**/*.jpg
+reference/locations/**/*.jpeg
+
+# Keep guide.json files
+!reference/**/guide.json
+
+# Music files
+music/*.mp3
+music/*.wav
+music/*.flac
+
+# Rendered video assets
+render_sheets/*.mp4
+render_sheets/*.mov
+render_sheets/*.avi
+
+# Edit project files (large)
+edit/*.ccut
+edit/*.prproj
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Environment variables (if added later)
+.env
+.env.local

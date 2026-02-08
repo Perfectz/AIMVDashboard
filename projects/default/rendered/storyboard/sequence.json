@@ -1,0 +1,15 @@
+{
+  "version": "2026-02-07",
+  "projectName": "AI Music Video Project",
+  "totalShots": 0,
+  "totalDuration": 0,
+  "musicFile": "",
+  "selections": [],
+  "_NOTE": "This file will be populated in Phase 2 after shots are rendered. It tracks which variation (A/B/C/D) is selected for each shot and the locations of rendered assets.",
+  "_INSTRUCTIONS": {
+    "howToUse": "After rendering shots in AI tools, place files in rendered/shots/{SHOT_ID}/ and update this file with selections",
+    "fileNaming": "Use pattern: kling_option_A.mp4, kling_option_B.mp4, nano_first_frame.png, nano_last_frame.png",
+    "workflow": "1) Render shots, 2) Place in folders, 3) Update selections, 4) View in Storyboard UI, 5) Export for CapCut"
+  },
+  "lastUpdated": "2026-02-07T00:00:00Z"
+}

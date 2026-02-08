@@ -1,0 +1,174 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://aimusicvideo.local/schemas/characters.json",
+  "title": "Character Identity Anchors Schema",
+  "description": "Defines the locked visual identity of characters to ensure consistency across all prompts",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "Version date in YYYY-MM-DD format"
+    },
+    "characters": {
+      "type": "array",
+      "description": "Array of character definitions",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "physicalCore", "faceSignature", "costume"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^CHAR_[A-Z_]+$",
+            "description": "Unique character identifier (must start with CHAR_)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable character name"
+          },
+          "physicalCore": {
+            "type": "object",
+            "description": "Invariant physical characteristics that must never change",
+            "required": ["age", "build", "height", "skinTone"],
+            "properties": {
+              "age": {
+                "type": "string",
+                "description": "Apparent age (e.g., 'early 30s', 'mid-20s')"
+              },
+              "build": {
+                "type": "string",
+                "description": "Body type (e.g., 'athletic', 'slender', 'stocky')"
+              },
+              "height": {
+                "type": "string",
+                "description": "Relative height (e.g., 'tall', 'average', 'short')"
+              },
+              "skinTone": {
+                "type": "string",
+                "description": "Skin tone description"
+              },
+              "additionalFeatures": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Other unchanging physical traits (scars, tattoos, etc.)"
+              }
+            }
+          },
+          "faceSignature": {
+            "type": "object",
+            "description": "Facial identity anchors that must appear in every prompt",
+            "required": ["structure", "eyes", "hair"],
+            "properties": {
+              "structure": {
+                "type": "string",
+                "description": "Face shape and key structural features (e.g., 'angular jawline, high cheekbones')"
+              },
+              "eyes": {
+                "type": "string",
+                "description": "Eye color and distinctive characteristics"
+              },
+              "hair": {
+                "type": "string",
+                "description": "Hair color, length, and style"
+              },
+              "distinctiveFeatures": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Memorable facial features (e.g., 'sharp nose', 'expressive eyebrows')"
+              }
+            }
+          },
+          "costume": {
+            "type": "object",
+            "description": "Default wardrobe identity anchors",
+            "required": ["default"],
+            "properties": {
+              "default": {
+                "type": "object",
+                "required": ["description", "colorPalette"],
+                "properties": {
+                  "description": {
+                    "type": "string",
+                    "description": "Main outfit description"
+                  },
+                  "colorPalette": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Primary colors in costume"
+                  },
+                  "signature": {
+                    "type": "string",
+                    "description": "Signature wardrobe item that should always appear"
+                  }
+                }
+              },
+              "variations": {
+                "type": "array",
+                "description": "Alternative costumes (same character, different outfit)",
+                "items": {
+                  "type": "object",
+                  "required": ["id", "description", "colorPalette"],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Z_]+$",
+                      "description": "Variation identifier (e.g., 'FORMAL', 'COMBAT')"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "colorPalette": {
+                      "type": "array",
+                      "items": {"type": "string"}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "allowedVariation": {
+            "type": "object",
+            "description": "What CAN change across shots without breaking identity",
+            "properties": {
+              "lighting": {
+                "type": "boolean",
+                "default": true,
+                "description": "Lighting and shadow can vary"
+              },
+              "expression": {
+                "type": "boolean",
+                "default": true,
+                "description": "Facial expression can vary"
+              },
+              "pose": {
+                "type": "boolean",
+                "default": true,
+                "description": "Body pose and position can vary"
+              },
+              "distance": {
+                "type": "boolean",
+                "default": true,
+                "description": "Camera distance can vary (close-up vs wide)"
+              }
+            }
+          },
+          "referenceImages": {
+            "type": "array",
+            "description": "Paths to reference images (relative to reference/characters/{id}/)",
+            "items": {
+              "type": "string",
+              "pattern": "^ref_\\d{2}\\.(png|jpg|jpeg)$"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "notes": {
+            "type": "string",
+            "description": "Internal notes, TODOs, or creative direction (not used in prompts)"
+          }
+        }
+      }
+    }
+  },
+  "required": ["version", "characters"]
+}

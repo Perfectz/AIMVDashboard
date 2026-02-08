@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prompt Compiler - AI Music Video</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <div class="main-layout">
+      <!-- Left Navigation -->
+      <nav class="left-nav">
+        <!-- Brand Header -->
+        <div class="nav-brand">
+          <h1>Prompt Compiler</h1>
+          <p class="nav-subtitle">AI Music Video Project</p>
+        </div>
+
+        <!-- Project Selector -->
+        <div class="project-selector-section">
+          <div class="nav-header">
+            <div class="nav-title">Current Project</div>
+            <button class="btn-icon" id="newProjectBtn" title="New Project">+</button>
+          </div>
+          <select class="project-dropdown" id="projectSelector">
+            <option value="default">Loading...</option>
+          </select>
+        </div>
+
+        <div class="nav-divider"></div>
+
+        <!-- Stats -->
+        <div class="nav-stats">
+          <div class="nav-stat-item">
+            <div class="nav-stat-value" id="stat-shots">0</div>
+            <div class="nav-stat-label">Shots</div>
+          </div>
+          <div class="nav-stat-item">
+            <div class="nav-stat-value" id="stat-prompts">0</div>
+            <div class="nav-stat-label">Prompts</div>
+          </div>
+          <div class="nav-stat-item nav-stat-success">
+            <div class="nav-stat-value" id="stat-passed">0</div>
+            <div class="nav-stat-label">Passed</div>
+          </div>
+          <div class="nav-stat-item nav-stat-error">
+            <div class="nav-stat-value" id="stat-failed">0</div>
+            <div class="nav-stat-label">Failed</div>
+          </div>
+        </div>
+
+        <div class="nav-divider"></div>
+
+        <div class="nav-header">
+          <div class="nav-title">Platforms</div>
+        </div>
+        <div class="nav-items">
+          <button class="nav-item active" data-platform="all">
+            <span class="nav-icon">📦</span>
+            <span class="nav-label">All Prompts</span>
+            <span class="nav-count" id="nav-count-all">0</span>
+          </button>
+          <button class="nav-item" data-platform="kling">
+            <span class="nav-icon">🎬</span>
+            <span class="nav-label">Kling 3.0</span>
+            <span class="nav-count" id="nav-count-kling">0</span>
+          </button>
+          <button class="nav-item" data-platform="nanobanana">
+            <span class="nav-icon">🖼️</span>
+            <span class="nav-label">Nano Banana</span>
+            <span class="nav-count" id="nav-count-nanobanana">0</span>
+          </button>
+          <button class="nav-item" data-platform="suno">
+            <span class="nav-icon">🎵</span>
+            <span class="nav-label">Suno</span>
+            <span class="nav-count" id="nav-count-suno">0</span>
+          </button>
+        </div>
+        <div class="nav-divider"></div>
+        <div class="nav-items">
+          <button class="nav-item" data-platform="storyboard">
+            <span class="nav-icon">📊</span>
+            <span class="nav-label">Storyboard</span>
+            <span class="nav-count" id="nav-count-storyboard">0</span>
+          </button>
+        </div>
+        <div class="nav-footer">
+          <div class="nav-version">v2026-02-07</div>
+        </div>
+      </nav>
+
+      <!-- Sidebar -->
+      <aside class="sidebar" id="shotsSidebar">
+        <div class="sidebar-header">
+          <div class="sidebar-title-row">
+            <h2>Shots</h2>
+            <button class="sidebar-toggle" id="sidebarToggle" title="Collapse sidebar">
+              ‹
+            </button>
+          </div>
+          <input
+            type="text"
+            id="search"
+            placeholder="Search shots..."
+            class="search-input"
+          >
+        </div>
+
+        <div class="shot-list" id="shotList">
+          <!-- Populated by JavaScript -->
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="content">
+        <!-- Breadcrumbs -->
+        <nav class="breadcrumbs" id="breadcrumbs" style="display: none;">
+          <!-- Populated by JavaScript -->
+        </nav>
+
+        <div class="empty-state" id="emptyState">
+          <h2>No Prompts Found</h2>
+          <p>This is expected in Phase 1.</p>
+          <p>Prompts will be generated in Phase 2 after:</p>
+          <ul>
+            <li>Music is generated</li>
+            <li>Shot intents are created</li>
+            <li>Canon is filled in (characters, locations)</li>
+          </ul>
+          <p class="note">To test the UI, create a test prompt file in <code>prompts/kling/</code> or run <code>npm run index</code> to regenerate the index.</p>
+        </div>
+
+        <div class="prompt-viewer" id="promptViewer" style="display: none;">
+          <div class="prompt-header">
+            <h2 id="promptTitle">Shot Title</h2>
+            <div class="prompt-meta">
+              <span id="promptTool" class="tool-badge"></span>
+              <span id="promptLintStatus" class="lint-status"></span>
+            </div>
+          </div>
+
+          <!-- Variation Selector (for Kling) -->
+          <div class="variation-selector" id="variationSelector" style="display: none;">
+            <button class="variation-btn" data-variation="A">Option A</button>
+            <button class="variation-btn" data-variation="B">Option B</button>
+            <button class="variation-btn" data-variation="C">Option C</button>
+            <button class="variation-btn" data-variation="D">Option D</button>
+          </div>
+
+          <div class="prompt-actions">
+            <button id="copyBtn" class="btn btn-primary">
+              📋 Copy to Clipboard
+            </button>
+            <span id="copyFeedback" class="copy-feedback"></span>
+          </div>
+
+          <div class="prompt-content">
+            <pre id="promptText"></pre>
+          </div>
+
+          <div class="prompt-info">
+            <div class="info-row">
+              <strong>File:</strong> <code id="promptFile"></code>
+            </div>
+            <div class="info-row" id="promptVersionRow" style="display: none;">
+              <strong>Version:</strong> <span id="promptVersion"></span>
+            </div>
+            <div class="info-row" id="lintErrorsRow" style="display: none;">
+              <strong>Lint Errors:</strong>
+              <ul id="lintErrorsList"></ul>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- New Project Modal -->
+  <div class="modal" id="newProjectModal" style="display: none;">
+    <div class="modal-overlay" id="newProjectModalOverlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Create New Project</h2>
+        <button class="modal-close" id="newProjectModalClose">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="newProjectForm">
+          <div class="form-group">
+            <label for="projectName">Project Name *</label>
+            <input type="text" id="projectName" required maxlength="100" placeholder="My Music Video" />
+          </div>
+          <div class="form-group">
+            <label for="projectDescription">Description</label>
+            <textarea id="projectDescription" rows="3" maxlength="500" placeholder="A brief description of your project"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelNewProject">Cancel</button>
+        <button class="btn btn-primary" id="createNewProject">Create Project</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

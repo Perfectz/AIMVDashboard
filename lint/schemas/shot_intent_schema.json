@@ -1,0 +1,165 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://aimusicvideo.local/schemas/shot_intent.json",
+  "title": "Shot Intent Schema",
+  "description": "Defines non-visual shot data: WHAT happens, WHY, WHEN. Does NOT contain final prompts.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "Version date in YYYY-MM-DD format"
+    },
+    "shots": {
+      "type": "array",
+      "description": "Array of shot intents",
+      "items": {
+        "type": "object",
+        "required": ["id", "shotNumber", "timing", "intent", "characters", "location"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^SHOT_\\d{2,3}$",
+            "description": "Unique shot identifier (e.g., SHOT_01, SHOT_02)"
+          },
+          "shotNumber": {
+            "type": "number",
+            "description": "Sequential shot number"
+          },
+          "timing": {
+            "type": "object",
+            "required": ["start", "duration"],
+            "properties": {
+              "start": {
+                "type": "number",
+                "description": "Start time in seconds (aligned with music beat map)"
+              },
+              "duration": {
+                "type": "number",
+                "description": "Shot duration in seconds (typically 8)",
+                "default": 8
+              },
+              "end": {
+                "type": "number",
+                "description": "End time in seconds (start + duration)"
+              },
+              "musicSection": {
+                "type": "string",
+                "description": "Which music section this shot belongs to",
+                "examples": ["intro", "verse_1", "chorus_1"]
+              }
+            }
+          },
+          "intent": {
+            "type": "object",
+            "description": "The creative intent of this shot - WHAT and WHY",
+            "required": ["what", "why"],
+            "properties": {
+              "what": {
+                "type": "string",
+                "description": "What physically happens in this shot (action, subject, beat)",
+                "examples": ["Protagonist walks through neon-lit alley, looking up at holographic signs"]
+              },
+              "why": {
+                "type": "string",
+                "description": "Narrative or emotional purpose of this shot",
+                "examples": ["Establish the cyberpunk world and protagonist's isolation"]
+              },
+              "emotionalBeat": {
+                "type": "string",
+                "description": "Emotional quality or mood shift",
+                "examples": ["Contemplative loneliness transitioning to wonder"]
+              }
+            }
+          },
+          "characters": {
+            "type": "array",
+            "description": "Characters present in this shot",
+            "items": {
+              "type": "object",
+              "required": ["id"],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^CHAR_[A-Z_]+$",
+                  "description": "Character ID from bible/characters.json"
+                },
+                "prominence": {
+                  "type": "string",
+                  "enum": ["primary", "secondary", "background"],
+                  "description": "Character's role in this shot"
+                },
+                "action": {
+                  "type": "string",
+                  "description": "Character-specific action in this shot",
+                  "examples": ["walking slowly", "turning to look at camera", "reaching toward hologram"]
+                },
+                "costumeVariation": {
+                  "type": "string",
+                  "description": "Which costume variation to use (if not default)",
+                  "examples": ["DEFAULT", "FORMAL", "COMBAT"]
+                }
+              }
+            }
+          },
+          "location": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^LOC_[A-Z_]+$",
+                "description": "Location ID from bible/locations.json"
+              },
+              "specificArea": {
+                "type": "string",
+                "description": "Specific area within location",
+                "examples": ["main street intersection", "corner near arcade", "alley entrance"]
+              },
+              "timeOverride": {
+                "type": "string",
+                "description": "Override default location time of day if needed"
+              }
+            }
+          },
+          "cameraIntent": {
+            "type": "object",
+            "description": "Camera approach (not final camera prompt, just creative intent)",
+            "properties": {
+              "feeling": {
+                "type": "string",
+                "description": "What the camera should convey",
+                "examples": ["intimate and personal", "vast and overwhelming", "tense and urgent"]
+              },
+              "movement": {
+                "type": "string",
+                "description": "Intended camera movement type",
+                "examples": ["slow push in", "static hold", "tracking alongside", "orbit around subject"]
+              },
+              "focus": {
+                "type": "string",
+                "enum": ["subject", "environment", "both"],
+                "description": "What should be the visual priority"
+              }
+            }
+          },
+          "transitionTo": {
+            "type": "string",
+            "description": "How this shot transitions to next shot",
+            "examples": ["hard cut", "fade to black", "match cut on motion"]
+          },
+          "notes": {
+            "type": "string",
+            "description": "Internal notes, TODOs, or creative ideas"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "approved", "prompts_generated", "rendered", "final"],
+            "description": "Production status of this shot"
+          }
+        }
+      }
+    }
+  },
+  "required": ["version", "shots"]
+}

@@ -1,0 +1,149 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://aimusicvideo.local/schemas/locations.json",
+  "title": "Location Identity Anchors Schema",
+  "description": "Defines the locked visual identity of locations to ensure consistency across all prompts",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "Version date in YYYY-MM-DD format"
+    },
+    "locations": {
+      "type": "array",
+      "description": "Array of location definitions",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "setting", "atmosphere", "visualAnchors"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^LOC_[A-Z_]+$",
+            "description": "Unique location identifier (must start with LOC_)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable location name"
+          },
+          "setting": {
+            "type": "object",
+            "description": "Core spatial and architectural characteristics",
+            "required": ["type", "scale", "architecture"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "description": "Location type (e.g., 'city street', 'interior apartment', 'rooftop')"
+              },
+              "scale": {
+                "type": "string",
+                "description": "Spatial scale (e.g., 'intimate', 'expansive', 'claustrophobic')"
+              },
+              "architecture": {
+                "type": "string",
+                "description": "Architectural style and key structural elements"
+              },
+              "timeOfDay": {
+                "type": "string",
+                "description": "Default time of day (can be overridden in shots if needed)"
+              }
+            }
+          },
+          "atmosphere": {
+            "type": "object",
+            "description": "Mood and environmental anchors",
+            "required": ["lighting", "weather", "colorPalette"],
+            "properties": {
+              "lighting": {
+                "type": "string",
+                "description": "Default lighting quality (e.g., 'harsh neon', 'soft twilight', 'dramatic chiaroscuro')"
+              },
+              "weather": {
+                "type": "string",
+                "description": "Weather conditions (e.g., 'rain-slicked', 'fog-heavy', 'clear')"
+              },
+              "colorPalette": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Dominant colors that define the location's visual identity",
+                "minItems": 2
+              },
+              "mood": {
+                "type": "string",
+                "description": "Emotional atmosphere (e.g., 'tense', 'melancholic', 'hopeful')"
+              }
+            }
+          },
+          "visualAnchors": {
+            "type": "array",
+            "description": "Signature visual elements that must appear to identify this location",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 2,
+            "examples": [
+              ["flickering holographic billboard", "wet pavement reflecting neon"],
+              ["vintage arcade machines", "rain-streaked windows"],
+              ["spiral staircase", "floor-to-ceiling windows overlooking city"]
+            ]
+          },
+          "soundscape": {
+            "type": "object",
+            "description": "Audio identity (for reference, not used in visual prompts)",
+            "properties": {
+              "ambient": {
+                "type": "string",
+                "description": "Background sound environment"
+              },
+              "signature": {
+                "type": "string",
+                "description": "Distinctive sound that defines this location"
+              }
+            }
+          },
+          "allowedVariation": {
+            "type": "object",
+            "description": "What CAN change across shots without breaking location identity",
+            "properties": {
+              "cameraAngle": {
+                "type": "boolean",
+                "default": true,
+                "description": "Camera angle and framing can vary"
+              },
+              "timeOfDay": {
+                "type": "boolean",
+                "default": false,
+                "description": "Time of day can change (usually locked unless explicitly varied)"
+              },
+              "crowdDensity": {
+                "type": "boolean",
+                "default": true,
+                "description": "Number of background people/vehicles can vary"
+              },
+              "weatherIntensity": {
+                "type": "boolean",
+                "default": true,
+                "description": "Weather intensity can vary (e.g., light rain to heavy rain)"
+              }
+            }
+          },
+          "referenceImages": {
+            "type": "array",
+            "description": "Paths to reference images (relative to reference/locations/{id}/)",
+            "items": {
+              "type": "string",
+              "pattern": "^ref_\\d{2}\\.(png|jpg|jpeg)$"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "notes": {
+            "type": "string",
+            "description": "Internal notes, TODOs, or creative direction (not used in prompts)"
+          }
+        }
+      }
+    }
+  },
+  "required": ["version", "locations"]
+}

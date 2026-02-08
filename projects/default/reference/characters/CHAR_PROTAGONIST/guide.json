@@ -1,0 +1,66 @@
+{
+  "version": "2026-02-07",
+  "entityType": "character",
+  "entityId": "CHAR_PROTAGONIST",
+  "_TODO": "This is an EXAMPLE template. Replace with actual character reference guide when you create reference images in Phase 2.",
+  "referenceImages": [
+    {
+      "filename": "ref_01.png",
+      "description": "TODO: Front view, neutral expression, default costume",
+      "emphasis": [
+        "face structure",
+        "eye color",
+        "hair style",
+        "costume signature item"
+      ]
+    },
+    {
+      "filename": "ref_02.png",
+      "description": "TODO: Three-quarter view, dramatic lighting showing depth",
+      "emphasis": [
+        "face angles",
+        "lighting response",
+        "costume details"
+      ]
+    },
+    {
+      "filename": "ref_03.png",
+      "description": "TODO: Full body shot showing proportions and environment interaction",
+      "emphasis": [
+        "body proportions",
+        "stance",
+        "costume full view",
+        "scale in environment"
+      ]
+    }
+  ],
+  "invariantFeatures": [
+    "TODO: Feature 1 that must never change (e.g., 'angular face with sharp jawline')",
+    "TODO: Feature 2 that must never change (e.g., 'bright green eyes')",
+    "TODO: Feature 3 that must never change (e.g., 'short black hair, slightly tousled')",
+    "TODO: Feature 4 that must never change (e.g., 'black leather jacket with red accent stripe on sleeves')"
+  ],
+  "allowedVariation": {
+    "lighting": {
+      "allowed": true,
+      "notes": "Lighting can vary from dramatic side-light to overhead neon, but must maintain high-contrast quality consistent with visual style canon"
+    },
+    "angle": {
+      "allowed": true,
+      "notes": "Any camera angle OK, but face structure must remain consistent across all angles"
+    },
+    "distance": {
+      "allowed": true,
+      "notes": "From extreme close-up to wide shot - identity must be recognizable at each scale"
+    },
+    "expression": {
+      "allowed": true,
+      "notes": "Facial expression can vary (neutral, contemplative, surprised, etc.) but face structure stays locked"
+    }
+  },
+  "promptMatchingStrategy": {
+    "imageInputSupported": false,
+    "textMatchingApproach": "Since Nano Banana Pro 3 may not support image input, describe ALL invariant features explicitly in text. Mirror the invariantFeatures array exactly in every prompt. For Kling, include character description at start of every prompt."
+  },
+  "notes": "EXAMPLE ONLY - Replace with actual reference guide after creating reference images. Each character needs 3 reference images (ref_01.png, ref_02.png, ref_03.png) in this directory."
+}

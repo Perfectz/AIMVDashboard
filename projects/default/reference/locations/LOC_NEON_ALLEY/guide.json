@@ -1,0 +1,72 @@
+{
+  "version": "2026-02-07",
+  "entityType": "location",
+  "entityId": "LOC_NEON_ALLEY",
+  "_TODO": "This is an EXAMPLE template. Replace with actual location reference guide when you create reference images in Phase 2.",
+  "referenceImages": [
+    {
+      "filename": "ref_01.png",
+      "description": "TODO: Wide establishing shot showing full location context",
+      "emphasis": [
+        "overall layout",
+        "key architectural elements",
+        "lighting sources",
+        "color palette"
+      ]
+    },
+    {
+      "filename": "ref_02.png",
+      "description": "TODO: Medium shot focusing on signature visual anchors",
+      "emphasis": [
+        "visual anchor 1 detail",
+        "visual anchor 2 detail",
+        "material textures",
+        "atmospheric effects"
+      ]
+    },
+    {
+      "filename": "ref_03.png",
+      "description": "TODO: Alternative angle showing spatial relationships and depth",
+      "emphasis": [
+        "foreground/background layering",
+        "depth and scale",
+        "lighting variation",
+        "environmental atmosphere"
+      ]
+    }
+  ],
+  "invariantFeatures": [
+    "TODO: Visual anchor 1 (e.g., 'flickering holographic billboard reading ECHO in blue/pink light')",
+    "TODO: Visual anchor 2 (e.g., 'wet pavement reflecting neon in blue and pink streaks')",
+    "TODO: Architectural feature (e.g., 'narrow alley with brick walls, approximately 3 meters wide')",
+    "TODO: Lighting signature (e.g., 'dominant blue neon from left side, pink accent from right')"
+  ],
+  "allowedVariation": {
+    "lighting": {
+      "allowed": true,
+      "notes": "Intensity of neon can vary (brighter/dimmer) but color palette must stay locked (blue/pink dominant)"
+    },
+    "angle": {
+      "allowed": true,
+      "notes": "Camera angle can vary but visual anchors must remain identifiable from any angle"
+    },
+    "distance": {
+      "allowed": true,
+      "notes": "From wide establishing to tight detail shots - location must be recognizable at all scales"
+    },
+    "time": {
+      "allowed": false,
+      "notes": "Time of day LOCKED to night. No daytime variations for this location."
+    },
+    "other": [
+      "Weather intensity can vary (light rain to heavy rain)",
+      "Crowd density can vary (empty to moderate foot traffic)",
+      "Fog density can vary for atmosphere"
+    ]
+  },
+  "promptMatchingStrategy": {
+    "imageInputSupported": false,
+    "textMatchingApproach": "Describe ALL visual anchors from invariantFeatures array in every prompt featuring this location. Include color palette, lighting sources, and key architectural elements explicitly."
+  },
+  "notes": "EXAMPLE ONLY - Replace with actual reference guide after creating reference images. Each location needs 3 reference images (ref_01.png, ref_02.png, ref_03.png) in this directory."
+}

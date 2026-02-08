@@ -1,0 +1,153 @@
+{
+  "version": "2026-02-07",
+  "shotDuration": {
+    "default": 8,
+    "unit": "seconds",
+    "notes": "One shot = 8 seconds editorial unit. Kling may generate longer clips, but system assumes only first ~8 seconds are usable. Prompts must describe ONE continuous action suitable for 8-second shot."
+  },
+  "cameraMovement": {
+    "philosophy": "Smooth cinematic motion only - deliberate and motivated. No shaky cam.",
+    "allowed": [
+      {
+        "type": "push in",
+        "description": "Slow dolly push toward subject to increase intimacy or reveal detail",
+        "speed": "slow"
+      },
+      {
+        "type": "pull back",
+        "description": "Slow dolly pull to reveal environment or create emotional distance",
+        "speed": "slow"
+      },
+      {
+        "type": "dolly tracking",
+        "description": "Follow subject smoothly, maintaining consistent distance",
+        "speed": "medium"
+      },
+      {
+        "type": "slow pan",
+        "description": "Horizontal camera rotation to reveal space or follow action",
+        "speed": "slow"
+      },
+      {
+        "type": "crane up",
+        "description": "Vertical rise to reveal scale or create god's-eye perspective",
+        "speed": "slow"
+      },
+      {
+        "type": "orbit",
+        "description": "Circular movement around subject to show dimensionality",
+        "speed": "slow"
+      },
+      {
+        "type": "static hold",
+        "description": "No camera movement - let action play out in frame",
+        "speed": "n/a"
+      }
+    ],
+    "forbidden": [
+      "shaky cam",
+      "handheld wobble",
+      "crash zoom",
+      "whip pan",
+      "dutch angle (unless narratively justified)"
+    ]
+  },
+  "lenses": {
+    "available": [
+      {
+        "focalLength": "24mm wide",
+        "use": "Establishing shots, environmental context, emphasizing space",
+        "effect": "Wide field of view, slight distortion, sense of expansive space"
+      },
+      {
+        "focalLength": "35mm anamorphic",
+        "use": "Balanced storytelling, character in environment, cinematic feel",
+        "effect": "Anamorphic bokeh, moderate depth, cinematic compression, widescreen aesthetic"
+      },
+      {
+        "focalLength": "50mm",
+        "use": "Natural perspective, human-eye view, intimate moments",
+        "effect": "Natural field of view, moderate depth of field, realistic spatial relationships"
+      },
+      {
+        "focalLength": "85mm portrait",
+        "use": "Close-ups, emotional beats, character focus",
+        "effect": "Compressed depth, cinematic bokeh, subject isolation, flattering compression"
+      }
+    ],
+    "default": "35mm anamorphic"
+  },
+  "framing": {
+    "compositions": [
+      {
+        "type": "rule of thirds",
+        "use": "Dynamic framing for active subjects, visual interest"
+      },
+      {
+        "type": "centered",
+        "use": "Symmetrical scenes, emphasis on subject power or isolation"
+      },
+      {
+        "type": "symmetrical",
+        "use": "Formalism, architectural beauty, visual harmony"
+      },
+      {
+        "type": "leading lines",
+        "use": "Draw eye toward subject, create depth"
+      },
+      {
+        "type": "depth layering",
+        "use": "Foreground/midground/background separation for cinematic depth"
+      }
+    ],
+    "shotSizes": [
+      {
+        "type": "extreme close-up",
+        "description": "Eyes, hands, objects - detail and emotion"
+      },
+      {
+        "type": "close-up",
+        "description": "Face filling frame - intimate emotion"
+      },
+      {
+        "type": "medium shot",
+        "description": "Waist up - conversation, action"
+      },
+      {
+        "type": "medium wide",
+        "description": "Full body with some environment - context"
+      },
+      {
+        "type": "wide shot",
+        "description": "Full figure in environment - establishing"
+      },
+      {
+        "type": "extreme wide",
+        "description": "Vast environment, tiny figure - scale and isolation"
+      }
+    ]
+  },
+  "depthOfField": {
+    "default": "shallow",
+    "philosophy": "Use shallow focus for character intimacy and subject isolation. Use deep focus for environmental context and spatial relationships."
+  },
+  "constraints": [
+    {
+      "rule": "One action per shot - describe single continuous action suitable for 8-second duration",
+      "enforcement": "CRITICAL"
+    },
+    {
+      "rule": "No scene cuts within shot - each shot is one continuous take",
+      "enforcement": "CRITICAL"
+    },
+    {
+      "rule": "Camera movement must be continuous and describable in one sentence",
+      "enforcement": "CRITICAL"
+    },
+    {
+      "rule": "No ambiguous or conflicting camera directions",
+      "enforcement": "CRITICAL"
+    }
+  ],
+  "notes": "Camera language serves story and emotion. Every movement must be motivated. Prefer simplicity and clarity over complexity."
+}

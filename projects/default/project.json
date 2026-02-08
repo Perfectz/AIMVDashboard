@@ -1,0 +1,25 @@
+{
+  "id": "default",
+  "name": "AI Music Video Project",
+  "description": "Migrated from single-project structure",
+  "createdAt": "2026-02-07T23:56:48.785Z",
+  "lastModified": "2026-02-07T23:56:48.785Z",
+  "music": {
+    "songTitle": "",
+    "artist": "",
+    "duration": 0,
+    "bpm": 0,
+    "sections": []
+  },
+  "visualStyle": {
+    "genre": "",
+    "colorPalette": [],
+    "themes": []
+  },
+  "stats": {
+    "totalShots": 0,
+    "renderedShots": 0,
+    "selectedShots": 0,
+    "totalDuration": 0
+  }
+}
