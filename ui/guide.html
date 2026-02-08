@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Guide - AI Music Video</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .guide-container {
+      display: flex;
+      height: 100vh;
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* Left Navigation */
+    .left-nav {
+      width: 280px;
+      background: #ffffff;
+      border-right: 1px solid #d8dbe0;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .nav-brand {
+      padding: 24px 20px 16px;
+      border-bottom: 1px solid #e1e4e8;
+    }
+
+    .nav-brand h1 {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0 0 4px 0;
+      color: #24292f;
+    }
+
+    .nav-subtitle {
+      font-size: 12px;
+      color: #57606a;
+      margin: 0;
+    }
+
+    .nav-divider {
+      height: 1px;
+      background: #d8dbe0;
+      margin: 8px 0;
+    }
+
+    .nav-header {
+      padding: 12px 20px 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-title {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #57606a;
+    }
+
+    .nav-items {
+      padding: 0;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      padding: 8px 20px;
+      background: none;
+      border: none;
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      color: #24292f;
+      font-size: 14px;
+      text-decoration: none;
+    }
+
+    .nav-item:hover {
+      background: #f6f8fa;
+    }
+
+    .nav-item.active {
+      background: #e8f0fe;
+      color: #1a73e8;
+      font-weight: 500;
+    }
+
+    .nav-icon {
+      margin-right: 12px;
+      font-size: 16px;
+    }
+
+    .nav-footer {
+      margin-top: auto;
+      padding: 16px 20px;
+      border-top: 1px solid #d8dbe0;
+      font-size: 11px;
+      color: #57606a;
+    }
+
+    /* Guide Content */
+    .guide-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 48px 64px 96px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .guide-content h1 {
+      font-size: 36px;
+      font-weight: 700;
+      margin: 0 0 8px 0;
+      color: #ffffff;
+    }
+
+    .guide-content .subtitle {
+      font-size: 18px;
+      color: #8b949e;
+      margin: 0 0 48px 0;
+    }
+
+    .guide-content h2 {
+      font-size: 28px;
+      font-weight: 600;
+      margin: 48px 0 24px 0;
+      color: #ffffff;
+      border-bottom: 1px solid #21262d;
+      padding-bottom: 12px;
+    }
+
+    .guide-content h3 {
+      font-size: 20px;
+      font-weight: 600;
+      margin: 32px 0 16px 0;
+      color: #c9d1d9;
+    }
+
+    .guide-content h4 {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 24px 0 12px 0;
+      color: #c9d1d9;
+    }
+
+    .guide-content p {
+      line-height: 1.7;
+      margin: 0 0 16px 0;
+      color: #c9d1d9;
+    }
+
+    .guide-content ul, .guide-content ol {
+      margin: 0 0 16px 0;
+      padding-left: 24px;
+    }
+
+    .guide-content li {
+      margin: 8px 0;
+      line-height: 1.7;
+      color: #c9d1d9;
+    }
+
+    .guide-content code {
+      background: #161b22;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 13px;
+      color: #79c0ff;
+    }
+
+    .guide-content pre {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      margin: 0 0 24px 0;
+    }
+
+    .guide-content pre code {
+      background: none;
+      padding: 0;
+      color: #c9d1d9;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .info-box {
+      background: #1c2128;
+      border: 1px solid #30363d;
+      border-left: 4px solid #1a73e8;
+      border-radius: 6px;
+      padding: 16px 20px;
+      margin: 24px 0;
+    }
+
+    .info-box h4 {
+      margin: 0 0 8px 0;
+      color: #58a6ff;
+    }
+
+    .info-box p {
+      margin: 0;
+    }
+
+    .warning-box {
+      background: #1c2128;
+      border: 1px solid #30363d;
+      border-left: 4px solid #f85149;
+      border-radius: 6px;
+      padding: 16px 20px;
+      margin: 24px 0;
+    }
+
+    .warning-box h4 {
+      margin: 0 0 8px 0;
+      color: #f85149;
+    }
+
+    .success-box {
+      background: #1c2128;
+      border: 1px solid #30363d;
+      border-left: 4px solid #3fb950;
+      border-radius: 6px;
+      padding: 16px 20px;
+      margin: 24px 0;
+    }
+
+    .success-box h4 {
+      margin: 0 0 8px 0;
+      color: #3fb950;
+    }
+
+    .example-card {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 24px 0;
+    }
+
+    .example-card h4 {
+      margin: 0 0 12px 0;
+      color: #58a6ff;
+    }
+
+    .step-number {
+      display: inline-block;
+      width: 32px;
+      height: 32px;
+      background: #1a73e8;
+      color: white;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 32px;
+      font-weight: 600;
+      margin-right: 12px;
+    }
+
+    .step-header {
+      display: flex;
+      align-items: center;
+      margin: 32px 0 16px 0;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-phase1 {
+      background: #3fb950;
+      color: white;
+    }
+
+    .badge-phase2 {
+      background: #d29922;
+      color: white;
+    }
+
+    .badge-optional {
+      background: #8b949e;
+      color: white;
+    }
+
+    .screenshot-placeholder {
+      background: #161b22;
+      border: 2px dashed #30363d;
+      border-radius: 8px;
+      padding: 48px;
+      text-align: center;
+      color: #8b949e;
+      margin: 24px 0;
+    }
+
+    .file-tree {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 13px;
+      line-height: 1.8;
+      margin: 24px 0;
+    }
+
+    .file-tree-item {
+      color: #c9d1d9;
+    }
+
+    .file-tree-folder {
+      color: #58a6ff;
+    }
+
+    .file-tree-file {
+      color: #79c0ff;
+    }
+  </style>
+</head>
+<body>
+  <div class="guide-container">
+    <!-- Left Navigation -->
+    <nav class="left-nav">
+      <div class="nav-brand">
+        <h1>📖 User Guide</h1>
+        <p class="nav-subtitle">Complete workflow documentation</p>
+      </div>
+
+      <div class="nav-divider"></div>
+
+      <div class="nav-header">
+        <div class="nav-title">Navigation</div>
+      </div>
+      <div class="nav-items">
+        <a href="index.html" class="nav-item">
+          <span class="nav-icon">📦</span>
+          <span class="nav-label">Prompts UI</span>
+        </a>
+        <a href="storyboard.html" class="nav-item">
+          <span class="nav-icon">📊</span>
+          <span class="nav-label">Storyboard</span>
+        </a>
+        <a href="guide.html" class="nav-item active">
+          <span class="nav-icon">📖</span>
+          <span class="nav-label">User Guide</span>
+        </a>
+        <a href="home.html" class="nav-item">
+          <span class="nav-icon">🏠</span>
+          <span class="nav-label">Quick Start</span>
+        </a>
+      </div>
+
+      <div class="nav-footer">
+        <div class="nav-version">v2026-02-07</div>
+      </div>
+    </nav>
+
+    <!-- Guide Content -->
+    <div class="guide-content">
+      <h1>🎬 AI Music Video - Complete User Guide</h1>
+      <p class="subtitle">Step-by-step instructions with examples for creating cinematic music videos</p>
+
+      <!-- ========== INTRODUCTION ========== -->
+      <h2 id="introduction">Introduction</h2>
+
+      <p>This system is a <strong>Prompt Compiler</strong>, not a creative director. It enforces structure, consistency, and best practices by translating structured data (Canon + Shot Intent) into system-specific prompts for AI tools.</p>
+
+      <div class="info-box">
+        <h4>💡 Core Philosophy</h4>
+        <p>We prioritize <strong>consistency over creativity</strong>. A mediocre but visually consistent music video is better than a stunning video where the main character's jacket changes color every 3 shots.</p>
+      </div>
+
+      <h3>What This System Does</h3>
+      <ul>
+        <li><strong>Enforces visual consistency</strong> - Characters and locations never drift across shots</li>
+        <li><strong>Generates standalone prompts</strong> - Each prompt contains complete context (no variables or references)</li>
+        <li><strong>Manages multiple projects</strong> - Complete data isolation per music video</li>
+        <li><strong>Validates before rendering</strong> - Catch errors in text before wasting GPU credits</li>
+        <li><strong>Tracks asset variations</strong> - Compare A/B/C/D camera options side-by-side</li>
+      </ul>
+
+      <!-- ========== PHASE 1: SETUP ========== -->
+      <h2 id="phase1-setup">Phase 1: Initial Setup <span class="badge badge-phase1">Current Phase</span></h2>
+
+      <p>Before creating your first music video, you need to set up the development environment.</p>
+
+      <div class="step-header">
+        <span class="step-number">1</span>
+        <h3>Install Dependencies</h3>
+      </div>
+
+      <p>Open your terminal in the project directory and run:</p>
+
+      <pre><code>npm install</code></pre>
+
+      <p>This installs two required packages:</p>
+      <ul>
+        <li><code>ajv</code> - JSON Schema validator for enforcing data structure</li>
+        <li><code>busboy</code> - File upload handling for music and video files</li>
+      </ul>
+
+      <div class="success-box">
+        <h4>✓ Expected Output</h4>
+        <p>You should see "added 2 packages" in the terminal. If you see errors, ensure Node.js version 14 or higher is installed.</p>
+      </div>
+
+      <div class="step-header">
+        <span class="step-number">2</span>
+        <h3>Migrate to Multi-Project Structure</h3>
+      </div>
+
+      <p>Run the migration script <strong>once</strong> to set up the multi-project folder structure:</p>
+
+      <pre><code>npm run migrate</code></pre>
+
+      <p>This script:</p>
+      <ul>
+        <li>Creates <code>projects/</code> directory</li>
+        <li>Creates <code>projects/default/</code> for your first project</li>
+        <li>Moves existing <code>bible/</code>, <code>prompts/</code>, <code>rendered/</code>, <code>music/</code> folders into <code>projects/default/</code></li>
+        <li>Creates <code>projects/projects_index.json</code> registry</li>
+        <li>Creates <code>projects/default/project.json</code> metadata file</li>
+      </ul>
+
+      <div class="warning-box">
+        <h4>⚠ Important</h4>
+        <p>Only run this migration script <strong>once</strong>. Running it multiple times may cause data duplication issues.</p>
+      </div>
+
+      <div class="example-card">
+        <h4>Example: projects_index.json</h4>
+        <pre><code>{
+  "version": "2026-02-07",
+  "activeProject": "default",
+  "projects": [
+    {
+      "id": "default",
+      "name": "My First Music Video",
+      "createdAt": "2026-02-07T00:00:00Z",
+      "lastModified": "2026-02-07T12:30:00Z",
+      "status": "active"
+    }
+  ]
+}</code></pre>
+      </div>
+
+      <div class="step-header">
+        <span class="step-number">3</span>
+        <h3>Start the UI Server</h3>
+      </div>
+
+      <p>Launch the web server to access the UI:</p>
+
+      <pre><code>npm run serve</code></pre>
+
+      <p>Open your browser and navigate to:</p>
+      <pre><code>http://localhost:8000</code></pre>
+
+      <p>You should see the main Prompts UI with:</p>
+      <ul>
+        <li>Left navigation with project selector</li>
+        <li>Empty prompts list (expected in Phase 1)</li>
+        <li>Platform filters (Kling, Nano Banana, Suno)</li>
+        <li>Storyboard link in navigation</li>
+      </ul>
+
+      <!-- ========== MULTI-PROJECT MANAGEMENT ========== -->
+      <h2 id="multi-project">Multi-Project Management</h2>
+
+      <p>The system supports unlimited projects with complete data isolation. Each project has its own canon, prompts, rendered assets, and music files.</p>
+
+      <div class="step-header">
+        <span class="step-number">1</span>
+        <h3>Create a New Project</h3>
+      </div>
+
+      <p>In the left navigation of any page (Prompts UI or Storyboard):</p>
+
+      <ol>
+        <li>Find the <strong>"Current Project"</strong> section at the top of the sidebar</li>
+        <li>Click the <strong>"+"</strong> button next to the dropdown</li>
+        <li>Enter a project name (e.g., "Cyberpunk Dreams")</li>
+        <li>Optionally add a description (e.g., "A dark, neon-soaked music video")</li>
+        <li>Click <strong>"Create Project"</strong></li>
+      </ol>
+
+      <p>The system will:</p>
+      <ul>
+        <li>Generate a unique project ID (e.g., "cyberpunk-dreams")</li>
+        <li>Create complete folder structure: <code>projects/cyberpunk-dreams/</code></li>
+        <li>Initialize empty canon files (characters.json, locations.json, etc.)</li>
+        <li>Switch the UI to your new project automatically</li>
+        <li>Save your selection in browser localStorage</li>
+      </ul>
+
+      <div class="file-tree">
+        <div class="file-tree-folder">projects/</div>
+        <div class="file-tree-folder">  └── cyberpunk-dreams/</div>
+        <div class="file-tree-file">        ├── project.json</div>
+        <div class="file-tree-folder">        ├── bible/</div>
+        <div class="file-tree-file">        │     ├── characters.json</div>
+        <div class="file-tree-file">        │     ├── locations.json</div>
+        <div class="file-tree-file">        │     ├── visual_style.json</div>
+        <div class="file-tree-file">        │     └── cinematography.json</div>
+        <div class="file-tree-folder">        ├── prompts/</div>
+        <div class="file-tree-folder">        ├── rendered/</div>
+        <div class="file-tree-folder">        └── music/</div>
+      </div>
+
+      <div class="step-header">
+        <span class="step-number">2</span>
+        <h3>Switch Between Projects</h3>
+      </div>
+
+      <p>Use the dropdown selector in the left navigation:</p>
+
+      <ol>
+        <li>Click the <strong>"Current Project"</strong> dropdown</li>
+        <li>Select a different project from the list</li>
+        <li>The page will reload with that project's data</li>
+      </ol>
+
+      <div class="info-box">
+        <h4>💾 Persistent Selection</h4>
+        <p>Your active project is saved in browser localStorage. When you reload the page or visit the UI later, you'll stay on the same project.</p>
+      </div>
+
+      <h3>Project Isolation</h3>
+
+      <p>Each project is <strong>completely isolated</strong>:</p>
+
+      <ul>
+        <li><strong>Files:</strong> Music uploaded to Project A does NOT appear in Project B</li>
+        <li><strong>Canon:</strong> Characters defined in Project A never leak into Project B</li>
+        <li><strong>Prompts:</strong> Generated prompts reference only their project's canon</li>
+        <li><strong>Renders:</strong> Videos uploaded to one project's storyboard stay isolated</li>
+      </ul>
+
+      <!-- ========== PHASE 2: PRODUCTION ========== -->
+      <h2 id="phase2-production">Phase 2: Production Workflow <span class="badge badge-phase2">Coming Soon</span></h2>
+
+      <p>This is the full workflow for creating a music video from start to finish.</p>
+
+      <div class="warning-box">
+        <h4>🚧 Phase 2 Status</h4>
+        <p>The prompt compiler is not yet implemented. The workflow below describes how it will work when completed. You can manually prepare canon files now to be ready for Phase 2.</p>
+      </div>
+
+      <div class="step-header">
+        <span class="step-number">1</span>
+        <h3>Define Your Canon (The "Bible")</h3>
+      </div>
+
+      <p>The canon is your project's locked visual identity. Everything defined here appears in <strong>every prompt</strong> to prevent drift.</p>
+
+      <h4>📁 Navigate to Your Project's Bible</h4>
+      <pre><code>projects/YOUR_PROJECT_NAME/bible/</code></pre>
+
+      <h4>👤 Define Characters (characters.json)</h4>
+
+      <p>Create character definitions with identity anchors:</p>
+
+      <div class="example-card">
+        <h4>Example: Protagonist Character</h4>
+        <pre><code>{
+  "CHAR_01": {
+    "name": "The Wanderer",
+    "identityAnchors": [
+      "weathered brown leather jacket",
+      "short black hair with gray streaks",
+      "intense green eyes",
+      "silver chain necklace"
+    ],
+    "age": "mid-40s",
+    "ethnicity": "East Asian",
+    "notes": "Mysterious lone traveler"
+  }
+}</code></pre>
+      </div>
+
+      <div class="info-box">
+        <h4>💡 Identity Anchors</h4>
+        <p><strong>Identity anchors</strong> are specific visual features that appear in every prompt. They prevent AI from changing the character's appearance mid-video. Use 3-5 highly specific details (clothing, hair, eyes, accessories).</p>
+      </div>
+
+      <h4>🗺️ Define Locations (locations.json)</h4>
+
+      <p>Create location definitions with environmental anchors:</p>
+
+      <div class="example-card">
+        <h4>Example: Neon Alley Location</h4>
+        <pre><code>{
+  "LOC_01": {
+    "name": "Neon Alley",
+    "identityAnchors": [
+      "narrow brick alley with purple neon signs",
+      "wet pavement reflecting neon light",
+      "steam rising from metal grates",
+      "flickering red Chinese characters overhead"
+    ],
+    "timeOfDay": "night",
+    "weather": "light rain",
+    "notes": "Cyberpunk aesthetic, Blade Runner inspired"
+  }
+}</code></pre>
+      </div>
+
+      <h4>🎨 Define Visual Style (visual_style.json)</h4>
+
+      <div class="example-card">
+        <h4>Example: Cinematic Cyberpunk Style</h4>
+        <pre><code>{
+  "genre": "cinematic cyberpunk",
+  "colorPalette": [
+    "neon purple",
+    "electric blue",
+    "deep shadows",
+    "warm amber streetlights"
+  ],
+  "themes": [
+    "isolation",
+    "urban decay",
+    "technology vs humanity"
+  ],
+  "mood": "mysterious, melancholic",
+  "lighting": "high contrast, neon-lit darkness",
+  "influences": [
+    "Blade Runner",
+    "Ghost in the Shell",
+    "Akira"
+  ]
+}</code></pre>
+      </div>
+
+      <h4>📷 Define Camera Rules (cinematography.json)</h4>
+
+      <div class="example-card">
+        <h4>Example: Cinematography Rules</h4>
+        <pre><code>{
+  "defaultFrameRate": "24fps",
+  "aspectRatio": "16:9",
+  "cameraMovements": {
+    "allowed": [
+      "static",
+      "slow push-in",
+      "slow pull-out",
+      "tracking",
+      "crane"
+    ],
+    "forbidden": [
+      "shaky handheld",
+      "rapid zoom",
+      "spinning"
+    ]
+  },
+  "shotTypes": {
+    "A": "wide establishing shot",
+    "B": "medium shot with movement",
+    "C": "close-up with dramatic angle",
+    "D": "experimental/artistic"
+  }
+}</code></pre>
+      </div>
+
+      <div class="step-header">
+        <span class="step-number">2</span>
+        <h3>Add Visual References</h3>
+      </div>
+
+      <p>Upload 3 reference images per character and location to guide the AI:</p>
+
+      <h4>📁 File Structure</h4>
+      <div class="file-tree">
+        <div class="file-tree-folder">projects/YOUR_PROJECT/reference/</div>
+        <div class="file-tree-folder">  └── characters/</div>
+        <div class="file-tree-folder">        └── CHAR_01/</div>
+        <div class="file-tree-file">              ├── ref_01.png  ← Front view</div>
+        <div class="file-tree-file">              ├── ref_02.png  ← Side profile</div>
+        <div class="file-tree-file">              ├── ref_03.png  ← In context (environment)</div>
+        <div class="file-tree-file">              └── guide.json  ← Descriptions</div>
+      </div>
+
+      <div class="example-card">
+        <h4>Example: guide.json</h4>
+        <pre><code>{
+  "characterId": "CHAR_01",
+  "name": "The Wanderer",
+  "images": [
+    {
+      "filename": "ref_01.png",
+      "description": "Front view showing weathered leather jacket and facial features",
+      "focus": "Full body, neutral pose"
+    },
+    {
+      "filename": "ref_02.png",
+      "description": "Side profile highlighting hair and jacket details",
+      "focus": "Character build and silhouette"
+    },
+    {
+      "filename": "ref_03.png",
+      "description": "Character in neon alley environment",
+      "focus": "Lighting interaction, scale, mood"
+    }
+  ]
+}</code></pre>
+      </div>
+
+      <div class="step-header">
+        <span class="step-number">3</span>
+        <h3>Write Shot Intents</h3>
+      </div>
+
+      <p>Define what happens in each 8-second shot using structured JSON:</p>
+
+      <div class="example-card">
+        <h4>Example: SHOT_01 - Opening Scene</h4>
+        <pre><code>{
+  "shotId": "SHOT_01",
+  "action": "The Wanderer walks slowly down the rain-soaked alley, hands in jacket pockets",
+  "characters": ["CHAR_01"],
+  "location": "LOC_01",
+  "timing": {
+    "musicSection": "intro",
+    "startTime": 0,
+    "duration": 8,
+    "bpm": 120
+  },
+  "variations": {
+    "A": {
+      "camera": "wide shot, static, eye-level",
+      "description": "Establishing shot showing full environment"
+    },
+    "B": {
+      "camera": "medium shot, slow push-in, eye-level",
+      "description": "Emphasizes character emotion"
+    },
+    "C": {
+      "camera": "low angle, tracking alongside character",
+      "description": "Dynamic, immersive perspective"
+    },
+    "D": {
+      "camera": "overhead crane, descending slowly",
+      "description": "Artistic bird's eye view"
+    }
+  },
+  "notes": "First shot - sets tone. Rain visible in neon light."
+}</code></pre>
+      </div>
+
+      <div class="info-box">
+        <h4>🎬 Critical Rules for Shot Intents</h4>
+        <ul style="margin: 0;">
+          <li><strong>8 seconds maximum</strong> - Longer shots increase visual drift risk</li>
+          <li><strong>One action only</strong> - "Character walks" not "Character walks then sits"</li>
+          <li><strong>Vary camera only</strong> - A/B/C/D options have identical action, different camera work</li>
+          <li><strong>Reference canon IDs</strong> - Use CHAR_01, LOC_01 to link to bible definitions</li>
+        </ul>
+      </div>
+
+      <div class="step-header">
+        <span class="step-number">4</span>
+        <h3>Compile Prompts</h3>
+      </div>
+
+      <p>Run the compiler to generate AI-ready prompts:</p>
+
+      <pre><code>npm run compile</code></pre>
+
+      <div class="warning-box">
+        <h4>🚧 Not Yet Implemented</h4>
+        <p>The compiler script is planned for Phase 2. When ready, it will read your canon + shot intents and output standalone prompts.</p>
+      </div>
+
+      <h4>What the Compiler Does:</h4>
+      <ol>
+        <li>Reads <code>bible/characters.json</code> and <code>bible/locations.json</code></li>
+        <li>Reads shot intent files from <code>storyboard/</code></li>
+        <li>For each shot variation (A/B/C/D):
+          <ul>
+            <li>Merges identity anchors from characters and locations</li>
+            <li>Adds camera specifications</li>
+            <li>Adds visual style and lighting from <code>visual_style.json</code></li>
+            <li>Adds negative prompts</li>
+          </ul>
+        </li>
+        <li>Outputs to <code>prompts/kling/SHOT_01_option_A.txt</code></li>
+      </ol>
+
+      <div class="example-card">
+        <h4>Example: Compiled Prompt (Kling 3.0)</h4>
+        <p><strong>File:</strong> <code>projects/default/prompts/kling/SHOT_01_option_A.txt</code></p>
+        <pre><code>A mid-40s East Asian man with weathered brown leather jacket,
+short black hair with gray streaks, intense green eyes, and silver
+chain necklace walks slowly down a narrow brick alley with purple
+neon signs, wet pavement reflecting neon light, steam rising from
+metal grates, and flickering red Chinese characters overhead,
+hands in jacket pockets.
+
+Camera: Wide shot, static, eye-level.
+Lighting: High contrast neon-lit darkness with electric blue and
+purple tones, warm amber streetlights, rain droplets catching light.
+Mood: Mysterious, melancholic, cinematic cyberpunk.
+Duration: 8 seconds at 24fps.
+
+Negative Prompt: blurry, distorted face, inconsistent clothing colors,
+dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
+      </div>
+
+      <div class="step-header">
+        <span class="step-number">5</span>
+        <h3>Validate with Linter</h3>
+      </div>
+
+      <p>Before rendering, validate all prompts to catch errors:</p>
+
+      <pre><code>npm run lint</code></pre>
+
+      <p>The linter checks for:</p>
+      <ul>
+        <li>✓ All identity anchors present in every prompt</li>
+        <li>✓ No cross-references (standalone rule enforced)</li>
+        <li>✓ Camera specs match cinematography rules</li>
+        <li>✓ Negative prompts included</li>
+        <li>✓ Duration is 8 seconds or less</li>
+      </ul>
+
+      <div class="warning-box">
+        <h4>⚠ Fix Errors Before Rendering</h4>
+        <p>If lint fails, <strong>do not proceed to rendering</strong>. Fix the errors first. Rendering inconsistent prompts wastes GPU credits and produces poor results.</p>
+      </div>
+
+      <div class="step-header">
+        <span class="step-number">6</span>
+        <h3>Render in AI Tools</h3>
+      </div>
+
+      <p>Now you're ready to generate video with external AI tools:</p>
+
+      <h4>Using the Prompts UI:</h4>
+      <ol>
+        <li>Open <code>http://localhost:8000</code></li>
+        <li>Click on <strong>SHOT_01</strong> in the left sidebar</li>
+        <li>You'll see 4 variations (A, B, C, D) with toggle buttons</li>
+        <li>Click <strong>"Option A"</strong> to view that variation</li>
+        <li>Click <strong>"Copy Prompt"</strong> button</li>
+        <li>Open <strong>Kling 3.0</strong> in your browser</li>
+        <li>Paste the prompt and generate an 8-second video</li>
+        <li>Download the rendered MP4 file</li>
+        <li>Repeat for options B, C, D</li>
+      </ol>
+
+      <div class="info-box">
+        <h4>🎯 Why Render A/B/C/D?</h4>
+        <p>Camera work dramatically affects the emotion and pacing of a shot. Rendering 4 options lets you choose the best camera angle in post-production without changing the action.</p>
+      </div>
+
+      <div class="step-header">
+        <span class="step-number">7</span>
+        <h3>Upload to Storyboard</h3>
+      </div>
+
+      <p>After rendering, upload your videos to compare variations:</p>
+
+      <ol>
+        <li>Navigate to <code>http://localhost:8000/storyboard.html</code></li>
+        <li>Find <strong>SHOT_01</strong> in the grid view</li>
+        <li>Click on the shot card to open the comparison modal</li>
+        <li>You'll see 4 empty boxes labeled A, B, C, D</li>
+        <li>Drag your <code>SHOT_01_option_A.mp4</code> file into the "A" box</li>
+        <li>The video will upload and appear with playback controls</li>
+        <li>Repeat for B, C, D variations</li>
+      </ol>
+
+      <div class="success-box">
+        <h4>✓ Auto-Organization</h4>
+        <p>Uploaded files are automatically saved to <code>projects/YOUR_PROJECT/rendered/shots/SHOT_01/kling_option_A.mp4</code> and tracked in <code>sequence.json</code>.</p>
+      </div>
+
+      <div class="step-header">
+        <span class="step-number">8</span>
+        <h3>Select Best Variation</h3>
+      </div>
+
+      <p>In the storyboard comparison modal:</p>
+
+      <ol>
+        <li>Watch all 4 variations side-by-side</li>
+        <li>Click the radio button under your preferred option</li>
+        <li>Click <strong>"Save Selection"</strong></li>
+        <li>The system tracks your choice in <code>sequence.json</code></li>
+      </ol>
+
+      <div class="example-card">
+        <h4>Example: sequence.json (after selection)</h4>
+        <pre><code>{
+  "version": "2026-02-07",
+  "projectName": "Cyberpunk Dreams",
+  "totalShots": 20,
+  "selections": [
+    {
+      "shotId": "SHOT_01",
+      "selectedVariation": "C",
+      "status": "selected",
+      "renderFiles": {
+        "kling": {
+          "A": "rendered/shots/SHOT_01/kling_option_A.mp4",
+          "B": "rendered/shots/SHOT_01/kling_option_B.mp4",
+          "C": "rendered/shots/SHOT_01/kling_option_C.mp4",
+          "D": "rendered/shots/SHOT_01/kling_option_D.mp4"
+        }
+      }
+    }
+  ]
+}</code></pre>
+      </div>
+
+      <div class="step-header">
+        <span class="step-number">9</span>
+        <h3>Upload Music Track</h3>
+      </div>
+
+      <p>Add your music file to the storyboard:</p>
+
+      <ol>
+        <li>In the storyboard left navigation, find <strong>"Music Track"</strong></li>
+        <li>Drag your MP3 file into the music drop zone</li>
+        <li>The file uploads to <code>projects/YOUR_PROJECT/music/</code></li>
+        <li>The filename appears in the drop zone</li>
+      </ol>
+
+      <div class="step-header">
+        <span class="step-number">10</span>
+        <h3>Export for Editing</h3>
+      </div>
+
+      <p>Once all shots are rendered and selected:</p>
+
+      <ol>
+        <li>Click <strong>"Export PDF"</strong> in the storyboard navigation</li>
+        <li>Download the storyboard PDF (contains shot order, selections, timecodes)</li>
+        <li>Import selected video files into CapCut, Premiere Pro, or DaVinci Resolve</li>
+        <li>Use the PDF as a guide for shot order and timing</li>
+        <li>Sync videos to music timeline</li>
+        <li>Add transitions, color grading, effects</li>
+        <li>Export final music video</li>
+      </ol>
+
+      <!-- ========== FILE UPLOADS ========== -->
+      <h2 id="file-uploads">File Upload System</h2>
+
+      <p>The system supports browser-based drag-and-drop uploads for music and video files.</p>
+
+      <h3>Music Upload (MP3)</h3>
+
+      <ul>
+        <li><strong>Supported formats:</strong> .mp3 only</li>
+        <li><strong>Max size:</strong> 50MB</li>
+        <li><strong>Location:</strong> Storyboard left navigation → "Music Track" section</li>
+        <li><strong>Saved to:</strong> <code>projects/YOUR_PROJECT/music/filename.mp3</code></li>
+      </ul>
+
+      <h3>Video Upload (Kling Renders)</h3>
+
+      <ul>
+        <li><strong>Supported formats:</strong> .mp4, .mov</li>
+        <li><strong>Max size:</strong> 500MB per file</li>
+        <li><strong>Location:</strong> Storyboard modal → Click shot → Drag into A/B/C/D boxes</li>
+        <li><strong>Saved to:</strong> <code>projects/YOUR_PROJECT/rendered/shots/SHOT_XX/kling_option_X.mp4</code></li>
+      </ul>
+
+      <h3>Upload Methods</h3>
+
+      <ol>
+        <li><strong>Drag and drop:</strong> Drag file from desktop directly into drop zone</li>
+        <li><strong>Click to browse:</strong> Click drop zone to open file picker</li>
+      </ol>
+
+      <div class="info-box">
+        <h4>💾 Auto-Tracking</h4>
+        <p>All uploads are automatically tracked in <code>sequence.json</code>. You don't need to manually edit JSON files.</p>
+      </div>
+
+      <!-- ========== TROUBLESHOOTING ========== -->
+      <h2 id="troubleshooting">Troubleshooting</h2>
+
+      <h3>Server won't start (Port 8000 in use)</h3>
+
+      <p><strong>Problem:</strong> Error message "Port 8000 is already in use"</p>
+
+      <p><strong>Solution:</strong></p>
+      <ul>
+        <li>The server is already running - just open <code>http://localhost:8000</code></li>
+        <li>OR stop the existing server with <code>Ctrl+C</code> in the terminal</li>
+        <li>OR change the port in <code>scripts/serve_ui.js</code> (line 14)</li>
+      </ul>
+
+      <h3>Prompts list is empty</h3>
+
+      <p><strong>Problem:</strong> UI shows "No prompts found"</p>
+
+      <p><strong>Expected in Phase 1:</strong> The prompt compiler isn't implemented yet. This is normal.</p>
+
+      <p><strong>In Phase 2:</strong> Run <code>npm run compile</code> to generate prompts, then <code>npm run index</code> to update the index.</p>
+
+      <h3>File upload fails</h3>
+
+      <p><strong>Problem:</strong> "Upload failed" error after dragging file</p>
+
+      <p><strong>Solutions:</strong></p>
+      <ul>
+        <li>Check file size limits (50MB for MP3, 500MB for video)</li>
+        <li>Verify file extension (.mp3, .mp4, or .mov only)</li>
+        <li>Ensure server is running (<code>npm run serve</code>)</li>
+        <li>Check browser console for detailed error messages</li>
+      </ul>
+
+      <h3>Project selector shows "Loading..."</h3>
+
+      <p><strong>Problem:</strong> Dropdown never populates</p>
+
+      <p><strong>Solution:</strong> Run migration script: <code>npm run migrate</code></p>
+
+      <h3>Videos don't play in storyboard</h3>
+
+      <p><strong>Problem:</strong> Video thumbnail shows but clicking play does nothing</p>
+
+      <p><strong>Solutions:</strong></p>
+      <ul>
+        <li>Check file path in <code>sequence.json</code> is correct</li>
+        <li>Verify video file exists in <code>rendered/shots/SHOT_XX/</code></li>
+        <li>Try a different browser (Chrome/Edge work best)</li>
+        <li>Check browser console for codec errors</li>
+      </ul>
+
+      <h3>Linter shows errors for valid prompts</h3>
+
+      <p><strong>Problem:</strong> Lint fails even though prompts look correct</p>
+
+      <p><strong>Solutions:</strong></p>
+      <ul>
+        <li>Verify all identity anchors from <code>characters.json</code> appear in the prompt</li>
+        <li>Check for typos (anchors must match exactly)</li>
+        <li>Ensure no cross-references like "see CHAR_01" (standalone rule)</li>
+        <li>Review <code>lint/prompt_rules.md</code> for full linting rules</li>
+      </ul>
+
+      <!-- ========== BEST PRACTICES ========== -->
+      <h2 id="best-practices">Best Practices</h2>
+
+      <h3>Canon Definition</h3>
+
+      <ul>
+        <li><strong>Be specific:</strong> "weathered brown leather jacket" not "jacket"</li>
+        <li><strong>Use 3-5 anchors:</strong> Too few = drift, too many = clutter</li>
+        <li><strong>Lock before shooting:</strong> Don't change canon mid-project</li>
+        <li><strong>Test early:</strong> Render one shot to verify anchors work</li>
+      </ul>
+
+      <h3>Shot Intent Planning</h3>
+
+      <ul>
+        <li><strong>Sync to music:</strong> Time shot changes to beat drops, transitions</li>
+        <li><strong>Vary shot types:</strong> Mix wide/medium/close-up for visual interest</li>
+        <li><strong>Limit actions:</strong> One simple action per 8-second shot</li>
+        <li><strong>Plan transitions:</strong> Consider how shots flow together</li>
+      </ul>
+
+      <h3>Rendering Strategy</h3>
+
+      <ul>
+        <li><strong>Render one shot first:</strong> Test your canon before bulk rendering</li>
+        <li><strong>Batch by scene:</strong> Render all shots from one location together</li>
+        <li><strong>Save originals:</strong> Keep all A/B/C/D variations for flexibility</li>
+        <li><strong>Review before deleting:</strong> Don't delete "bad" renders until editing</li>
+      </ul>
+
+      <h3>Project Organization</h3>
+
+      <ul>
+        <li><strong>One project per video:</strong> Don't mix multiple videos in one project</li>
+        <li><strong>Descriptive names:</strong> "Cyberpunk Dreams" not "Project 1"</li>
+        <li><strong>Back up projects:</strong> Copy <code>projects/</code> folder regularly</li>
+        <li><strong>Use version control:</strong> Commit to git after major milestones</li>
+      </ul>
+
+      <!-- ========== KEYBOARD SHORTCUTS ========== -->
+      <h2 id="shortcuts">Keyboard Shortcuts</h2>
+
+      <div class="example-card">
+        <h4>Prompts UI</h4>
+        <ul style="margin: 0;">
+          <li><code>Ctrl+C</code> - Copy selected prompt</li>
+          <li><code>Ctrl+F</code> - Focus search box</li>
+          <li><code>Arrow Up/Down</code> - Navigate shots</li>
+          <li><code>1/2/3/4</code> - Switch to variation A/B/C/D</li>
+        </ul>
+      </div>
+
+      <div class="example-card">
+        <h4>Storyboard</h4>
+        <ul style="margin: 0;">
+          <li><code>Space</code> - Play/pause video in modal</li>
+          <li><code>Esc</code> - Close modal</li>
+          <li><code>Tab</code> - Switch view mode (Grid/Timeline)</li>
+        </ul>
+      </div>
+
+      <!-- ========== FAQ ========== -->
+      <h2 id="faq">Frequently Asked Questions</h2>
+
+      <h3>Can I use this for static images instead of videos?</h3>
+
+      <p>Yes! Nano Banana Pro 3 prompts generate static images for first/last frame references. You can use the same canon system for image generation.</p>
+
+      <h3>Why 8-second shots?</h3>
+
+      <p>8 seconds is Kling's sweet spot for quality. Longer shots increase the risk of visual drift, where the AI gradually changes character appearance mid-shot.</p>
+
+      <h3>Can I edit canon after generating prompts?</h3>
+
+      <p>You can, but you'll need to regenerate all prompts with <code>npm run compile</code>. It's better to finalize canon before prompt generation.</p>
+
+      <h3>What if I want different characters in different shots?</h3>
+
+      <p>Define multiple characters in <code>characters.json</code> (CHAR_01, CHAR_02, etc.) and reference them in shot intents. Each shot can use different character combinations.</p>
+
+      <h3>Can I export the final video from this system?</h3>
+
+      <p>No - this system manages prompts and asset organization. Final editing happens in external tools like CapCut, Premiere Pro, or DaVinci Resolve.</p>
+
+      <h3>How do I share a project with a collaborator?</h3>
+
+      <p>Copy the entire <code>projects/YOUR_PROJECT/</code> folder and send it to them. They can drop it in their <code>projects/</code> directory and it will appear in their project selector.</p>
+
+      <h3>Can I use this commercially?</h3>
+
+      <p>Yes, this tool is MIT licensed. However, check the terms of service for the AI tools you use (Kling, Nano Banana, Suno) regarding commercial use of their outputs.</p>
+
+      <!-- ========== NEXT STEPS ========== -->
+      <h2 id="next-steps">Next Steps</h2>
+
+      <div class="success-box">
+        <h4>✓ You're Ready!</h4>
+        <p>If you've completed Phase 1 setup, you can now:</p>
+        <ul style="margin: 8px 0 0 0;">
+          <li>Create multiple projects for different music videos</li>
+          <li>Start defining your canon (characters, locations, visual style)</li>
+          <li>Upload music tracks to the storyboard</li>
+          <li>Prepare for Phase 2 when the prompt compiler is released</li>
+        </ul>
+      </div>
+
+      <h3>Stay Updated</h3>
+
+      <p>Phase 2 will add:</p>
+      <ul>
+        <li>Automatic prompt compilation from canon + shot intents</li>
+        <li>Interactive canon builder (wizard interface)</li>
+        <li>Visual shot intent editor with timeline</li>
+        <li>Music section detection (auto-generate shot timing from MP3)</li>
+        <li>PDF storyboard export</li>
+        <li>Batch rendering support</li>
+      </ul>
+
+      <h3>Resources</h3>
+
+      <ul>
+        <li><strong>Documentation:</strong> <code>README.md</code> in project root</li>
+        <li><strong>Lint Rules:</strong> <code>lint/prompt_rules.md</code></li>
+        <li><strong>Schemas:</strong> <code>lint/schemas/</code> for JSON structure reference</li>
+        <li><strong>Templates:</strong> <code>prompts/{tool}/_template.md</code> for prompt examples</li>
+      </ul>
+
+      <div style="height: 64px;"></div>
+    </div>
+  </div>
+</body>
+</html>
