@@ -6,6 +6,8 @@ let currentView = 'grid';
 let selectedShot = null;
 let selectedVariation = null;
 let currentProject = null;
+let reorderModeEnabled = false;
+let shotListOrderMap = new Map();
 
 // Toast notification system
 const toastContainer = document.getElementById('toastContainer');
@@ -113,6 +115,120 @@ function initializeDOMElements() {
   statRendered = document.getElementById('stat-rendered');
   statSelected = document.getElementById('stat-selected');
   statDuration = document.getElementById('stat-duration');
+}
+
+
+function getDefaultShotOrder(shots) {
+  const sortedShots = [...shots];
+  sortedShots.sort((a, b) => {
+    const aFromShotList = shotListOrderMap.get(a.shotId);
+    const bFromShotList = shotListOrderMap.get(b.shotId);
+
+    if (Number.isFinite(aFromShotList) && Number.isFinite(bFromShotList)) {
+      return aFromShotList - bFromShotList;
+    }
+    if (Number.isFinite(aFromShotList)) return -1;
+    if (Number.isFinite(bFromShotList)) return 1;
+
+    const aNum = Number(a.shotNumber);
+    const bNum = Number(b.shotNumber);
+    if (Number.isFinite(aNum) && Number.isFinite(bNum)) return aNum - bNum;
+    if (Number.isFinite(aNum)) return -1;
+    if (Number.isFinite(bNum)) return 1;
+    return String(a.shotId || '').localeCompare(String(b.shotId || ''));
+  });
+  return sortedShots.map(shot => shot.shotId).filter(Boolean);
+}
+
+function getOrderedShots() {
+  if (!sequenceData || !Array.isArray(sequenceData.selections)) return [];
+
+  const shotsById = new Map();
+  sequenceData.selections.forEach(shot => {
+    if (shot?.shotId) shotsById.set(shot.shotId, shot);
+  });
+
+  const order = [];
+  const seen = new Set();
+  const editorialOrder = Array.isArray(sequenceData.editorialOrder) ? sequenceData.editorialOrder : [];
+
+  editorialOrder.forEach(shotId => {
+    if (shotsById.has(shotId) && !seen.has(shotId)) {
+      order.push(shotId);
+      seen.add(shotId);
+    }
+  });
+
+  const fallbackOrder = getDefaultShotOrder(sequenceData.selections);
+  fallbackOrder.forEach(shotId => {
+    if (!seen.has(shotId) && shotsById.has(shotId)) {
+      order.push(shotId);
+      seen.add(shotId);
+    }
+  });
+
+  return order.map(shotId => shotsById.get(shotId));
+}
+
+function updateTimelineControlsVisibility() {
+  const reorderModeBtn = document.getElementById('reorderModeBtn');
+  const resetOrderBtn = document.getElementById('resetOrderBtn');
+  const isTimeline = currentView === 'timeline' && sequenceData?.selections?.length > 0;
+
+  if (reorderModeBtn) reorderModeBtn.style.display = isTimeline ? 'inline-flex' : 'none';
+  if (resetOrderBtn) resetOrderBtn.style.display = isTimeline ? 'inline-flex' : 'none';
+}
+
+function updateReorderModeButtonLabel() {
+  const reorderModeBtn = document.getElementById('reorderModeBtn');
+  if (!reorderModeBtn) return;
+  reorderModeBtn.textContent = `Reorder Mode: ${reorderModeEnabled ? 'On' : 'Off'}`;
+  reorderModeBtn.classList.toggle('is-active', reorderModeEnabled);
+}
+
+function setReorderMode(enabled) {
+  reorderModeEnabled = Boolean(enabled);
+  updateReorderModeButtonLabel();
+  renderView();
+}
+
+async function saveEditorialOrder(editorialOrder, { successMessage = 'Editorial order saved' } = {}) {
+  if (!Array.isArray(editorialOrder)) return;
+
+  const loadingToast = showToast('Saving order...', '', 'info', 0);
+
+  try {
+    const payload = {
+      project: currentProject?.id || null,
+      editorialOrder
+    };
+
+    const response = await fetch('/api/storyboard/order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Failed to save order');
+    }
+
+    sequenceData.editorialOrder = editorialOrder;
+    dismissToast(loadingToast);
+    showToast('Success', successMessage, 'success', 2000);
+    renderView();
+  } catch (err) {
+    dismissToast(loadingToast);
+    showToast('Save failed', err.message, 'error', 4000);
+  }
+}
+
+async function resetToShotListOrder() {
+  if (!sequenceData?.selections?.length) return;
+
+  const fallbackOrder = getDefaultShotOrder(sequenceData.selections);
+  await saveEditorialOrder(fallbackOrder, { successMessage: 'Reset to shot list order' });
 }
 
 /**
@@ -380,6 +496,28 @@ async function loadSequence() {
       throw new Error('Sequence file not found');
     }
     sequenceData = await response.json();
+    if (!Array.isArray(sequenceData.editorialOrder)) sequenceData.editorialOrder = [];
+
+    shotListOrderMap = new Map();
+    try {
+      const projectParam = currentProject ? `?project=${currentProject.id}` : '';
+      const shotListResp = await fetch(`/api/load/canon/script${projectParam}`);
+      if (shotListResp.ok) {
+        const shotListPayload = await shotListResp.json();
+        const shotListData = shotListPayload?.content ? JSON.parse(shotListPayload.content) : null;
+        if (Array.isArray(shotListData?.shots)) {
+          shotListData.shots.forEach((shot, index) => {
+            if (shot?.id) {
+              const num = Number(shot.shotNumber);
+              shotListOrderMap.set(shot.id, Number.isFinite(num) ? num : index + 1);
+            }
+          });
+        }
+      }
+    } catch (shotListErr) {
+      console.warn('Could not load shot_list.json order:', shotListErr);
+    }
+
     updateStats();
     renderView();
 
@@ -449,6 +587,8 @@ function renderView() {
 
   hideEmptyState();
 
+  updateTimelineControlsVisibility();
+
   if (currentView === 'grid') {
     gridView.style.display = 'block';
     timelineView.style.display = 'none';
@@ -466,7 +606,7 @@ function renderView() {
 function renderGridView() {
   shotGrid.innerHTML = '';
 
-  sequenceData.selections.forEach(shot => {
+  getOrderedShots().forEach(shot => {
     const card = createShotCard(shot);
     shotGrid.appendChild(card);
   });
@@ -563,9 +703,24 @@ function createShotCard(shot) {
 function renderTimelineView() {
   timelineTrack.innerHTML = '';
 
+  const orderedShots = getOrderedShots();
+
+  if (reorderModeEnabled) {
+    const reorderContainer = document.createElement('div');
+    reorderContainer.className = 'timeline-reorder-list';
+
+    orderedShots.forEach((shot, index) => {
+      const shotEl = createTimelineShot(shot, { reorderMode: true, index });
+      reorderContainer.appendChild(shotEl);
+    });
+
+    timelineTrack.appendChild(reorderContainer);
+    return;
+  }
+
   // Group shots by music section
   const sections = {};
-  sequenceData.selections.forEach(shot => {
+  orderedShots.forEach(shot => {
     const sectionName = shot.timing?.musicSection || 'Unknown';
     if (!sections[sectionName]) {
       sections[sectionName] = [];
@@ -622,10 +777,14 @@ function createTimelineSection(sectionName, shots) {
 /**
  * Create timeline shot element
  */
-function createTimelineShot(shot) {
+function createTimelineShot(shot, options = {}) {
   const shotEl = document.createElement('div');
   shotEl.className = 'timeline-shot';
-  shotEl.addEventListener('click', () => openShotModal(shot));
+  const { reorderMode = false, index = null } = options;
+
+  if (!reorderMode) {
+    shotEl.addEventListener('click', () => openShotModal(shot));
+  }
 
   const thumbnailPath = shot.renderFiles?.thumbnail;
   if (thumbnailPath) {
@@ -639,6 +798,56 @@ function createTimelineShot(shot) {
   label.className = 'timeline-shot-label';
   label.textContent = shot.shotId;
   shotEl.appendChild(label);
+
+  if (reorderMode) {
+    shotEl.classList.add('reorderable');
+    shotEl.draggable = true;
+    shotEl.dataset.shotId = shot.shotId;
+
+    const dragHandle = document.createElement('div');
+    dragHandle.className = 'timeline-shot-drag-handle';
+    dragHandle.textContent = index !== null ? `#${index + 1}` : '\u2630';
+    shotEl.appendChild(dragHandle);
+
+    shotEl.addEventListener('dragstart', (e) => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', shot.shotId);
+      shotEl.classList.add('dragging');
+    });
+
+    shotEl.addEventListener('dragend', () => {
+      shotEl.classList.remove('dragging');
+      document.querySelectorAll('.timeline-shot.drag-over').forEach(el => el.classList.remove('drag-over'));
+    });
+
+    shotEl.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      shotEl.classList.add('drag-over');
+    });
+
+    shotEl.addEventListener('dragleave', () => {
+      shotEl.classList.remove('drag-over');
+    });
+
+    shotEl.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      shotEl.classList.remove('drag-over');
+
+      const sourceShotId = e.dataTransfer.getData('text/plain');
+      const targetShotId = shot.shotId;
+      if (!sourceShotId || sourceShotId === targetShotId) return;
+
+      const currentOrder = getOrderedShots().map(s => s.shotId);
+      const sourceIndex = currentOrder.indexOf(sourceShotId);
+      const targetIndex = currentOrder.indexOf(targetShotId);
+      if (sourceIndex < 0 || targetIndex < 0) return;
+
+      currentOrder.splice(sourceIndex, 1);
+      currentOrder.splice(targetIndex, 0, sourceShotId);
+
+      await saveEditorialOrder(currentOrder);
+    });
+  }
 
   return shotEl;
 }
@@ -926,6 +1135,10 @@ function initializeViewTabs() {
       currentView = tab.dataset.view;
       viewTabs.forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
+      if (currentView !== 'timeline' && reorderModeEnabled) {
+        reorderModeEnabled = false;
+        updateReorderModeButtonLabel();
+      }
       renderView();
     });
   });
@@ -937,6 +1150,8 @@ function initializeViewTabs() {
 function initializeButtons() {
   const exportBtn = document.getElementById('exportBtn');
   const refreshBtn = document.getElementById('refreshBtn');
+  const reorderModeBtn = document.getElementById('reorderModeBtn');
+  const resetOrderBtn = document.getElementById('resetOrderBtn');
   const storyboardFocusBtn = document.getElementById('storyboardFocusBtn');
   const modalClose = document.getElementById('modalClose');
   const modalOverlay = document.getElementById('modalOverlay');
@@ -945,6 +1160,17 @@ function initializeButtons() {
 
   if (exportBtn) exportBtn.addEventListener('click', exportPDF);
   if (refreshBtn) refreshBtn.addEventListener('click', loadSequence);
+  if (reorderModeBtn) {
+    reorderModeBtn.addEventListener('click', () => {
+      setReorderMode(!reorderModeEnabled);
+    });
+  }
+  if (resetOrderBtn) {
+    resetOrderBtn.addEventListener('click', async () => {
+      await resetToShotListOrder();
+      setReorderMode(false);
+    });
+  }
   if (storyboardFocusBtn) {
     storyboardFocusBtn.addEventListener('click', () => {
       document.body.classList.toggle('focus-mode');
@@ -1017,6 +1243,7 @@ if (newProjectBtn && newProjectModal) {
   if (projectsLoaded) {
     initializeViewTabs();
     initializeButtons();
+    updateReorderModeButtonLabel();
     await loadSequence();
     initMusicUpload();
   } else {

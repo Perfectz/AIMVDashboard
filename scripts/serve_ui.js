@@ -296,6 +296,7 @@ function readSequenceFile(projectId = 'default') {
       totalDuration: 0,
       musicFile: "",
       selections: [],
+      editorialOrder: [],
       lastUpdated: new Date().toISOString()
     };
   }
@@ -1771,6 +1772,57 @@ const server = http.createServer((req, res) => {
     } catch (err) {
       sendJSON(res, 500, { success: false, error: err.message });
     }
+    return;
+  }
+
+  // POST /api/storyboard/order - Save editorial sequence order
+  if (req.method === 'POST' && req.url.startsWith('/api/storyboard/order')) {
+    readBody(req, MAX_BODY_SIZE, (err, body) => {
+      if (err) {
+        sendJSON(res, 413, { success: false, error: 'Payload too large' });
+        return;
+      }
+
+      try {
+        const data = JSON.parse(body);
+        const projectId = resolveProjectId(data.project || projectManager.getActiveProject(), { required: true });
+        const editorialOrder = data.editorialOrder;
+
+        if (!Array.isArray(editorialOrder) || editorialOrder.length === 0) {
+          sendJSON(res, 400, { success: false, error: 'editorialOrder must be a non-empty array' });
+          return;
+        }
+
+        const invalidShotId = editorialOrder.find(id => !SHOT_ID_REGEX.test(id || ''));
+        if (invalidShotId) {
+          sendJSON(res, 400, { success: false, error: `Invalid shot ID in editorialOrder: ${invalidShotId}` });
+          return;
+        }
+
+        const sequence = readSequenceFile(projectId);
+        const existingShotIds = new Set((sequence.selections || []).map(s => s.shotId));
+
+        const missingShots = editorialOrder.filter(id => !existingShotIds.has(id));
+        if (missingShots.length > 0) {
+          sendJSON(res, 400, { success: false, error: `Unknown shot IDs: ${missingShots.join(', ')}` });
+          return;
+        }
+
+        const dedupedOrder = [...new Set(editorialOrder)];
+        if (dedupedOrder.length !== editorialOrder.length) {
+          sendJSON(res, 400, { success: false, error: 'editorialOrder contains duplicate shot IDs' });
+          return;
+        }
+
+        const trailingShots = [...existingShotIds].filter(id => !dedupedOrder.includes(id));
+        sequence.editorialOrder = dedupedOrder.concat(trailingShots);
+
+        writeSequenceFile(sequence, projectId);
+        sendJSON(res, 200, { success: true, editorialOrder: sequence.editorialOrder });
+      } catch (parseErr) {
+        sendJSON(res, 400, { success: false, error: parseErr.message || 'Invalid JSON' });
+      }
+    });
     return;
   }
 
