@@ -181,6 +181,8 @@ const mainLayout = document.querySelector('.main-layout');
 const emptyRunIndexBtn = document.getElementById('emptyRunIndex');
 const emptyOpenGuideBtn = document.getElementById('emptyOpenGuide');
 let lastWorkspaceUrl = '';
+let workspaceLoadTimeoutId = null;
+const WORKSPACE_LOAD_TIMEOUT_MS = 10000;
 const WORKSPACE_VIEW_MAP = {
   prompts: { url: '', title: 'Step 5: Prompts' },
   step1: { url: 'step1.html', title: 'Step 1: Theme' },
@@ -249,6 +251,22 @@ function showWorkspaceFrameLoading(message = 'Loading workspace...') {
 function hideWorkspaceFrameLoading() {
   if (!workspaceShellLoading) return;
   workspaceShellLoading.style.display = 'none';
+}
+
+function clearWorkspaceLoadTimeout() {
+  if (!workspaceLoadTimeoutId) return;
+  clearTimeout(workspaceLoadTimeoutId);
+  workspaceLoadTimeoutId = null;
+}
+
+function startWorkspaceLoadTimeout(urlForMessage = '') {
+  clearWorkspaceLoadTimeout();
+  workspaceLoadTimeoutId = setTimeout(() => {
+    if (!workspaceShell || workspaceShell.style.display === 'none') return;
+    hideWorkspaceFrameLoading();
+    const label = urlForMessage || lastWorkspaceUrl || 'workspace page';
+    showWorkspaceError(`Timed out while loading "${label}". Retry or open in a new tab.`);
+  }, WORKSPACE_LOAD_TIMEOUT_MS);
 }
 
 function showWorkspaceError(message = 'The page could not be loaded in this panel.') {
@@ -1058,6 +1076,16 @@ function buildEmbeddedWorkspaceUrl(url) {
   }
 }
 
+function normalizeWorkspacePath(url) {
+  if (!url) return '';
+  try {
+    const next = new URL(url, window.location.href);
+    return `${next.pathname}${next.search}`;
+  } catch {
+    return String(url);
+  }
+}
+
 function updateViewInUrl(view, replace = false) {
   const next = new URL(window.location.href);
   if (!view || view === 'prompts') {
@@ -1073,15 +1101,27 @@ function updateViewInUrl(view, replace = false) {
 }
 
 function openWorkspacePane(url, title, options = {}) {
-  const { updateHistory = true, replaceHistory = false } = options;
+  const { updateHistory = true, replaceHistory = false, forceReload = false } = options;
   if (!workspaceShell || !workspaceShellFrame || !promptsWorkspace) return;
+  const targetSrc = buildEmbeddedWorkspaceUrl(url);
+  const currentSrc = workspaceShellFrame.getAttribute('src') || '';
+  const isSameTarget = normalizeWorkspacePath(currentSrc) === normalizeWorkspacePath(targetSrc);
+
   setWorkspaceMode(true);
   hideWorkspaceError();
   promptsWorkspace.style.display = 'none';
   workspaceShell.style.display = 'block';
-  showWorkspaceFrameLoading(`Loading ${title || 'workspace'}...`);
   lastWorkspaceUrl = url;
-  workspaceShellFrame.src = buildEmbeddedWorkspaceUrl(lastWorkspaceUrl);
+
+  if (!isSameTarget || forceReload) {
+    showWorkspaceFrameLoading(`Loading ${title || 'workspace'}...`);
+    startWorkspaceLoadTimeout(url);
+    workspaceShellFrame.src = targetSrc;
+  } else {
+    hideWorkspaceFrameLoading();
+    clearWorkspaceLoadTimeout();
+  }
+
   if (workspaceShellTitle) workspaceShellTitle.textContent = title;
   workspaceNavButtons.forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.workspaceUrl === url);
@@ -1098,6 +1138,7 @@ function closeWorkspacePane(options = {}) {
   if (!workspaceShell || !promptsWorkspace) return;
   setWorkspaceMode(false);
   workspaceShell.style.display = 'none';
+  clearWorkspaceLoadTimeout();
   hideWorkspaceFrameLoading();
   hideWorkspaceError();
   if (workspaceShellFrame) workspaceShellFrame.src = 'about:blank';
@@ -1175,10 +1216,12 @@ if (workspaceShellCloseBtn) {
 }
 if (workspaceShellRetryBtn) {
   workspaceShellRetryBtn.addEventListener('click', () => {
-    if (!workspaceShellFrame || !lastWorkspaceUrl) return;
+    if (!lastWorkspaceUrl) return;
     hideWorkspaceError();
-    showWorkspaceFrameLoading(`Loading ${workspaceShellTitle?.textContent || 'workspace'}...`);
-    workspaceShellFrame.src = buildEmbeddedWorkspaceUrl(lastWorkspaceUrl);
+    openWorkspacePane(lastWorkspaceUrl, workspaceShellTitle?.textContent || 'Workspace', {
+      updateHistory: false,
+      forceReload: true
+    });
   });
 }
 if (workspaceShellOpenNewBtn) {
@@ -1189,7 +1232,14 @@ if (workspaceShellOpenNewBtn) {
 }
 
 if (workspaceShellFrame) {
+  workspaceShellFrame.addEventListener('error', () => {
+    clearWorkspaceLoadTimeout();
+    hideWorkspaceFrameLoading();
+    showWorkspaceError('The workspace failed to load. Retry or open it in a new tab.');
+  });
+
   workspaceShellFrame.addEventListener('load', () => {
+    clearWorkspaceLoadTimeout();
     let innerUrl;
     try {
       innerUrl = new URL(workspaceShellFrame.contentWindow.location.href);
@@ -1216,6 +1266,7 @@ if (workspaceShellFrame) {
     if (innerUrl.searchParams.get('embedded') !== '1' && view !== 'prompts') {
       const target = WORKSPACE_VIEW_MAP[view];
       if (target) {
+        startWorkspaceLoadTimeout(target.url);
         workspaceShellFrame.src = buildEmbeddedWorkspaceUrl(target.url);
         return;
       }

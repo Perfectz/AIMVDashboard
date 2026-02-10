@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Step 2: Music - AI Music Video</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <div class="main-layout">
+      <!-- Left Navigation -->
+      <nav class="left-nav">
+        <!-- Brand Header -->
+        <div class="nav-brand">
+          <h1>Prompt Compiler</h1>
+          <p class="nav-subtitle">AI Music Video Project</p>
+        </div>
+
+        <!-- Project Selector -->
+        <div class="project-selector-section">
+          <div class="nav-header">
+            <div class="nav-title">Current Project</div>
+            <button class="btn-icon" id="newProjectBtn" title="New Project">+</button>
+          </div>
+          <select class="project-dropdown" id="projectSelector">
+            <option value="default">Loading...</option>
+          </select>
+        </div>
+
+        <div class="nav-divider"></div>
+
+        <!-- Stats -->
+        <div class="nav-stats">
+          <div class="nav-stat-item">
+            <div class="nav-stat-value" id="stat-shots">0</div>
+            <div class="nav-stat-label">Shots</div>
+          </div>
+          <div class="nav-stat-item">
+            <div class="nav-stat-value" id="stat-prompts">0</div>
+            <div class="nav-stat-label">Prompts</div>
+          </div>
+          <div class="nav-stat-item nav-stat-success">
+            <div class="nav-stat-value" id="stat-passed">0</div>
+            <div class="nav-stat-label">Passed</div>
+          </div>
+          <div class="nav-stat-item nav-stat-error">
+            <div class="nav-stat-value" id="stat-failed">0</div>
+            <div class="nav-stat-label">Failed</div>
+          </div>
+        </div>
+
+        <div class="nav-divider"></div>
+
+        <div class="nav-header">
+          <div class="nav-title">Workflow Steps</div>
+        </div>
+        <div class="nav-items">
+          <button class="nav-item" onclick="window.location.href='step1.html'">
+            <span class="nav-icon">01</span>
+            <span class="nav-label">Step 1: Theme</span>
+          </button>
+          <button class="nav-item active" onclick="window.location.href='step2.html'">
+            <span class="nav-icon">02</span>
+            <span class="nav-label">Step 2: Music</span>
+          </button>
+          <button class="nav-item" onclick="window.location.href='step3.html'">
+            <span class="nav-icon">03</span>
+            <span class="nav-label">Step 3: Canon</span>
+          </button>
+          <button class="nav-item" onclick="window.location.href='step4.html'">
+            <span class="nav-icon">04</span>
+            <span class="nav-label">Step 4: References</span>
+          </button>
+          <button class="nav-item" onclick="window.location.href='index.html'">
+            <span class="nav-icon">05</span>
+            <span class="nav-label">Step 5: Prompts</span>
+            <span class="nav-count" id="nav-count-all">0</span>
+          </button>
+          <button class="nav-item" onclick="window.location.href='storyboard.html'">
+            <span class="nav-icon">06</span>
+            <span class="nav-label">Step 6: Storyboard</span>
+          </button>
+        </div>
+        <div class="nav-divider"></div>
+        <div class="nav-header">
+          <div class="nav-title">Resources</div>
+        </div>
+        <div class="nav-items">
+          <button class="nav-item" onclick="window.location.href='guide.html'">
+            <span class="nav-icon">?</span>
+            <span class="nav-label">User Guide</span>
+          </button>
+        </div>
+        <div class="nav-footer">
+          <div class="nav-version">v2026-02-07</div>
+        </div>
+      </nav>
+
+      <!-- Main Content -->
+      <main class="content content-full-width">
+        <!-- Breadcrumbs -->
+        <nav class="breadcrumbs" id="breadcrumbs" style="display: none;">
+          <!-- Populated by JavaScript -->
+        </nav>
+
+        <!-- Step 2: Upload Music & Analysis -->
+        <div class="upload-section" id="uploadSection">
+          <div class="section-header">
+            <h2>Step 2: Upload Music & Analysis</h2>
+            <p class="section-subtitle">Upload your music file, Suno prompt, and AI-generated analysis to begin</p>
+          </div>
+
+          <!-- Music File Upload -->
+          <div class="collapsible-card" data-collapse-key="musicUpload">
+            <div class="collapsible-header">
+              <div class="collapsible-title">
+                <span class="collapsible-icon">MU</span>
+                <span class="collapsible-label">Music File</span>
+                <span class="collapsible-hint">Drag & drop MP3 or click to browse</span>
+              </div>
+              <button class="collapse-toggle" type="button">
+                <span class="collapse-icon">-</span>
+              </button>
+            </div>
+            <div class="collapsible-body">
+              <div class="upload-zone" id="musicUploadZone">
+                <div class="upload-icon">MU</div>
+                <div class="upload-label">Music File</div>
+                <div class="upload-hint">Drag & drop MP3 or click to browse</div>
+                <input type="file" id="musicFileInput" accept=".mp3,audio/mpeg" style="display: none;">
+              </div>
+              <div class="upload-status" id="musicUploadStatus"></div>
+
+              <!-- Music Player Controls (shown when file exists) -->
+              <div class="music-controls" id="musicControls" style="display: none;">
+                <div class="music-player">
+                  <audio id="musicPlayer" controls style="width: 100%; margin-bottom: var(--spacer-md);"></audio>
+                </div>
+                <div class="music-actions">
+                  <button class="btn btn-secondary btn-sm" id="deleteMusicBtn">Delete Song
+                  </button>
+                  <span class="music-file-info" id="musicFileInfo"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Text Input Section -->
+          <div class="text-input-section">
+            <!-- Suno Prompt -->
+            <div class="collapsible-card" data-collapse-key="sunoPrompt">
+              <div class="collapsible-header">
+                <div class="collapsible-title">
+                  <span class="collapsible-icon">SP</span>
+                  <span class="collapsible-label">Suno Prompt</span>
+                  <span class="collapsible-hint">Paste the prompt you used to generate the music</span>
+                </div>
+                <button class="collapse-toggle" type="button">
+                  <span class="collapse-icon">-</span>
+                </button>
+              </div>
+              <div class="collapsible-body">
+                <div class="text-input-card-inner">
+                  <div class="text-input-actions">
+                    <button class="btn btn-secondary btn-sm" id="saveSunoPromptBtn">Save
+                    </button>
+                  </div>
+                  <textarea
+                    id="sunoPromptText"
+                    placeholder="Example: [Upbeat synthwave with driving bass], Epic cinematic intro, female vocals, 128 BPM, minor key..."
+                    rows="4"
+                  ></textarea>
+                  <div class="text-input-status" id="sunoPromptTextStatus"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Song Info -->
+            <div class="collapsible-card" data-collapse-key="songInfo">
+              <div class="collapsible-header">
+                <div class="collapsible-title">
+                  <span class="collapsible-icon">SI</span>
+                  <span class="collapsible-label">Song Info (Optional)</span>
+                  <span class="collapsible-hint">Any additional context: lyrics, concept, mood, inspiration</span>
+                </div>
+                <button class="collapse-toggle" type="button">
+                  <span class="collapse-icon">-</span>
+                </button>
+              </div>
+              <div class="collapsible-body">
+                <div class="text-input-card-inner">
+                  <div class="text-input-actions">
+                    <button class="btn btn-secondary btn-sm" id="saveSongInfoBtn">Save
+                    </button>
+                  </div>
+                  <textarea
+                    id="songInfoText"
+                    placeholder="Example: Song is about a lone traveler in a cyberpunk city. Mood: mysterious and melancholic. Visual inspiration: Blade Runner, Ghost in the Shell..."
+                    rows="4"
+                  ></textarea>
+                  <div class="text-input-status" id="songInfoTextStatus"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Analysis JSON -->
+            <div class="collapsible-card" data-collapse-key="analysisJson">
+              <div class="collapsible-header">
+                <div class="collapsible-title">
+                  <span class="collapsible-icon">AJ</span>
+                  <span class="collapsible-label">Analysis JSON</span>
+                  <span class="collapsible-hint">Paste the JSON output from AI music analysis tool
+                    <a href="#" id="viewAnalysisPromptLink" class="upload-link" style="margin-left: 8px;">View Prompt</a>
+                  </span>
+                </div>
+                <button class="collapse-toggle" type="button">
+                  <span class="collapse-icon">-</span>
+                </button>
+              </div>
+              <div class="collapsible-body">
+                <div class="text-input-card-inner">
+                  <div class="text-input-actions">
+                    <button class="btn btn-secondary btn-sm" id="saveAnalysisJsonBtn">Save
+                    </button>
+                  </div>
+                  <textarea
+                    id="analysisJsonText"
+                    placeholder='{"version":"2026-02-07","songTitle":"Your Song","duration":180,"bpm":120,"sections":[...]}'
+                    rows="8"
+                    style="font-family: 'Monaco', 'Courier New', monospace; font-size: 12px;"
+                  ></textarea>
+                  <div class="text-input-status" id="analysisJsonTextStatus"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="upload-instructions">
+            <div class="instruction-card">
+              <h3>How to Get AI Music Analysis</h3>
+              <ol>
+                <li>Click <strong>"View AI Analysis Prompt"</strong> above</li>
+                <li>Copy the full prompt and paste into another AI (Claude, ChatGPT, etc.)</li>
+                <li>Upload your music file to that AI</li>
+                <li>The AI will return a JSON response</li>
+                <li>Copy the JSON and paste into the "Analysis JSON" box above</li>
+                <li>Click "Save" to save the analysis</li>
+              </ol>
+              <p class="note">
+                <strong>Note:</strong> The AI will return complete JSON with song structure, BPM, sections, and timestamps.
+                Just copy/paste the entire JSON response - no need to download files!
+              </p>
+            </div>
+
+            <div class="instruction-card">
+              <h3>Current Project Status</h3>
+              <div class="status-grid">
+                <div class="status-item">
+                  <span class="status-icon" id="statusMusicIcon">O</span>
+                  <span class="status-label">Music File</span>
+                  <span class="status-value" id="statusMusicValue">Not saved</span>
+                </div>
+                <div class="status-item">
+                  <span class="status-icon" id="statusAnalysisIcon">O</span>
+                  <span class="status-label">Analysis JSON</span>
+                  <span class="status-value" id="statusAnalysisValue">Not saved</span>
+                </div>
+                <div class="status-item">
+                  <span class="status-icon" id="statusSunoIcon">O</span>
+                  <span class="status-label">Suno Prompt</span>
+                  <span class="status-value" id="statusSunoValue">Not saved</span>
+                </div>
+                <div class="status-item">
+                  <span class="status-icon" id="statusSongInfoIcon">O</span>
+                  <span class="status-label">Song Info</span>
+                  <span class="status-value" id="statusSongInfoValue">Not saved</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- New Project Modal -->
+  <div class="modal" id="newProjectModal" style="display: none;">
+    <div class="modal-overlay" id="newProjectModalOverlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Create New Project</h2>
+        <button class="modal-close" id="newProjectModalClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="newProjectForm">
+          <div class="form-group">
+            <label for="projectName">Project Name *</label>
+            <input type="text" id="projectName" required maxlength="100" placeholder="My Music Video" />
+          </div>
+          <div class="form-group">
+            <label for="projectDescription">Description</label>
+            <textarea id="projectDescription" rows="3" maxlength="500" placeholder="A brief description of your project"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelNewProject">Cancel</button>
+        <button class="btn btn-primary" id="createNewProject">Create Project</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Analysis Prompt Modal -->
+  <div class="modal" id="analysisPromptModal" style="display: none;">
+    <div class="modal-overlay" id="analysisPromptModalOverlay"></div>
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <h2>AI Music Analysis Prompt</h2>
+        <button class="modal-close" id="analysisPromptModalClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-description">Copy this prompt and paste it into another AI (Claude, ChatGPT, etc.) along with your music file.
+          The AI will analyze your music and return a JSON file that you can upload here.
+        </p>
+        <div class="prompt-box">
+          <button class="btn btn-primary btn-sm copy-prompt-btn" id="copyAnalysisPromptBtn">Copy Prompt
+          </button>
+          <pre id="analysisPromptText">Loading prompt...</pre>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="closeAnalysisPromptModal">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

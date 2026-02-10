@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Step 3: Canon - AI Music Video</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <div class="main-layout">
+      <!-- Left Navigation -->
+      <nav class="left-nav">
+        <!-- Brand Header -->
+        <div class="nav-brand">
+          <h1>Prompt Compiler</h1>
+          <p class="nav-subtitle">AI Music Video Project</p>
+        </div>
+
+        <!-- Project Selector -->
+        <div class="project-selector-section">
+          <div class="nav-header">
+            <div class="nav-title">Current Project</div>
+            <button class="btn-icon" id="newProjectBtn" title="New Project">+</button>
+          </div>
+          <select class="project-dropdown" id="projectSelector">
+            <option value="default">Loading...</option>
+          </select>
+        </div>
+
+        <div class="nav-divider"></div>
+
+        <!-- Stats -->
+        <div class="nav-stats">
+          <div class="nav-stat-item">
+            <div class="nav-stat-value" id="stat-shots">0</div>
+            <div class="nav-stat-label">Shots</div>
+          </div>
+          <div class="nav-stat-item">
+            <div class="nav-stat-value" id="stat-prompts">0</div>
+            <div class="nav-stat-label">Prompts</div>
+          </div>
+          <div class="nav-stat-item nav-stat-success">
+            <div class="nav-stat-value" id="stat-passed">0</div>
+            <div class="nav-stat-label">Passed</div>
+          </div>
+          <div class="nav-stat-item nav-stat-error">
+            <div class="nav-stat-value" id="stat-failed">0</div>
+            <div class="nav-stat-label">Failed</div>
+          </div>
+        </div>
+
+        <div class="nav-divider"></div>
+
+        <div class="nav-header">
+          <div class="nav-title">Workflow Steps</div>
+        </div>
+        <div class="nav-items">
+          <button class="nav-item" onclick="window.location.href='step1.html'">
+            <span class="nav-icon">01</span>
+            <span class="nav-label">Step 1: Theme</span>
+          </button>
+          <button class="nav-item" onclick="window.location.href='step2.html'">
+            <span class="nav-icon">02</span>
+            <span class="nav-label">Step 2: Music</span>
+          </button>
+          <button class="nav-item active" onclick="window.location.href='step3.html'">
+            <span class="nav-icon">03</span>
+            <span class="nav-label">Step 3: Canon</span>
+          </button>
+          <button class="nav-item" onclick="window.location.href='step4.html'">
+            <span class="nav-icon">04</span>
+            <span class="nav-label">Step 4: References</span>
+          </button>
+          <button class="nav-item" onclick="window.location.href='index.html'">
+            <span class="nav-icon">05</span>
+            <span class="nav-label">Step 5: Prompts</span>
+            <span class="nav-count" id="nav-count-all">0</span>
+          </button>
+          <button class="nav-item" onclick="window.location.href='storyboard.html'">
+            <span class="nav-icon">06</span>
+            <span class="nav-label">Step 6: Storyboard</span>
+          </button>
+        </div>
+        <div class="nav-divider"></div>
+        <div class="nav-header">
+          <div class="nav-title">Resources</div>
+        </div>
+        <div class="nav-items">
+          <button class="nav-item" onclick="window.location.href='guide.html'">
+            <span class="nav-icon">?</span>
+            <span class="nav-label">User Guide</span>
+          </button>
+        </div>
+        <div class="nav-footer">
+          <div class="nav-version">v2026-02-07</div>
+        </div>
+      </nav>
+
+      <!-- Main Content -->
+      <main class="content content-full-width">
+        <!-- Breadcrumbs -->
+        <nav class="breadcrumbs" id="breadcrumbs" style="display: none;">
+          <!-- Populated by JavaScript -->
+        </nav>
+
+        <div class="section-header">
+          <h2>Step 3: Define Canon (Bible)</h2>
+          <p class="section-subtitle">Create your visual identity: characters, locations, style, and cinematography rules</p>
+        </div>
+
+        <!-- Canon Editor Tabs -->
+        <div class="canon-tabs">
+          <button class="canon-tab active" data-tab="script">Shot List</button>
+          <button class="canon-tab" data-tab="characters">Characters</button>
+          <button class="canon-tab" data-tab="locations">Locations</button>
+          <button class="canon-tab" data-tab="style">Visual Style</button>
+          <button class="canon-tab" data-tab="cinematography">Cinematography</button>
+        </div>
+
+        <!-- Script Tab -->
+        <div class="canon-tab-content active" id="tab-script">
+          <div class="collapsible-card" data-collapse-key="scriptCanon">
+            <div class="collapsible-header">
+              <div class="collapsible-title">
+                <span class="collapsible-icon">SL</span>
+                <span class="collapsible-label">Shot List</span>
+                <span class="collapsible-hint">34-shot script mapped to music timecodes with character, location, and camera intent</span>
+              </div>
+              <button class="collapse-toggle" type="button">
+                <span class="collapse-icon">-</span>
+              </button>
+            </div>
+            <div class="collapsible-body">
+              <div class="text-input-card-inner">
+                <div class="text-input-actions">
+                  <button class="btn btn-secondary btn-sm" id="saveScriptBtn">Save Shot List</button>
+                </div>
+                <textarea
+                  id="scriptJson"
+                  placeholder='{"version": "2026-02-08", "shots": [{"id": "SHOT_01", "shotNumber": 1, "timing": {"start": 3, "duration": 8, "end": 11, "musicSection": "intro_1"}, "intent": {"what": "...", "why": "...", "emotionalBeat": "..."}}]}'
+                  rows="20"
+                  style="font-family: 'Monaco', 'Courier New', monospace; font-size: 12px;"
+                ></textarea>
+                <div class="text-input-status" id="scriptStatus"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Characters Tab -->
+        <div class="canon-tab-content" id="tab-characters">
+          <div class="collapsible-card" data-collapse-key="charactersCanon">
+            <div class="collapsible-header">
+              <div class="collapsible-title">
+                <span class="collapsible-icon">CH</span>
+                <span class="collapsible-label">Characters Definition</span>
+                <span class="collapsible-hint">Define character appearances, clothing, and personality</span>
+              </div>
+              <button class="collapse-toggle" type="button">
+                <span class="collapse-icon">-</span>
+              </button>
+            </div>
+            <div class="collapsible-body">
+              <div class="text-input-card-inner">
+                <div class="text-input-actions">
+                  <button class="btn btn-secondary btn-sm" id="saveCharactersBtn">Save Characters</button>
+                </div>
+                <textarea
+                  id="charactersJson"
+                  placeholder='{"characters": [{"name": "Protagonist", "description": "25-year-old female, long dark hair, wearing black leather jacket, determined expression"}]}'
+                  rows="12"
+                  style="font-family: 'Monaco', 'Courier New', monospace; font-size: 12px;"
+                ></textarea>
+                <div class="text-input-status" id="charactersStatus"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Locations Tab -->
+        <div class="canon-tab-content" id="tab-locations">
+          <div class="collapsible-card" data-collapse-key="locationsCanon">
+            <div class="collapsible-header">
+              <div class="collapsible-title">
+                <span class="collapsible-icon">LO</span>
+                <span class="collapsible-label">Locations Definition</span>
+                <span class="collapsible-hint">Define environments, lighting, and atmosphere</span>
+              </div>
+              <button class="collapse-toggle" type="button">
+                <span class="collapse-icon">-</span>
+              </button>
+            </div>
+            <div class="collapsible-body">
+              <div class="text-input-card-inner">
+                <div class="text-input-actions">
+                  <button class="btn btn-secondary btn-sm" id="saveLocationsBtn">Save Locations</button>
+                </div>
+                <textarea
+                  id="locationsJson"
+                  placeholder='{"locations": [{"name": "Cyberpunk City", "description": "Neon-lit urban streets, rain-slicked pavement, holographic billboards, blue and purple color palette"}]}'
+                  rows="12"
+                  style="font-family: 'Monaco', 'Courier New', monospace; font-size: 12px;"
+                ></textarea>
+                <div class="text-input-status" id="locationsStatus"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Visual Style Tab -->
+        <div class="canon-tab-content" id="tab-style">
+          <div class="collapsible-card" data-collapse-key="styleCanon">
+            <div class="collapsible-header">
+              <div class="collapsible-title">
+                <span class="collapsible-icon">VS</span>
+                <span class="collapsible-label">Visual Style Definition</span>
+                <span class="collapsible-hint">Define color palette, mood, and genre</span>
+              </div>
+              <button class="collapse-toggle" type="button">
+                <span class="collapse-icon">-</span>
+              </button>
+            </div>
+            <div class="collapsible-body">
+              <div class="text-input-card-inner">
+                <div class="text-input-actions">
+                  <button class="btn btn-secondary btn-sm" id="saveStyleBtn">Save Visual Style</button>
+                </div>
+                <textarea
+                  id="styleJson"
+                  placeholder='{"visualStyle": {"colorPalette": ["neon blue", "deep purple", "electric pink"], "mood": "mysterious and cinematic", "genre": "cyberpunk noir"}}'
+                  rows="12"
+                  style="font-family: 'Monaco', 'Courier New', monospace; font-size: 12px;"
+                ></textarea>
+                <div class="text-input-status" id="styleStatus"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cinematography Tab -->
+        <div class="canon-tab-content" id="tab-cinematography">
+          <div class="collapsible-card" data-collapse-key="cinematographyCanon">
+            <div class="collapsible-header">
+              <div class="collapsible-title">
+                <span class="collapsible-icon">CM</span>
+                <span class="collapsible-label">Cinematography Rules</span>
+                <span class="collapsible-hint">Define camera rules, shot types, and movement</span>
+              </div>
+              <button class="collapse-toggle" type="button">
+                <span class="collapse-icon">-</span>
+              </button>
+            </div>
+            <div class="collapsible-body">
+              <div class="text-input-card-inner">
+                <div class="text-input-actions">
+                  <button class="btn btn-secondary btn-sm" id="saveCinematographyBtn">Save Cinematography</button>
+                </div>
+                <textarea
+                  id="cinematographyJson"
+                  placeholder='{"cinematography": {"shotTypes": ["wide establishing shots", "medium close-ups", "dynamic tracking shots"], "cameraMovement": "smooth, cinematic", "lighting": "high contrast, moody"}}'
+                  rows="12"
+                  style="font-family: 'Monaco', 'Courier New', monospace; font-size: 12px;"
+                ></textarea>
+                <div class="text-input-status" id="cinematographyStatus"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- New Project Modal -->
+  <div class="modal" id="newProjectModal" style="display: none;">
+    <div class="modal-overlay" id="newProjectModalOverlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Create New Project</h2>
+        <button class="modal-close" id="newProjectModalClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="newProjectForm">
+          <div class="form-group">
+            <label for="projectName">Project Name *</label>
+            <input type="text" id="projectName" required maxlength="100" placeholder="My Music Video" />
+          </div>
+          <div class="form-group">
+            <label for="projectDescription">Description</label>
+            <textarea id="projectDescription" rows="3" maxlength="500" placeholder="A brief description of your project"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelNewProject">Cancel</button>
+        <button class="btn btn-primary" id="createNewProject">Create Project</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Analysis Prompt Modal -->
+  <div class="modal" id="analysisPromptModal" style="display: none;">
+    <div class="modal-overlay" id="analysisPromptModalOverlay"></div>
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <h2>AI Music Analysis Prompt</h2>
+        <button class="modal-close" id="analysisPromptModalClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-description">Copy this prompt and paste it into another AI (Claude, ChatGPT, etc.) along with your music file.
+          The AI will analyze your music and return a JSON file that you can upload here.
+        </p>
+        <div class="prompt-box">
+          <button class="btn btn-primary btn-sm copy-prompt-btn" id="copyAnalysisPromptBtn">Copy Prompt
+          </button>
+          <pre id="analysisPromptText">Loading prompt...</pre>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="closeAnalysisPromptModal">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

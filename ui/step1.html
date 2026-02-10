@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Step 1: Theme - AI Music Video</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <div class="main-layout">
+      <!-- Left Navigation -->
+      <nav class="left-nav">
+        <!-- Brand Header -->
+        <div class="nav-brand">
+          <h1>Prompt Compiler</h1>
+          <p class="nav-subtitle">AI Music Video Project</p>
+        </div>
+
+        <!-- Project Selector -->
+        <div class="project-selector-section">
+          <div class="nav-header">
+            <div class="nav-title">Current Project</div>
+            <button class="btn-icon" id="newProjectBtn" title="New Project">+</button>
+          </div>
+          <select class="project-dropdown" id="projectSelector">
+            <option value="default">Loading...</option>
+          </select>
+        </div>
+
+        <div class="nav-divider"></div>
+
+        <!-- Stats -->
+        <div class="nav-stats">
+          <div class="nav-stat-item">
+            <div class="nav-stat-value" id="stat-shots">0</div>
+            <div class="nav-stat-label">Shots</div>
+          </div>
+          <div class="nav-stat-item">
+            <div class="nav-stat-value" id="stat-prompts">0</div>
+            <div class="nav-stat-label">Prompts</div>
+          </div>
+          <div class="nav-stat-item nav-stat-success">
+            <div class="nav-stat-value" id="stat-passed">0</div>
+            <div class="nav-stat-label">Passed</div>
+          </div>
+          <div class="nav-stat-item nav-stat-error">
+            <div class="nav-stat-value" id="stat-failed">0</div>
+            <div class="nav-stat-label">Failed</div>
+          </div>
+        </div>
+
+        <div class="nav-divider"></div>
+
+        <div class="nav-header">
+          <div class="nav-title">Workflow Steps</div>
+        </div>
+        <div class="nav-items">
+          <button class="nav-item active" onclick="window.location.href='step1.html'">
+            <span class="nav-icon">01</span>
+            <span class="nav-label">Step 1: Theme</span>
+          </button>
+          <button class="nav-item" onclick="window.location.href='step2.html'">
+            <span class="nav-icon">02</span>
+            <span class="nav-label">Step 2: Music</span>
+          </button>
+          <button class="nav-item" onclick="window.location.href='step3.html'">
+            <span class="nav-icon">03</span>
+            <span class="nav-label">Step 3: Canon</span>
+          </button>
+          <button class="nav-item" onclick="window.location.href='step4.html'">
+            <span class="nav-icon">04</span>
+            <span class="nav-label">Step 4: References</span>
+          </button>
+          <button class="nav-item" onclick="window.location.href='index.html'">
+            <span class="nav-icon">05</span>
+            <span class="nav-label">Step 5: Prompts</span>
+            <span class="nav-count" id="nav-count-all">0</span>
+          </button>
+          <button class="nav-item" onclick="window.location.href='storyboard.html'">
+            <span class="nav-icon">06</span>
+            <span class="nav-label">Step 6: Storyboard</span>
+          </button>
+        </div>
+        <div class="nav-divider"></div>
+        <div class="nav-header">
+          <div class="nav-title">Resources</div>
+        </div>
+        <div class="nav-items">
+          <button class="nav-item" onclick="window.location.href='guide.html'">
+            <span class="nav-icon">?</span>
+            <span class="nav-label">User Guide</span>
+          </button>
+        </div>
+        <div class="nav-footer">
+          <div class="nav-version">v2026-02-07</div>
+        </div>
+      </nav>
+
+      <!-- Main Content -->
+      <main class="content content-full-width">
+        <!-- Breadcrumbs -->
+        <nav class="breadcrumbs" id="breadcrumbs" style="display: none;">
+          <!-- Populated by JavaScript -->
+        </nav>
+
+        <div class="section-header">
+          <h2>Step 1: Project Theme & Concept</h2>
+          <p class="section-subtitle">Define the core vision and creative direction for your music video</p>
+        </div>
+
+        <!-- Theme Form -->
+        <div class="collapsible-card" data-collapse-key="projectConcept">
+          <div class="collapsible-header">
+            <div class="collapsible-title">
+              <span class="collapsible-icon">PC</span>
+              <span class="collapsible-label">Project Concept</span>
+              <span class="collapsible-hint">What is your music video about?</span>
+            </div>
+            <button class="collapse-toggle" type="button">
+              <span class="collapse-icon">-</span>
+            </button>
+          </div>
+          <div class="collapsible-body">
+            <div class="text-input-card-inner">
+              <div class="text-input-actions">
+                <button class="btn btn-secondary btn-sm" id="saveConceptBtn">Save</button>
+              </div>
+              <textarea
+                id="conceptText"
+                placeholder="Describe the central concept, story, or theme of your music video. What message or emotion are you trying to convey?"
+                rows="6"
+              ></textarea>
+              <div class="text-input-status" id="conceptTextStatus"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="collapsible-card" data-collapse-key="visualInspiration">
+          <div class="collapsible-header">
+            <div class="collapsible-title">
+              <span class="collapsible-icon">VS</span>
+              <span class="collapsible-label">Visual Inspiration</span>
+              <span class="collapsible-hint">What influences your visual style?</span>
+            </div>
+            <button class="collapse-toggle" type="button">
+              <span class="collapse-icon">-</span>
+            </button>
+          </div>
+          <div class="collapsible-body">
+            <div class="text-input-card-inner">
+              <div class="text-input-actions">
+                <button class="btn btn-secondary btn-sm" id="saveInspirationBtn">Save</button>
+              </div>
+              <textarea
+                id="inspirationText"
+                placeholder="List films, artists, art styles, or other works that inspire your vision. Examples: Blade Runner, Studio Ghibli, neon noir aesthetic, etc."
+                rows="4"
+              ></textarea>
+              <div class="text-input-status" id="inspirationTextStatus"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="collapsible-card" data-collapse-key="moodTone">
+          <div class="collapsible-header">
+            <div class="collapsible-title">
+              <span class="collapsible-icon">MT</span>
+              <span class="collapsible-label">Mood & Tone</span>
+              <span class="collapsible-hint">What emotions should viewers feel?</span>
+            </div>
+            <button class="collapse-toggle" type="button">
+              <span class="collapse-icon">-</span>
+            </button>
+          </div>
+          <div class="collapsible-body">
+            <div class="text-input-card-inner">
+              <div class="text-input-actions">
+                <button class="btn btn-secondary btn-sm" id="saveMoodBtn">Save</button>
+              </div>
+              <textarea
+                id="moodText"
+                placeholder="Describe the emotional tone: mysterious, uplifting, melancholic, energetic, surreal, etc."
+                rows="3"
+              ></textarea>
+              <div class="text-input-status" id="moodTextStatus"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="collapsible-card" data-collapse-key="genreStyle">
+          <div class="collapsible-header">
+            <div class="collapsible-title">
+              <span class="collapsible-icon">GS</span>
+              <span class="collapsible-label">Genre & Style</span>
+              <span class="collapsible-hint">What genre and visual style?</span>
+            </div>
+            <button class="collapse-toggle" type="button">
+              <span class="collapse-icon">-</span>
+            </button>
+          </div>
+          <div class="collapsible-body">
+            <div class="text-input-card-inner">
+              <div class="text-input-actions">
+                <button class="btn btn-secondary btn-sm" id="saveGenreBtn">Save</button>
+              </div>
+              <textarea
+                id="genreText"
+                placeholder="Visual genre: cinematic, anime, surreal, documentary, abstract, music video aesthetics, etc."
+                rows="3"
+              ></textarea>
+              <div class="text-input-status" id="genreTextStatus"></div>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- New Project Modal -->
+  <div class="modal" id="newProjectModal" style="display: none;">
+    <div class="modal-overlay" id="newProjectModalOverlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Create New Project</h2>
+        <button class="modal-close" id="newProjectModalClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="newProjectForm">
+          <div class="form-group">
+            <label for="projectName">Project Name *</label>
+            <input type="text" id="projectName" required maxlength="100" placeholder="My Music Video" />
+          </div>
+          <div class="form-group">
+            <label for="projectDescription">Description</label>
+            <textarea id="projectDescription" rows="3" maxlength="500" placeholder="A brief description of your project"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelNewProject">Cancel</button>
+        <button class="btn btn-primary" id="createNewProject">Create Project</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Analysis Prompt Modal -->
+  <div class="modal" id="analysisPromptModal" style="display: none;">
+    <div class="modal-overlay" id="analysisPromptModalOverlay"></div>
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <h2>AI Music Analysis Prompt</h2>
+        <button class="modal-close" id="analysisPromptModalClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-description">Copy this prompt and paste it into another AI (Claude, ChatGPT, etc.) along with your music file.
+          The AI will analyze your music and return a JSON file that you can upload here.
+        </p>
+        <div class="prompt-box">
+          <button class="btn btn-primary btn-sm copy-prompt-btn" id="copyAnalysisPromptBtn">Copy Prompt
+          </button>
+          <pre id="analysisPromptText">Loading prompt...</pre>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="closeAnalysisPromptModal">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
