@@ -52,6 +52,14 @@ const ALLOWED_IMAGE_TYPES = ['.png', '.jpg', '.jpeg'];
 const MAX_MUSIC_SIZE = 50 * 1024 * 1024;  // 50MB
 const MAX_VIDEO_SIZE = 500 * 1024 * 1024; // 500MB
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;  // 10MB
+const PREVIS_SOURCE_TYPES = new Set([
+  'rendered_thumbnail',
+  'rendered_video',
+  'rendered_first_frame',
+  'character_ref',
+  'location_ref',
+  'manual_upload'
+]);
 
 function isPathInside(basePath, targetPath) {
   const base = path.resolve(basePath);
@@ -327,6 +335,70 @@ function writeSequenceFile(data, projectId = 'default') {
   fs.writeFileSync(sequencePath, JSON.stringify(data, null, 2), 'utf8');
 }
 
+function getPrevisMapPath(projectId = 'default') {
+  return path.join(
+    projectManager.getProjectPath(projectId, 'rendered'),
+    'storyboard',
+    'previs_map.json'
+  );
+}
+
+function readPrevisMapFile(projectId = 'default') {
+  const previsMapPath = getPrevisMapPath(projectId);
+  try {
+    if (!fs.existsSync(previsMapPath)) {
+      return {};
+    }
+    const data = JSON.parse(fs.readFileSync(previsMapPath, 'utf8'));
+    return (data && typeof data === 'object' && !Array.isArray(data)) ? data : {};
+  } catch (err) {
+    console.warn(`[Previs Map] Failed reading for project '${projectId}':`, err.message);
+    return {};
+  }
+}
+
+function writePrevisMapFile(previsMap, projectId = 'default') {
+  const previsMapPath = getPrevisMapPath(projectId);
+  const dir = path.dirname(previsMapPath);
+
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  fs.writeFileSync(previsMapPath, JSON.stringify(previsMap, null, 2), 'utf8');
+}
+
+function validatePrevisEntry(entry) {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+    throw new Error('entry must be an object');
+  }
+
+  const { sourceType, sourceRef, locked, notes } = entry;
+
+  if (!PREVIS_SOURCE_TYPES.has(sourceType)) {
+    throw new Error('Invalid sourceType');
+  }
+
+  if (typeof sourceRef !== 'string' || sourceRef.trim() === '' || sourceRef.length > 500) {
+    throw new Error('sourceRef must be a non-empty string');
+  }
+
+  if (typeof locked !== 'boolean') {
+    throw new Error('locked must be boolean');
+  }
+
+  if (notes !== undefined && typeof notes !== 'string') {
+    throw new Error('notes must be a string');
+  }
+
+  return {
+    sourceType,
+    sourceRef: sourceRef.trim(),
+    locked,
+    ...(typeof notes === 'string' && notes.length ? { notes } : {})
+  };
+}
+
 /**
  * Send JSON response
  */
@@ -436,6 +508,70 @@ const server = http.createServer((req, res) => {
       const projectId = req.url.match(/^\/api\/projects\/([^\/]+)$/)[1];
       projectManager.deleteProject(projectId);
       sendJSON(res, 200, { success: true, message: 'Project deleted' });
+    } catch (err) {
+      sendJSON(res, 400, { success: false, error: err.message });
+    }
+    return;
+  }
+
+
+  // ===== PREVIS MAP ENDPOINTS =====
+
+  // GET /api/storyboard/previs-map
+  if (req.method === 'GET' && req.url.startsWith('/api/storyboard/previs-map')) {
+    try {
+      const { projectId } = getProjectContext(req);
+      const previsMap = readPrevisMapFile(projectId);
+      sendJSON(res, 200, { success: true, projectId, previsMap });
+    } catch (err) {
+      sendJSON(res, 400, { success: false, error: err.message });
+    }
+    return;
+  }
+
+  // PUT /api/storyboard/previs-map/:shotId
+  if (req.method === 'PUT' && req.url.match(/^\/api\/storyboard\/previs-map\/([^\/]+)$/)) {
+    const shotId = req.url.match(/^\/api\/storyboard\/previs-map\/([^\/]+)$/)[1];
+
+    readBody(req, MAX_BODY_SIZE, (err, body) => {
+      if (err) {
+        sendJSON(res, 413, { success: false, error: 'Payload too large' });
+        return;
+      }
+
+      try {
+        sanitizePathSegment(shotId, SHOT_ID_REGEX, 'shot');
+        const payload = JSON.parse(body);
+        const { project, entry } = payload;
+        const projectId = resolveProjectId(project || projectManager.getActiveProject(), { required: true });
+
+        const sanitizedEntry = validatePrevisEntry(entry);
+        const previsMap = readPrevisMapFile(projectId);
+        previsMap[shotId] = sanitizedEntry;
+        writePrevisMapFile(previsMap, projectId);
+
+        sendJSON(res, 200, { success: true, shotId, entry: sanitizedEntry });
+      } catch (parseErr) {
+        sendJSON(res, 400, { success: false, error: parseErr.message || 'Invalid request' });
+      }
+    });
+    return;
+  }
+
+  // DELETE /api/storyboard/previs-map/:shotId
+  if (req.method === 'DELETE' && req.url.match(/^\/api\/storyboard\/previs-map\/([^\/]+)$/)) {
+    const shotId = req.url.match(/^\/api\/storyboard\/previs-map\/([^\/]+)$/)[1];
+
+    try {
+      const requestUrl = parseRequestUrl(req);
+      sanitizePathSegment(shotId, SHOT_ID_REGEX, 'shot');
+      const projectId = resolveProjectId(requestUrl.searchParams.get('project') || projectManager.getActiveProject(), { required: true });
+
+      const previsMap = readPrevisMapFile(projectId);
+      delete previsMap[shotId];
+      writePrevisMapFile(previsMap, projectId);
+
+      sendJSON(res, 200, { success: true, shotId });
     } catch (err) {
       sendJSON(res, 400, { success: false, error: err.message });
     }

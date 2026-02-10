@@ -164,6 +164,32 @@
 }
 
 /* Badges - Calm and elegant */
+
+.shot-preview-badge {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  background: rgba(12, 17, 29, 0.9);
+  color: var(--accent-primary);
+  border: 1px solid var(--accent-primary);
+  border-radius: 999px;
+  padding: 0.2rem 0.5rem;
+  font-size: 11px;
+  font-weight: 600;
+  z-index: 2;
+}
+
+.previs-controls {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.previs-controls .btn {
+  flex: 1 1 180px;
+}
+
 .shot-selection-badge {
   position: absolute;
   top: 1rem;

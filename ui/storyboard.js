@@ -6,10 +6,8 @@ let currentView = 'grid';
 let selectedShot = null;
 let selectedVariation = null;
 let currentProject = null;
-let shotListData = null;
-let characterRefs = [];
-let locationRefs = [];
-let orderedStoryboardShots = [];
+let previsMap = {};
+const PREVIS_REF_SLOT = 'ref_01';
 
 // Toast notification system
 const toastContainer = document.getElementById('toastContainer');
@@ -532,6 +530,153 @@ async function createNewProject(name, description) {
   }
 }
 
+
+async function loadPrevisMap() {
+  try {
+    const projectParam = currentProject ? `?project=${currentProject.id}` : '';
+    const response = await fetch(`/api/storyboard/previs-map${projectParam}`);
+    if (!response.ok) {
+      throw new Error('Failed to load previs map');
+    }
+
+    const result = await response.json();
+    previsMap = result.previsMap || {};
+  } catch (err) {
+    console.warn('Failed to load previs map:', err);
+    previsMap = {};
+  }
+}
+
+function getShotPrevisOverride(shotId) {
+  if (!shotId || !previsMap || typeof previsMap !== 'object') {
+    return null;
+  }
+
+  const entry = previsMap[shotId];
+  return entry && typeof entry === 'object' ? entry : null;
+}
+
+function getDefaultCharacterRef(shot) {
+  const characterId = shot?.characterId || shot?.characterRef;
+  if (!characterId) return null;
+  return `${characterId}:${PREVIS_REF_SLOT}`;
+}
+
+function getDefaultLocationRef(shot) {
+  const locationId = shot?.locationId || shot?.locationRef;
+  if (!locationId) return null;
+  return `${locationId}:${PREVIS_REF_SLOT}`;
+}
+
+function resolveRefSourcePath(sourceType, sourceRef) {
+  if (!sourceRef) return null;
+
+  if (sourceType === 'character_ref') {
+    const [entityId, slot = PREVIS_REF_SLOT] = sourceRef.split(':');
+    return `projects/${currentProject.id}/reference/characters/${entityId}/${slot}.png`;
+  }
+
+  if (sourceType === 'location_ref') {
+    const [entityId, slot = PREVIS_REF_SLOT] = sourceRef.split(':');
+    return `projects/${currentProject.id}/reference/locations/${entityId}/${slot}.png`;
+  }
+
+  return sourceRef;
+}
+
+function getFallbackPreviewAsset(shot) {
+  const thumbnailPath = shot.renderFiles?.thumbnail;
+  if (thumbnailPath) {
+    return { path: thumbnailPath, sourceType: 'rendered_thumbnail', isOverride: false, locked: false, notes: '' };
+  }
+
+  const selectedVar = shot.selectedVariation || 'A';
+  const videoPath = shot.renderFiles?.kling?.[selectedVar];
+  if (videoPath) {
+    return { path: videoPath, sourceType: 'rendered_video', isOverride: false, locked: false, notes: '' };
+  }
+
+  const firstFramePath = shot.renderFiles?.nano?.firstFrame || shot.renderFiles?.nanobanana?.firstFrame;
+  if (firstFramePath) {
+    return { path: firstFramePath, sourceType: 'rendered_first_frame', isOverride: false, locked: false, notes: '' };
+  }
+
+  return { path: null, sourceType: null, isOverride: false, locked: false, notes: '' };
+}
+
+function getShotPreviewAsset(shot) {
+  const override = getShotPrevisOverride(shot.shotId);
+  if (override?.sourceRef) {
+    return {
+      path: resolveRefSourcePath(override.sourceType, override.sourceRef),
+      sourceType: override.sourceType,
+      isOverride: true,
+      locked: !!override.locked,
+      notes: override.notes || ''
+    };
+  }
+
+  return getFallbackPreviewAsset(shot);
+}
+
+function applyPreviewNode(container, shot) {
+  const preview = getShotPreviewAsset(shot);
+
+  if (preview.path && /\.(mp4|mov)$/i.test(preview.path)) {
+    const video = document.createElement('video');
+    video.src = `/${preview.path}`;
+    video.muted = true;
+    video.preload = 'metadata';
+    container.appendChild(video);
+  } else if (preview.path) {
+    const img = document.createElement('img');
+    img.src = `/${preview.path}`;
+    img.alt = shot.shotId;
+    container.appendChild(img);
+  } else {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'placeholder';
+    placeholder.textContent = 'VIDEO';
+    container.appendChild(placeholder);
+  }
+
+  return preview;
+}
+
+async function saveShotPrevisOverride(shotId, entry) {
+  const payload = {
+    project: currentProject?.id,
+    entry
+  };
+
+  const response = await fetch(`/api/storyboard/previs-map/${encodeURIComponent(shotId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  const result = await response.json();
+  if (!response.ok || !result.success) {
+    throw new Error(result.error || 'Failed to save previs override');
+  }
+
+  previsMap[shotId] = result.entry;
+}
+
+async function resetShotPrevisOverride(shotId) {
+  const projectParam = currentProject ? `?project=${currentProject.id}` : '';
+  const response = await fetch(`/api/storyboard/previs-map/${encodeURIComponent(shotId)}${projectParam}`, {
+    method: 'DELETE'
+  });
+
+  const result = await response.json();
+  if (!response.ok || !result.success) {
+    throw new Error(result.error || 'Failed to reset previs override');
+  }
+
+  delete previsMap[shotId];
+}
+
 async function loadSequence() {
   const loadingOverlay = showLoading(document.body, 'Loading storyboard...');
 
@@ -549,12 +694,8 @@ async function loadSequence() {
         musicFile: ''
       };
     }
-
-    await loadShotList();
-    await loadReferenceData();
-    buildOrderedStoryboardShots();
-    updateMusicDisplay(sequenceData.musicFile);
-    updateMusicPreview();
+    sequenceData = await response.json();
+    await loadPrevisMap();
     updateStats();
     renderView();
 
@@ -661,25 +802,7 @@ function createShotCard(shot) {
   const thumbnail = document.createElement('div');
   thumbnail.className = 'shot-thumbnail';
 
-  const previewAsset = resolveShotPreviewAsset(shot);
-
-  if (previewAsset?.type === 'image') {
-    const img = document.createElement('img');
-    img.src = previewAsset.path;
-    img.alt = shot.shotId;
-    thumbnail.appendChild(img);
-  } else if (previewAsset?.type === 'video') {
-    const video = document.createElement('video');
-    video.src = previewAsset.path;
-    video.muted = true;
-    video.preload = 'metadata';
-    thumbnail.appendChild(video);
-  } else {
-    const placeholder = document.createElement('div');
-    placeholder.className = 'placeholder';
-    placeholder.textContent = 'SHOT';
-    thumbnail.appendChild(placeholder);
-  }
+  const preview = applyPreviewNode(thumbnail, shot);
 
   // Selection badge
   if (shot.selectedVariation && shot.selectedVariation !== 'none') {
@@ -687,6 +810,13 @@ function createShotCard(shot) {
     badge.className = 'shot-selection-badge';
     badge.textContent = `Option ${shot.selectedVariation}`;
     thumbnail.appendChild(badge);
+  }
+
+  if (preview.isOverride) {
+    const previewBadge = document.createElement('div');
+    previewBadge.className = 'shot-preview-badge';
+    previewBadge.textContent = preview.locked ? 'Locked' : 'Override';
+    thumbnail.appendChild(previewBadge);
   }
 
   // Status badge
@@ -791,19 +921,7 @@ function createTimelineShot(shot) {
   shotEl.className = 'timeline-shot';
   shotEl.addEventListener('click', () => openShotModal(shot));
 
-  const previewAsset = resolveShotPreviewAsset(shot);
-  if (previewAsset?.type === 'image') {
-    const img = document.createElement('img');
-    img.src = previewAsset.path;
-    img.alt = shot.shotId;
-    shotEl.appendChild(img);
-  } else if (previewAsset?.type === 'video') {
-    const video = document.createElement('video');
-    video.src = previewAsset.path;
-    video.muted = true;
-    video.preload = 'metadata';
-    shotEl.appendChild(video);
-  }
+  applyPreviewNode(shotEl, shot);
 
   const label = document.createElement('div');
   label.className = 'timeline-shot-label';
@@ -1029,12 +1147,19 @@ function renderShotDetails() {
   h3.textContent = 'Shot Details';
   shotDetails.appendChild(h3);
 
+  const override = getShotPrevisOverride(selectedShot.shotId);
   const fields = [
     ['Shot ID', selectedShot.shotId],
     ['Duration', (selectedShot.timing?.duration || 8) + 's'],
     ['Music Section', selectedShot.timing?.musicSection || 'N/A'],
     ['Status', selectedShot.status || 'not_rendered']
   ];
+
+  if (override) {
+    fields.push(['Preview Source', override.sourceType]);
+    fields.push(['Locked', override.locked ? 'Yes' : 'No']);
+  }
+
   if (selectedShot.notes) fields.push(['Notes', selectedShot.notes]);
 
   fields.forEach(([label, value]) => {
@@ -1045,7 +1170,130 @@ function renderShotDetails() {
     p.appendChild(document.createTextNode(value));
     shotDetails.appendChild(p);
   });
+
+  const controls = document.createElement('div');
+  controls.className = 'previs-controls';
+
+  const useCharacterBtn = document.createElement('button');
+  useCharacterBtn.className = 'btn btn-small btn-secondary';
+  useCharacterBtn.textContent = 'Use Character Ref';
+  useCharacterBtn.addEventListener('click', () => setShotPrevisFromSource('character_ref'));
+  controls.appendChild(useCharacterBtn);
+
+  const useLocationBtn = document.createElement('button');
+  useLocationBtn.className = 'btn btn-small btn-secondary';
+  useLocationBtn.textContent = 'Use Location Ref';
+  useLocationBtn.addEventListener('click', () => setShotPrevisFromSource('location_ref'));
+  controls.appendChild(useLocationBtn);
+
+  const useRenderedBtn = document.createElement('button');
+  useRenderedBtn.className = 'btn btn-small btn-secondary';
+  useRenderedBtn.textContent = 'Use Rendered';
+  useRenderedBtn.addEventListener('click', () => setShotPrevisFromSource('rendered_thumbnail'));
+  controls.appendChild(useRenderedBtn);
+
+  const lockBtn = document.createElement('button');
+  lockBtn.className = 'btn btn-small btn-secondary';
+  lockBtn.textContent = 'Lock selection';
+  lockBtn.addEventListener('click', toggleShotPrevisLock);
+  controls.appendChild(lockBtn);
+
+  const resetBtn = document.createElement('button');
+  resetBtn.className = 'btn btn-small';
+  resetBtn.textContent = 'Reset to Auto';
+  resetBtn.addEventListener('click', handleResetShotPrevis);
+  controls.appendChild(resetBtn);
+
+  shotDetails.appendChild(controls);
 }
+
+async function setShotPrevisFromSource(sourceType) {
+  if (!selectedShot) return;
+
+  let sourceRef = null;
+  if (sourceType === 'character_ref') {
+    sourceRef = getDefaultCharacterRef(selectedShot);
+    if (!sourceRef) {
+      showToast('No character reference', `${selectedShot.shotId} has no characterRef/characterId`, 'warning', 3000);
+      return;
+    }
+  } else if (sourceType === 'location_ref') {
+    sourceRef = getDefaultLocationRef(selectedShot);
+    if (!sourceRef) {
+      showToast('No location reference', `${selectedShot.shotId} has no locationRef/locationId`, 'warning', 3000);
+      return;
+    }
+  } else {
+    const preview = getFallbackPreviewAsset(selectedShot);
+    sourceRef = preview.path;
+    if (!sourceRef) {
+      showToast('No rendered source', 'No rendered preview asset is available for this shot', 'warning', 3000);
+      return;
+    }
+    sourceType = preview.sourceType || 'rendered_thumbnail';
+  }
+
+  try {
+    const existing = getShotPrevisOverride(selectedShot.shotId);
+    await saveShotPrevisOverride(selectedShot.shotId, {
+      sourceType,
+      sourceRef,
+      locked: existing?.locked || false,
+      notes: existing?.notes || ''
+    });
+
+    showToast('Preview source updated', `${selectedShot.shotId}: ${sourceType}`, 'success', 2000);
+    renderShotDetails();
+    renderView();
+  } catch (err) {
+    showToast('Failed to update source', err.message, 'error', 3000);
+  }
+}
+
+async function toggleShotPrevisLock() {
+  if (!selectedShot) return;
+
+  const existing = getShotPrevisOverride(selectedShot.shotId);
+  const fallbackPreview = getFallbackPreviewAsset(selectedShot);
+  const nextLocked = !(existing?.locked || false);
+
+  if (!existing && !fallbackPreview.path) {
+    showToast('Cannot lock selection', 'No preview source available to lock', 'warning', 3000);
+    return;
+  }
+
+  const sourceType = existing?.sourceType || fallbackPreview.sourceType || 'rendered_video';
+  const sourceRef = existing?.sourceRef || fallbackPreview.path;
+
+  try {
+    await saveShotPrevisOverride(selectedShot.shotId, {
+      sourceType,
+      sourceRef,
+      locked: nextLocked,
+      notes: existing?.notes || ''
+    });
+
+    showToast(nextLocked ? 'Selection locked' : 'Selection unlocked', selectedShot.shotId, 'success', 2000);
+    renderShotDetails();
+    renderView();
+  } catch (err) {
+    showToast('Failed to update lock', err.message, 'error', 3000);
+  }
+}
+
+async function handleResetShotPrevis() {
+  if (!selectedShot) return;
+
+  try {
+    await resetShotPrevisOverride(selectedShot.shotId);
+    showToast('Reset to auto', `${selectedShot.shotId} now follows auto preview resolution`, 'success', 2000);
+    renderShotDetails();
+    renderView();
+  } catch (err) {
+    showToast('Reset failed', err.message, 'error', 3000);
+  }
+}
+
 
 /**
  * Save selection
