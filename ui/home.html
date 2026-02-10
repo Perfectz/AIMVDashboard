@@ -3,565 +3,106 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Music Video - Getting Started</title>
+  <title>AIMV Dashboard Home</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-primary: #0f1419;
-      --bg-secondary: #1a1f2e;
-      --bg-card: #1e2433;
-      --bg-elevated: #232938;
-      --text-primary: #e6edf3;
-      --text-secondary: #adbac7;
-      --text-tertiary: #768390;
-      --accent-primary: #1a73e8;
-      --accent-hover: #1557b0;
-      --border: #2d3342;
-      --success: #34a853;
-      --warning: #fbbc04;
-      --error: #ea4335;
-      --shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      --bg:#0b1220;--panel:#121a2b;--panel2:#17223a;--text:#e7edf8;--muted:#9fb0cd;--line:#26324d;
+      --accent:#4da3ff;--good:#31c26b;--warn:#f6c24b;--bad:#ff7070;
     }
-
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      line-height: 1.6;
-    }
-
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 3rem 2rem;
-    }
-
-    .header {
-      text-align: center;
-      margin-bottom: 4rem;
-      padding-bottom: 2rem;
-      border-bottom: 2px solid var(--border);
-    }
-
-    .header h1 {
-      font-size: 3rem;
-      font-weight: 700;
-      margin-bottom: 1rem;
-      background: linear-gradient(135deg, #1a73e8 0%, #34a853 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    .header .subtitle {
-      font-size: 1.25rem;
-      color: var(--text-secondary);
-      margin-bottom: 0.5rem;
-    }
-
-    .header .version {
-      font-size: 0.875rem;
-      color: var(--text-tertiary);
-      font-weight: 500;
-    }
-
-    .quick-nav {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 1.5rem;
-      margin-bottom: 3rem;
-    }
-
-    .nav-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 2rem;
-      transition: all 0.2s;
-      text-decoration: none;
-      color: inherit;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-
-    .nav-card:hover {
-      transform: translateY(-2px);
-      box-shadow: var(--shadow);
-      border-color: var(--accent-primary);
-    }
-
-    .nav-card-icon {
-      font-size: 2.5rem;
-    }
-
-    .nav-card-title {
-      font-size: 1.25rem;
-      font-weight: 600;
-      color: var(--text-primary);
-    }
-
-    .nav-card-desc {
-      font-size: 0.9375rem;
-      color: var(--text-secondary);
-    }
-
-    .section {
-      margin-bottom: 3rem;
-    }
-
-    .section-title {
-      font-size: 1.75rem;
-      font-weight: 600;
-      margin-bottom: 1.5rem;
-      color: var(--text-primary);
-      border-left: 4px solid var(--accent-primary);
-      padding-left: 1rem;
-    }
-
-    .steps {
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
-    }
-
-    .step {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1.5rem;
-      display: flex;
-      gap: 1.5rem;
-    }
-
-    .step-number {
-      flex-shrink: 0;
-      width: 40px;
-      height: 40px;
-      background: var(--accent-primary);
-      color: white;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      font-size: 1.125rem;
-    }
-
-    .step-content h3 {
-      font-size: 1.125rem;
-      font-weight: 600;
-      margin-bottom: 0.5rem;
-      color: var(--text-primary);
-    }
-
-    .step-content p {
-      color: var(--text-secondary);
-      margin-bottom: 0.75rem;
-    }
-
-    .code-block {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 1rem;
-      font-family: 'SF Mono', Monaco, Consolas, monospace;
-      font-size: 0.875rem;
-      color: var(--success);
-      margin: 0.75rem 0;
-      overflow-x: auto;
-    }
-
-    .feature-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 1.5rem;
-      margin-top: 1.5rem;
-    }
-
-    .feature {
-      background: var(--bg-elevated);
-      border-radius: 8px;
-      padding: 1.5rem;
-    }
-
-    .feature-icon {
-      font-size: 2rem;
-      margin-bottom: 0.75rem;
-    }
-
-    .feature-title {
-      font-weight: 600;
-      margin-bottom: 0.5rem;
-      color: var(--text-primary);
-    }
-
-    .feature-desc {
-      font-size: 0.9375rem;
-      color: var(--text-secondary);
-    }
-
-    .warning-box {
-      background: rgba(251, 188, 4, 0.1);
-      border-left: 4px solid var(--warning);
-      border-radius: 6px;
-      padding: 1rem 1.5rem;
-      margin: 1rem 0;
-    }
-
-    .warning-box strong {
-      color: var(--warning);
-    }
-
-    .info-box {
-      background: rgba(26, 115, 232, 0.1);
-      border-left: 4px solid var(--accent-primary);
-      border-radius: 6px;
-      padding: 1rem 1.5rem;
-      margin: 1rem 0;
-    }
-
-    .success-box {
-      background: rgba(52, 168, 83, 0.1);
-      border-left: 4px solid var(--success);
-      border-radius: 6px;
-      padding: 1rem 1.5rem;
-      margin: 1rem 0;
-    }
-
-    ul {
-      margin: 0.5rem 0;
-      padding-left: 1.5rem;
-      color: var(--text-secondary);
-    }
-
-    ul li {
-      margin-bottom: 0.5rem;
-    }
-
-    code {
-      background: var(--bg-secondary);
-      color: var(--success);
-      padding: 0.125rem 0.375rem;
-      border-radius: 3px;
-      font-family: 'SF Mono', Monaco, Consolas, monospace;
-      font-size: 0.875em;
-    }
-
-    .footer {
-      margin-top: 4rem;
-      padding-top: 2rem;
-      border-top: 1px solid var(--border);
-      text-align: center;
-      color: var(--text-tertiary);
-      font-size: 0.875rem;
-    }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Inter,system-ui,sans-serif; background:linear-gradient(180deg,#09101d,#0b1220); color:var(--text); }
+    .wrap { max-width:1200px; margin:0 auto; padding:2rem 1.25rem 3rem; }
+    .top { display:flex; justify-content:space-between; align-items:end; gap:1rem; margin-bottom:1.5rem; }
+    h1 { margin:0; font-size:2rem; }
+    .sub { color:var(--muted); margin-top:.35rem; }
+    .links { display:flex; gap:.6rem; flex-wrap:wrap; }
+    .btn { border:1px solid var(--line); background:var(--panel); color:var(--text); padding:.55rem .8rem; border-radius:.55rem; text-decoration:none; font-size:.92rem; }
+    .btn:hover { border-color:var(--accent); }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:1rem; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:.8rem; padding:1rem; }
+    .label { font-size:.82rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+    .value { font-size:1.8rem; font-weight:700; margin:.35rem 0 .2rem; }
+    .split { display:grid; grid-template-columns:2fr 1fr; gap:1rem; margin-top:1rem; }
+    .list { display:grid; gap:.55rem; margin-top:.75rem; }
+    .item { display:flex; justify-content:space-between; gap:.8rem; align-items:flex-start; padding:.65rem .7rem; border:1px solid var(--line); border-radius:.55rem; background:var(--panel2); }
+    .item a { color:#9fd0ff; text-decoration:none; font-size:.9rem; white-space:nowrap; }
+    .ok { color:var(--good); }
+    .warn { color:var(--warn); }
+    .bad { color:var(--bad); }
+    .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+    @media (max-width:980px){ .split{grid-template-columns:1fr;} }
   </style>
 </head>
 <body>
-  <div class="container">
-    <!-- Header -->
-    <div class="header">
-      <h1>🎬 AI Music Video</h1>
-      <p class="subtitle">Prompt Compiler + Project Orchestrator</p>
-      <p class="version">Version 2026-02-07 | Multi-Project Support</p>
-    </div>
-
-    <!-- Quick Navigation -->
-    <div class="quick-nav">
-      <a href="index.html" class="nav-card">
-        <div class="nav-card-icon">📝</div>
-        <div class="nav-card-title">Prompts Interface</div>
-        <div class="nav-card-desc">Browse and manage generated prompts for Kling, Nano Banana, and Suno</div>
-      </a>
-      <a href="storyboard.html" class="nav-card">
-        <div class="nav-card-icon">📊</div>
-        <div class="nav-card-title">Storyboard</div>
-        <div class="nav-card-desc">Upload and compare rendered video variations A/B/C/D</div>
-      </a>
-      <a href="https://github.com/anthropics/claude-code" class="nav-card" target="_blank">
-        <div class="nav-card-icon">📖</div>
-        <div class="nav-card-title">Documentation</div>
-        <div class="nav-card-desc">View README and technical documentation</div>
-      </a>
-    </div>
-
-    <!-- Getting Started -->
-    <div class="section">
-      <h2 class="section-title">🚀 Getting Started</h2>
-
-      <div class="warning-box">
-        <strong>⚠️ First Time Setup:</strong> If you haven't migrated to multi-project structure yet, run <code>npm run migrate</code> first!
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1>Project Home</h1>
+        <div class="sub" id="projectSummary">Loading project health…</div>
       </div>
-
-      <div class="steps">
-        <div class="step">
-          <div class="step-number">1</div>
-          <div class="step-content">
-            <h3>Install Dependencies</h3>
-            <p>Install required Node.js packages:</p>
-            <div class="code-block">npm install</div>
-            <p>This installs <code>ajv</code> (JSON validator) and <code>busboy</code> (file uploads).</p>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="step-number">2</div>
-          <div class="step-content">
-            <h3>Migrate to Multi-Project (One-Time)</h3>
-            <p>Move existing data to projects structure:</p>
-            <div class="code-block">npm run migrate</div>
-            <p>This creates <code>projects/default/</code> and moves your bible, prompts, and assets there.</p>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="step-number">3</div>
-          <div class="step-content">
-            <h3>Generate Prompts Index</h3>
-            <p>Create the index file for the UI:</p>
-            <div class="code-block">npm run index</div>
-            <p>In Phase 1 (infrastructure only), this will be empty. That's expected!</p>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="step-number">4</div>
-          <div class="step-content">
-            <h3>Start the UI Server</h3>
-            <p>Launch the web interface:</p>
-            <div class="code-block">npm run serve</div>
-            <p>Open <strong>http://localhost:8000</strong> in your browser.</p>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="step-number">5</div>
-          <div class="step-content">
-            <h3>Explore the Interface</h3>
-            <p>Navigate through the UI:</p>
-            <ul>
-              <li><strong>Main Prompts UI:</strong> Browse and copy generated prompts</li>
-              <li><strong>Storyboard:</strong> Upload and compare rendered videos</li>
-              <li><strong>Project Selector:</strong> Switch projects or create new ones</li>
-            </ul>
-          </div>
-        </div>
+      <div class="links">
+        <a class="btn" href="index.html">Step 5: Prompts</a>
+        <a class="btn" href="storyboard.html">Step 6: Storyboard</a>
+        <a class="btn" href="step4.html">Step 4: References</a>
       </div>
     </div>
 
-    <!-- Key Features -->
-    <div class="section">
-      <h2 class="section-title">✨ Key Features</h2>
-
-      <div class="feature-grid">
-        <div class="feature">
-          <div class="feature-icon">🎯</div>
-          <div class="feature-title">Multi-Project Support</div>
-          <div class="feature-desc">Manage unlimited projects with complete data isolation. Each project has its own canon, prompts, and assets.</div>
-        </div>
-
-        <div class="feature">
-          <div class="feature-icon">📤</div>
-          <div class="feature-title">Drag-and-Drop Uploads</div>
-          <div class="feature-desc">Upload music MP3s and rendered videos directly in the browser. No manual file management needed.</div>
-        </div>
-
-        <div class="feature">
-          <div class="feature-icon">🎬</div>
-          <div class="feature-title">Storyboard System</div>
-          <div class="feature-desc">Visual asset viewer with side-by-side A/B/C/D comparison. Track which variations you've selected.</div>
-        </div>
-
-        <div class="feature">
-          <div class="feature-icon">📋</div>
-          <div class="feature-title">Smart Prompt Management</div>
-          <div class="feature-desc">Browse prompts by shot and platform. Copy entire prompts or individual sections (Scene/Camera/Negative).</div>
-        </div>
-
-        <div class="feature">
-          <div class="feature-icon">✅</div>
-          <div class="feature-title">Built-in Validation</div>
-          <div class="feature-desc">Linter catches errors before rendering. Ensures prompts follow best practices and consistency rules.</div>
-        </div>
-
-        <div class="feature">
-          <div class="feature-icon">🎨</div>
-          <div class="feature-title">Professional UX</div>
-          <div class="feature-desc">Toast notifications, loading states, breadcrumbs, collapsible sidebar, and responsive design.</div>
-        </div>
-      </div>
+    <div class="grid">
+      <div class="card"><div class="label">Shots total</div><div class="value" id="shotsTotal">0</div></div>
+      <div class="card"><div class="label">Shots ready</div><div class="value ok" id="shotsReady">0</div></div>
+      <div class="card"><div class="label">Shots blocked</div><div class="value bad" id="shotsBlocked">0</div></div>
+      <div class="card"><div class="label">Missing references</div><div class="value warn" id="missingRefs">0</div><div class="sub" id="missingRefsBreakdown"></div></div>
+      <div class="card"><div class="label">Missing transcript segments</div><div class="value warn" id="missingTranscript">0</div></div>
+      <div class="card"><div class="label">Missing assets (manifest)</div><div class="value warn" id="missingAssets">0</div></div>
+      <div class="card"><div class="label">Storyboard coverage</div><div class="value" id="coverage">0%</div><div class="sub" id="coverageMeta">0 / 0 shots with preview image/video</div></div>
     </div>
 
-    <!-- Project Workflow -->
-    <div class="section">
-      <h2 class="section-title">🔄 Project Workflow</h2>
-
-      <div class="info-box">
-        <strong>📌 Current Phase:</strong> Phase 1 (Infrastructure Complete)<br>
-        This system is ready for Phase 2: generating actual prompts and rendering assets.
-      </div>
-
-      <h3 style="margin-top: 2rem; margin-bottom: 1rem; color: var(--text-primary);">Phase 2: Production Workflow</h3>
-
-      <div class="steps">
-        <div class="step">
-          <div class="step-number">1</div>
-          <div class="step-content">
-            <h3>Generate Music with Suno</h3>
-            <p>Use the Suno template to create your music track. Note the final duration and section timestamps (intro, verse, chorus, bridge, etc.).</p>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="step-number">2</div>
-          <div class="step-content">
-            <h3>Initialize Phase 2</h3>
-            <div class="code-block">npm run init-phase2</div>
-            <p>Interactive script captures song duration, BPM, and section timestamps. Creates beat map and shot plan scaffolds.</p>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="step-number">3</div>
-          <div class="step-content">
-            <h3>Define Canon (Bible)</h3>
-            <p>Fill in <code>bible/characters.json</code> and <code>bible/locations.json</code> with your characters and locations. These are the identity anchors that ensure visual consistency.</p>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="step-number">4</div>
-          <div class="step-content">
-            <h3>Create Visual References</h3>
-            <p>Generate 3 reference images for each character and location using Nano Banana. Save in <code>reference/{type}/{ID}/</code> with guide.json.</p>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="step-number">5</div>
-          <div class="step-content">
-            <h3>Write Shot Intents</h3>
-            <p>Fill in <code>shot_plan.json</code> with what happens in each shot, why it happens, which characters appear, and the camera intent.</p>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="step-number">6</div>
-          <div class="step-content">
-            <h3>Compile Prompts</h3>
-            <p>Merge Canon + Shot Intent → Final Prompts using templates. Generate A/B/C/D variations (camera only).</p>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="step-number">7</div>
-          <div class="step-content">
-            <h3>Validate & Render</h3>
-            <div class="code-block">npm run lint && npm run index && npm run serve</div>
-            <p>Validate prompts, generate UI index, and view in browser. Copy prompts to Kling and Nano Banana for rendering.</p>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="step-number">8</div>
-          <div class="step-content">
-            <h3>Upload to Storyboard</h3>
-            <p>Drag-and-drop rendered MP4s into the Storyboard. Compare A/B/C/D variations side-by-side and select the best.</p>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="step-number">9</div>
-          <div class="step-content">
-            <h3>Final Assembly in CapCut</h3>
-            <p>Import selected shots, align with music timeline, apply transitions and color grading. Export final video!</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Multi-Project Usage -->
-    <div class="section">
-      <h2 class="section-title">📁 Multi-Project Usage</h2>
-
-      <div class="success-box">
-        <strong>✓ Complete Data Isolation:</strong> Each project has its own bible, prompts, rendered assets, and music. No data mixing between projects.
-      </div>
-
-      <h3 style="margin-top: 2rem; margin-bottom: 1rem; color: var(--text-primary);">Creating a New Project</h3>
-      <ol style="color: var(--text-secondary); margin-left: 1.5rem;">
-        <li>Click the <strong>"+"</strong> button next to "Current Project" in the left navigation</li>
-        <li>Enter a project name and description in the wizard modal</li>
-        <li>Click "Create Project"</li>
-        <li>The system automatically switches to your new project</li>
-      </ol>
-
-      <h3 style="margin-top: 2rem; margin-bottom: 1rem; color: var(--text-primary);">Switching Between Projects</h3>
-      <p style="color: var(--text-secondary);">Use the dropdown selector in the left navigation. Your selection is saved in browser localStorage and persists across sessions.</p>
-
-      <h3 style="margin-top: 2rem; margin-bottom: 1rem; color: var(--text-primary);">Per-Project Commands</h3>
-      <div class="code-block">npm run index             # Generate index for 'default' project
-npm run index my-project  # Generate index for specific project</div>
-    </div>
-
-    <!-- npm Commands Reference -->
-    <div class="section">
-      <h2 class="section-title">⚙️ Available Commands</h2>
-
-      <table style="width: 100%; border-collapse: collapse; color: var(--text-secondary);">
-        <thead>
-          <tr style="background: var(--bg-card); text-align: left;">
-            <th style="padding: 1rem; border: 1px solid var(--border); color: var(--text-primary);">Command</th>
-            <th style="padding: 1rem; border: 1px solid var(--border); color: var(--text-primary);">Description</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td style="padding: 0.75rem; border: 1px solid var(--border);"><code>npm run migrate</code></td>
-            <td style="padding: 0.75rem; border: 1px solid var(--border);">Migrate to multi-project structure (run once)</td>
-          </tr>
-          <tr style="background: var(--bg-elevated);">
-            <td style="padding: 0.75rem; border: 1px solid var(--border);"><code>npm run validate</code></td>
-            <td style="padding: 0.75rem; border: 1px solid var(--border);">Validate Bible JSON files against schemas</td>
-          </tr>
-          <tr>
-            <td style="padding: 0.75rem; border: 1px solid var(--border);"><code>npm run lint</code></td>
-            <td style="padding: 0.75rem; border: 1px solid var(--border);">Run linter on Bible files + prompts</td>
-          </tr>
-          <tr style="background: var(--bg-elevated);">
-            <td style="padding: 0.75rem; border: 1px solid var(--border);"><code>npm run index</code></td>
-            <td style="padding: 0.75rem; border: 1px solid var(--border);">Generate prompts_index.json for default project</td>
-          </tr>
-          <tr>
-            <td style="padding: 0.75rem; border: 1px solid var(--border);"><code>npm run serve</code></td>
-            <td style="padding: 0.75rem; border: 1px solid var(--border);">Start UI server on port 8000</td>
-          </tr>
-          <tr style="background: var(--bg-elevated);">
-            <td style="padding: 0.75rem; border: 1px solid var(--border);"><code>npm run init-phase2</code></td>
-            <td style="padding: 0.75rem; border: 1px solid var(--border);">Initialize Phase 2 (interactive)</td>
-          </tr>
-          <tr>
-            <td style="padding: 0.75rem; border: 1px solid var(--border);"><code>npm test</code></td>
-            <td style="padding: 0.75rem; border: 1px solid var(--border);">Run validate + lint</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Footer -->
-    <div class="footer">
-      <p>Built with Claude Code | AI Music Video Prompt Compiler v2026-02-07</p>
-      <p>Kling 3.0 • Nano Banana Pro 3 • Suno • CapCut</p>
+    <div class="split">
+      <section class="card">
+        <div class="label">Next Best Actions</div>
+        <div id="actions" class="list"></div>
+      </section>
+      <section class="card">
+        <div class="label">Reference gaps by shot</div>
+        <div id="shotGaps" class="list"></div>
+      </section>
     </div>
   </div>
+
+  <script src="app.js"></script>
+  <script>
+    async function initHome() {
+      const projectId = (localStorage.getItem('activeProject') || 'default');
+      const report = await window.AIMVDashboardData.aggregateHomeData(projectId);
+
+      document.getElementById('shotsTotal').textContent = report.shots.total;
+      document.getElementById('shotsReady').textContent = report.shots.ready;
+      document.getElementById('shotsBlocked').textContent = report.shots.blocked;
+      document.getElementById('missingRefs').textContent = report.missingReferences.total;
+      document.getElementById('missingRefsBreakdown').textContent = `${report.missingReferences.characters} character · ${report.missingReferences.locations} location`;
+      document.getElementById('missingTranscript').textContent = report.missingTranscriptSegments;
+      document.getElementById('missingAssets').textContent = report.missingAssets;
+      document.getElementById('coverage').textContent = `${report.storyboard.coveragePercent}%`;
+      document.getElementById('coverageMeta').textContent = `${report.storyboard.coveredShots} / ${report.shots.total} shots with preview image/video`;
+      document.getElementById('projectSummary').textContent = `${report.projectId} · ${report.nextBestActions.length} prioritized action${report.nextBestActions.length === 1 ? '' : 's'}`;
+
+      const actionsRoot = document.getElementById('actions');
+      actionsRoot.innerHTML = report.nextBestActions.length
+        ? report.nextBestActions.map(action => `<div class="item"><span>${action.text}</span><a href="${action.href}">Open</a></div>`).join('')
+        : '<div class="item"><span class="ok">No urgent actions detected.</span></div>';
+
+      const shotGapsRoot = document.getElementById('shotGaps');
+      shotGapsRoot.innerHTML = report.shotReferenceGaps.length
+        ? report.shotReferenceGaps.slice(0, 8).map(gap => `<div class="item"><span><span class="mono">${gap.shotId}</span>: ${gap.missing.join(', ')}</span><a href="step4.html?shot=${gap.shotId}">Step 4</a></div>`).join('')
+        : '<div class="item"><span class="ok">No missing per-shot references.</span></div>';
+    }
+
+    initHome().catch((err) => {
+      document.getElementById('projectSummary').textContent = `Unable to load dashboard: ${err.message}`;
+    });
+  </script>
 </body>
 </html>
