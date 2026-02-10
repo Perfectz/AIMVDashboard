@@ -912,6 +912,56 @@ function exportPDF() {
   }, 300);
 }
 
+async function fetchContextBundle(includePromptTemplates = true) {
+  const response = await fetch('/api/export/context-bundle', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      project: currentProject?.id,
+      includePromptTemplates
+    })
+  });
+
+  const result = await response.json();
+  if (!response.ok || !result.success) {
+    throw new Error(result.error || 'Failed to export context bundle');
+  }
+
+  return result.bundle;
+}
+
+async function copyContextForAI() {
+  try {
+    const bundle = await fetchContextBundle(true);
+    const contextText = `${bundle.markdown}\n\n\n---\n\nJSON Bundle:\n\n${JSON.stringify(bundle, null, 2)}`;
+    await navigator.clipboard.writeText(contextText);
+    showToast('Copied', 'Context bundle copied to clipboard', 'success', 3000);
+  } catch (err) {
+    console.error('Copy context error:', err);
+    showToast('Copy failed', err.message, 'error', 4000);
+  }
+}
+
+async function downloadContextBundle() {
+  try {
+    const bundle = await fetchContextBundle(true);
+    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const projectSlug = currentProject?.id || 'project';
+    link.href = url;
+    link.download = `${projectSlug}_context_bundle.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast('Downloaded', 'Context bundle JSON downloaded', 'success', 3000);
+  } catch (err) {
+    console.error('Download context error:', err);
+    showToast('Download failed', err.message, 'error', 4000);
+  }
+}
+
 // Event Listeners
 
 /**
@@ -936,6 +986,8 @@ function initializeViewTabs() {
  */
 function initializeButtons() {
   const exportBtn = document.getElementById('exportBtn');
+  const copyContextBtn = document.getElementById('copyContextBtn');
+  const downloadContextBtn = document.getElementById('downloadContextBtn');
   const refreshBtn = document.getElementById('refreshBtn');
   const storyboardFocusBtn = document.getElementById('storyboardFocusBtn');
   const modalClose = document.getElementById('modalClose');
@@ -944,6 +996,8 @@ function initializeButtons() {
   const modalSave = document.getElementById('modal-save');
 
   if (exportBtn) exportBtn.addEventListener('click', exportPDF);
+  if (copyContextBtn) copyContextBtn.addEventListener('click', copyContextForAI);
+  if (downloadContextBtn) downloadContextBtn.addEventListener('click', downloadContextBundle);
   if (refreshBtn) refreshBtn.addEventListener('click', loadSequence);
   if (storyboardFocusBtn) {
     storyboardFocusBtn.addEventListener('click', () => {
@@ -1024,5 +1078,4 @@ if (newProjectBtn && newProjectModal) {
     showToast('No projects found', 'Run npm run migrate to initialize multi-project support', 'info', 0);
   }
 })();
-
 

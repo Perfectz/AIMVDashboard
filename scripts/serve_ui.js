@@ -320,6 +320,224 @@ function writeSequenceFile(data, projectId = 'default') {
   fs.writeFileSync(sequencePath, JSON.stringify(data, null, 2), 'utf8');
 }
 
+function readJsonIfExists(filePath, fallback = null) {
+  if (!fs.existsSync(filePath)) return fallback;
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (err) {
+    return fallback;
+  }
+}
+
+function readTextIfExists(filePath) {
+  if (!fs.existsSync(filePath)) return '';
+  return fs.readFileSync(filePath, 'utf8');
+}
+
+function collectReferenceFiles(dirPath, projectRoot) {
+  if (!fs.existsSync(dirPath)) return [];
+  const files = fs.readdirSync(dirPath)
+    .filter(file => IMAGE_EXTENSIONS.has(path.extname(file).toLowerCase()))
+    .sort();
+
+  return files.map(file => {
+    const absolutePath = path.join(dirPath, file);
+    return {
+      filename: file,
+      relativePath: path.relative(projectRoot, absolutePath),
+      resolvedPath: path.resolve(absolutePath)
+    };
+  });
+}
+
+function extractShotId(shot) {
+  return shot?.shotId || shot?.id || null;
+}
+
+function buildContextBundle(projectId, { includePromptTemplates = false } = {}) {
+  const projectRoot = projectManager.getProjectPath(projectId);
+  const projectMetadata = readJsonIfExists(path.join(projectRoot, 'project.json'), {});
+  const bibleProject = readJsonIfExists(path.join(projectRoot, 'bible', 'project.json'), {});
+  const shotList = readJsonIfExists(path.join(projectRoot, 'bible', 'shot_list.json'), {});
+  const sequence = readSequenceFile(projectId);
+  const analysis = readJsonIfExists(path.join(projectRoot, 'music', 'analysis.json'), {});
+
+  const sunoPrompt = readTextIfExists(path.join(projectRoot, 'music', 'suno_prompt.txt'));
+  const songInfo = readTextIfExists(path.join(projectRoot, 'music', 'song_info.txt'));
+  const youtubeScriptText = readTextIfExists(path.join(projectRoot, 'music', 'youtube_script.txt')) || songInfo;
+
+  const shots = Array.isArray(shotList?.shots) ? shotList.shots : [];
+  const shotById = new Map(shots.map(shot => [extractShotId(shot), shot]));
+  const sequenceOrder = Array.isArray(sequence?.selections) ? sequence.selections : [];
+
+  const orderedShotList = [];
+  const includedShotIds = new Set();
+
+  for (const selection of sequenceOrder) {
+    const shotId = selection?.shotId;
+    if (!shotId || includedShotIds.has(shotId)) continue;
+    const shotFromList = shotById.get(shotId);
+    if (!shotFromList) continue;
+
+    orderedShotList.push({
+      ...shotFromList,
+      storyboardSelection: {
+        selectedVariation: selection.selectedVariation || null,
+        timing: selection.timing || null,
+        status: selection.status || null
+      }
+    });
+    includedShotIds.add(shotId);
+  }
+
+  for (const shot of shots) {
+    const shotId = extractShotId(shot);
+    if (!shotId || includedShotIds.has(shotId)) continue;
+    orderedShotList.push(shot);
+    includedShotIds.add(shotId);
+  }
+
+  const usedCharacterIds = new Set();
+  const usedLocationIds = new Set();
+
+  orderedShotList.forEach(shot => {
+    const characters = Array.isArray(shot.characters) ? shot.characters : [];
+    characters.forEach(character => {
+      if (character?.id) usedCharacterIds.add(character.id);
+    });
+
+    if (shot.location?.id) usedLocationIds.add(shot.location.id);
+  });
+
+  const selectedCharacterReferences = Array.from(usedCharacterIds).map(characterId => {
+    const charDir = path.join(projectRoot, 'reference', 'characters', characterId);
+    return {
+      id: characterId,
+      references: collectReferenceFiles(charDir, projectRoot),
+      guide: fs.existsSync(path.join(charDir, 'guide.json'))
+        ? {
+            relativePath: path.relative(projectRoot, path.join(charDir, 'guide.json')),
+            resolvedPath: path.resolve(path.join(charDir, 'guide.json'))
+          }
+        : null
+    };
+  });
+
+  const selectedLocationReferences = Array.from(usedLocationIds).map(locationId => {
+    const locDir = path.join(projectRoot, 'reference', 'locations', locationId);
+    return {
+      id: locationId,
+      references: collectReferenceFiles(locDir, projectRoot),
+      guide: fs.existsSync(path.join(locDir, 'guide.json'))
+        ? {
+            relativePath: path.relative(projectRoot, path.join(locDir, 'guide.json')),
+            resolvedPath: path.resolve(path.join(locDir, 'guide.json'))
+          }
+        : null
+    };
+  });
+
+  const missingCharacterReferences = selectedCharacterReferences
+    .filter(ref => ref.references.length < 3)
+    .map(ref => ({ id: ref.id, missingSlots: Math.max(3 - ref.references.length, 0) }));
+
+  const missingLocationReferences = selectedLocationReferences
+    .filter(ref => ref.references.length < 3)
+    .map(ref => ({ id: ref.id, missingSlots: Math.max(3 - ref.references.length, 0) }));
+
+  const renderGaps = sequenceOrder
+    .filter(selection => !selection?.selectedVariation)
+    .map(selection => ({ shotId: selection.shotId, reason: 'No selected variation in storyboard sequence' }));
+
+  const transcript = analysis?.transcript || analysis?.lyrics || analysis?.fullTranscript || '';
+
+  const styleCanon = readJsonIfExists(path.join(projectRoot, 'bible', 'visual_style.json'), {});
+  const cinematographyCanon = readJsonIfExists(path.join(projectRoot, 'bible', 'cinematography.json'), {});
+
+  const promptTemplates = includePromptTemplates
+    ? {
+        kling: readTextIfExists(path.join(projectRoot, 'prompts', 'kling', '_template.md')),
+        nanobanana: readTextIfExists(path.join(projectRoot, 'prompts', 'nanobanana', '_template.md')),
+        suno: readTextIfExists(path.join(projectRoot, 'prompts', 'suno', '_template.md'))
+      }
+    : null;
+
+  const bundle = {
+    generatedAt: new Date().toISOString(),
+    projectId,
+    projectMetadata: {
+      registry: projectMetadata,
+      bible: bibleProject
+    },
+    youtubeScript: youtubeScriptText,
+    shotList: {
+      totalShots: orderedShotList.length,
+      orderedShots: orderedShotList
+    },
+    transcript,
+    selectedReferences: {
+      characters: selectedCharacterReferences,
+      locations: selectedLocationReferences
+    },
+    assetManifestGaps: {
+      charactersMissingReferenceImages: missingCharacterReferences,
+      locationsMissingReferenceImages: missingLocationReferences,
+      storyboardSelectionGaps: renderGaps
+    },
+    styleCinematographyCanon: {
+      style: styleCanon,
+      cinematography: cinematographyCanon
+    },
+    promptTemplates
+  };
+
+  const markdown = [
+    `# Context Bundle: ${projectMetadata.name || projectId}`,
+    '',
+    `Generated: ${bundle.generatedAt}`,
+    '',
+    '## Project Metadata',
+    '```json',
+    JSON.stringify(bundle.projectMetadata, null, 2),
+    '```',
+    '',
+    '## YouTube Script',
+    bundle.youtubeScript || '_Not available_',
+    '',
+    '## Shot List (Storyboard Order)',
+    '```json',
+    JSON.stringify(bundle.shotList, null, 2),
+    '```',
+    '',
+    '## Transcript',
+    bundle.transcript || '_Not available_',
+    '',
+    '## Selected References (Resolved Paths)',
+    '```json',
+    JSON.stringify(bundle.selectedReferences, null, 2),
+    '```',
+    '',
+    '## Asset Manifest Gaps',
+    '```json',
+    JSON.stringify(bundle.assetManifestGaps, null, 2),
+    '```',
+    '',
+    '## Style + Cinematography Canon',
+    '```json',
+    JSON.stringify(bundle.styleCinematographyCanon, null, 2),
+    '```'
+  ];
+
+  if (promptTemplates) {
+    markdown.push('', '## Prompt Templates', '```json', JSON.stringify(promptTemplates, null, 2), '```');
+  }
+
+  return {
+    ...bundle,
+    markdown: markdown.join('\n')
+  };
+}
+
 /**
  * Send JSON response
  */
@@ -788,6 +1006,31 @@ const server = http.createServer((req, res) => {
     } catch (err) {
       sendJSON(res, 500, { error: 'Failed to load analysis JSON' });
     }
+    return;
+  }
+
+  // POST /api/export/context-bundle
+  if (req.method === 'POST' && req.url.startsWith('/api/export/context-bundle')) {
+    readBody(req, MAX_BODY_SIZE, (err, body) => {
+      if (err) {
+        sendJSON(res, 413, { success: false, error: 'Payload too large' });
+        return;
+      }
+
+      try {
+        const parsed = body ? JSON.parse(body) : {};
+        const projectId = resolveProjectId(parsed.project || getProjectContext(req).projectId, { required: true });
+        const includePromptTemplates = Boolean(parsed.includePromptTemplates);
+        const bundle = buildContextBundle(projectId, { includePromptTemplates });
+
+        sendJSON(res, 200, {
+          success: true,
+          bundle
+        });
+      } catch (bundleErr) {
+        sendJSON(res, 400, { success: false, error: bundleErr.message });
+      }
+    });
     return;
   }
 
