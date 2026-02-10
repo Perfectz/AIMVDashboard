@@ -13,6 +13,13 @@ const path = require('path');
 const ROOT_DIR = path.join(__dirname, '..');
 const PROJECTS_DIR = path.join(ROOT_DIR, 'projects');
 const INDEX_FILE = path.join(PROJECTS_DIR, 'projects_index.json');
+const PROJECT_ID_REGEX = /^[a-z0-9-]{1,50}$/;
+
+function isPathInside(basePath, targetPath) {
+  const base = path.resolve(basePath);
+  const target = path.resolve(targetPath);
+  return target === base || target.startsWith(base + path.sep);
+}
 
 class ProjectManager {
   /**
@@ -69,6 +76,10 @@ class ProjectManager {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '')
         .substring(0, 50);
+
+      if (!PROJECT_ID_REGEX.test(id)) {
+        throw new Error('Project name must produce a valid ID (a-z, 0-9, hyphen).');
+      }
 
       // Check if project already exists
       if (this.projectExists(id)) {
@@ -175,6 +186,9 @@ class ProjectManager {
    */
   getProject(projectId) {
     try {
+      if (!PROJECT_ID_REGEX.test(projectId || '')) {
+        throw new Error(`Invalid project ID: '${projectId}'`);
+      }
       const projectFile = path.join(PROJECTS_DIR, projectId, 'project.json');
 
       if (!fs.existsSync(projectFile)) {
@@ -194,6 +208,9 @@ class ProjectManager {
    */
   updateProject(projectId, updates) {
     try {
+      if (!PROJECT_ID_REGEX.test(projectId || '')) {
+        throw new Error(`Invalid project ID: '${projectId}'`);
+      }
       const project = this.getProject(projectId);
 
       // Merge updates
@@ -232,6 +249,9 @@ class ProjectManager {
    */
   deleteProject(projectId) {
     try {
+      if (!PROJECT_ID_REGEX.test(projectId || '')) {
+        throw new Error(`Invalid project ID: '${projectId}'`);
+      }
       // Don't allow deleting the active project if it's the only one
       const index = this.loadIndex();
 
@@ -274,6 +294,9 @@ class ProjectManager {
    * Check if project exists
    */
   projectExists(projectId) {
+    if (!PROJECT_ID_REGEX.test(projectId || '')) {
+      return false;
+    }
     const projectDir = path.join(PROJECTS_DIR, projectId);
     return fs.existsSync(projectDir) && fs.existsSync(path.join(projectDir, 'project.json'));
   }
@@ -282,13 +305,24 @@ class ProjectManager {
    * Get project path with optional subdirectory
    */
   getProjectPath(projectId, subdir = '') {
-    const projectDir = path.join(PROJECTS_DIR, projectId);
-
-    if (subdir) {
-      return path.join(projectDir, subdir);
+    if (!PROJECT_ID_REGEX.test(projectId || '')) {
+      throw new Error(`Invalid project ID: '${projectId}'`);
+    }
+    const projectDir = path.resolve(PROJECTS_DIR, projectId);
+    if (!isPathInside(PROJECTS_DIR, projectDir)) {
+      throw new Error('Invalid project path');
     }
 
-    return projectDir;
+    if (!subdir) {
+      return projectDir;
+    }
+
+    const fullPath = path.resolve(projectDir, subdir);
+    if (!isPathInside(projectDir, fullPath)) {
+      throw new Error('Invalid subdirectory path');
+    }
+
+    return fullPath;
   }
 
   /**
@@ -304,6 +338,9 @@ class ProjectManager {
    */
   setActiveProject(projectId) {
     try {
+      if (!PROJECT_ID_REGEX.test(projectId || '')) {
+        throw new Error(`Invalid project ID: '${projectId}'`);
+      }
       if (!this.projectExists(projectId)) {
         throw new Error(`Project '${projectId}' not found`);
       }

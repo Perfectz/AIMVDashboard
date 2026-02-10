@@ -13,10 +13,18 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const projectManager = require('./project_manager');
 
-const PROJECT_PATH = path.join(__dirname, '..', 'bible', 'project.json');
-const BEAT_MAP_PATH = path.join(__dirname, '..', 'storyboard', 'beat_map.json');
-const SHOT_PLAN_PATH = path.join(__dirname, '..', 'storyboard', 'shot_plan.json');
+const projectId = process.argv[2] || projectManager.getActiveProject();
+if (!projectManager.projectExists(projectId)) {
+  console.error(`\nError: Project '${projectId}' not found.`);
+  console.error('Usage: npm run init-phase2 -- <project-id>\n');
+  process.exit(1);
+}
+
+const PROJECT_PATH = projectManager.getProjectPath(projectId, 'project.json');
+const BEAT_MAP_PATH = projectManager.getProjectPath(projectId, 'rendered/storyboard/beat_map.json');
+const SHOT_PLAN_PATH = projectManager.getProjectPath(projectId, 'rendered/storyboard/shot_plan.json');
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -111,7 +119,11 @@ async function main() {
     bpm: bpm ? parseFloat(bpm) : null,
     sections: sections
   };
-  project.project.phase = '2_PRODUCTION';
+  if (project.project && typeof project.project === 'object') {
+    project.project.phase = '2_PRODUCTION';
+  } else {
+    project.phase = '2_PRODUCTION';
+  }
   fs.writeFileSync(PROJECT_PATH, JSON.stringify(project, null, 2));
   console.log(`\n✅ Updated ${PROJECT_PATH}`);
 
