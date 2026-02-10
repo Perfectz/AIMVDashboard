@@ -124,6 +124,39 @@
               "needs_revision"
             ],
             "description": "Production status"
+          },
+          "reviewStatus": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "ready_for_review",
+              "changes_requested",
+              "approved"
+            ],
+            "description": "Editorial review status for this shot"
+          },
+          "assignee": {
+            "type": "string",
+            "description": "Person responsible for resolving feedback"
+          },
+          "comments": {
+            "type": "array",
+            "description": "Review comments on this shot",
+            "items": {
+              "type": "object",
+              "required": [
+                "text",
+                "timestamp"
+              ],
+              "properties": {
+                "text": {
+                  "type": "string"
+                },
+                "timestamp": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }

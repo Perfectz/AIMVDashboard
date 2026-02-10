@@ -5,7 +5,7 @@
   "totalDuration": 0,
   "musicFile": "",
   "selections": [],
-  "_NOTE": "This file will be populated in Phase 2 after shots are rendered. It tracks which variation (A/B/C/D) is selected for each shot and the locations of rendered assets.",
+  "_NOTE": "This file is populated in Phase 2 after shots are rendered. Each shot record tracks selected variation, render assets, and review fields (reviewStatus, assignee, comments).",
   "_INSTRUCTIONS": {
     "howToUse": "After rendering shots in AI tools, place files in rendered/shots/{SHOT_ID}/ and update this file with selections",
     "fileNaming": "Use pattern: kling_option_A.mp4, kling_option_B.mp4, nano_first_frame.png, nano_last_frame.png",

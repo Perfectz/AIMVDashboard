@@ -81,8 +81,14 @@
             <button class="view-tab" data-view="timeline"><span>Timeline View</span></button>
           </div>
           <div class="view-actions">
-            <button class="btn btn-small btn-secondary" id="reorderModeBtn" style="display: none;">Reorder Mode: Off</button>
-            <button class="btn btn-small btn-secondary" id="resetOrderBtn" style="display: none;">Reset to Shot List Order</button>
+            <label class="review-filter-label" for="reviewFilter">Review</label>
+            <select id="reviewFilter" class="review-filter-select">
+              <option value="all">All statuses</option>
+              <option value="draft">Draft</option>
+              <option value="ready_for_review">Ready for review</option>
+              <option value="changes_requested">Changes requested</option>
+              <option value="approved">Approved</option>
+            </select>
             <button class="btn btn-small" id="refreshBtn">Refresh</button>
           </div>
         </div>
@@ -121,6 +127,21 @@
             <div class="modal-header"><h2 id="modalTitle">SHOT_01</h2><button class="modal-close" id="modalClose">×</button></div>
             <div class="modal-body"><div class="variation-grid" id="variationGrid"></div><div class="shot-details" id="shotDetails"></div></div>
             <div class="modal-footer"><button class="btn btn-secondary" id="modal-cancel">Cancel</button><button class="btn btn-primary" id="modal-save">Save Selection</button></div>
+          </div>
+        </div>
+
+
+        <div class="modal" id="commentsModal" style="display: none;">
+          <div class="modal-overlay" id="commentsModalOverlay"></div>
+          <div class="modal-content comments-modal-content">
+            <div class="modal-header"><h2 id="commentsModalTitle">Comments</h2><button class="modal-close" id="commentsModalClose">×</button></div>
+            <div class="modal-body">
+              <div class="comments-list" id="commentsList"></div>
+              <div class="comment-compose">
+                <textarea id="newCommentText" rows="4" placeholder="Add feedback for this shot..."></textarea>
+                <button class="btn btn-primary" id="addCommentBtn">Add Comment</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

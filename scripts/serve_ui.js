@@ -21,6 +21,7 @@ const PROJECTS_DIR = path.join(ROOT_DIR, 'projects');
 const PROJECT_ID_REGEX = /^[a-z0-9-]{1,50}$/;
 const SHOT_ID_REGEX = /^SHOT_\d{2,4}$/;
 const VARIATION_REGEX = /^[A-D]$/;
+const REVIEW_STATUS_VALUES = new Set(['draft', 'ready_for_review', 'changes_requested', 'approved']);
 const CHARACTER_REGEX = /^[A-Za-z0-9_-]{1,64}$/;
 const LOCATION_REGEX = /^[A-Za-z0-9_-]{1,64}$/;
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
@@ -301,7 +302,11 @@ function readSequenceFile(projectId = 'default') {
 
   try {
     const data = fs.readFileSync(sequencePath, 'utf8');
-    return JSON.parse(data);
+    const sequence = JSON.parse(data);
+    if (normalizeSequenceReviewFields(sequence)) {
+      writeSequenceFile(sequence, projectId);
+    }
+    return sequence;
   } catch (err) {
     // Return default structure
     return {
@@ -336,69 +341,50 @@ function writeSequenceFile(data, projectId = 'default') {
   fs.writeFileSync(sequencePath, JSON.stringify(data, null, 2), 'utf8');
 }
 
-function getPrevisMapPath(projectId = 'default') {
-  return path.join(
-    projectManager.getProjectPath(projectId, 'rendered'),
-    'storyboard',
-    'previs_map.json'
-  );
-}
+function normalizeShotReviewFields(shot) {
+  if (!shot || typeof shot !== 'object') return false;
+  let changed = false;
 
-function readPrevisMapFile(projectId = 'default') {
-  const previsMapPath = getPrevisMapPath(projectId);
-  try {
-    if (!fs.existsSync(previsMapPath)) {
-      return {};
+  if (!REVIEW_STATUS_VALUES.has(shot.reviewStatus)) {
+    shot.reviewStatus = 'draft';
+    changed = true;
+  }
+
+  if (typeof shot.assignee !== 'string') {
+    shot.assignee = '';
+    changed = true;
+  }
+
+  if (!Array.isArray(shot.comments)) {
+    shot.comments = [];
+    changed = true;
+  } else {
+    const normalized = [];
+    for (const comment of shot.comments) {
+      if (!comment || typeof comment.text !== 'string') continue;
+      normalized.push({
+        text: comment.text.trim(),
+        timestamp: typeof comment.timestamp === 'string' ? comment.timestamp : new Date().toISOString()
+      });
     }
-    const data = JSON.parse(fs.readFileSync(previsMapPath, 'utf8'));
-    return (data && typeof data === 'object' && !Array.isArray(data)) ? data : {};
-  } catch (err) {
-    console.warn(`[Previs Map] Failed reading for project '${projectId}':`, err.message);
-    return {};
+    if (normalized.length !== shot.comments.length) {
+      changed = true;
+    }
+    shot.comments = normalized;
   }
+
+  return changed;
 }
 
-function writePrevisMapFile(previsMap, projectId = 'default') {
-  const previsMapPath = getPrevisMapPath(projectId);
-  const dir = path.dirname(previsMapPath);
-
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+function normalizeSequenceReviewFields(sequence) {
+  if (!sequence || !Array.isArray(sequence.selections)) return false;
+  let changed = false;
+  for (const shot of sequence.selections) {
+    if (normalizeShotReviewFields(shot)) changed = true;
   }
-
-  fs.writeFileSync(previsMapPath, JSON.stringify(previsMap, null, 2), 'utf8');
+  return changed;
 }
 
-function validatePrevisEntry(entry) {
-  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-    throw new Error('entry must be an object');
-  }
-
-  const { sourceType, sourceRef, locked, notes } = entry;
-
-  if (!PREVIS_SOURCE_TYPES.has(sourceType)) {
-    throw new Error('Invalid sourceType');
-  }
-
-  if (typeof sourceRef !== 'string' || sourceRef.trim() === '' || sourceRef.length > 500) {
-    throw new Error('sourceRef must be a non-empty string');
-  }
-
-  if (typeof locked !== 'boolean') {
-    throw new Error('locked must be boolean');
-  }
-
-  if (notes !== undefined && typeof notes !== 'string') {
-    throw new Error('notes must be a string');
-  }
-
-  return {
-    sourceType,
-    sourceRef: sourceRef.trim(),
-    locked,
-    ...(typeof notes === 'string' && notes.length ? { notes } : {})
-  };
-}
 
 /**
  * Send JSON response
@@ -721,11 +707,15 @@ const server = http.createServer((req, res) => {
           shotId,
           selectedVariation: 'none',
           status: 'rendered',
-          renderFiles: { kling: {}, nano: {} }
+          renderFiles: { kling: {}, nano: {} },
+          reviewStatus: 'draft',
+          assignee: '',
+          comments: []
         };
         sequence.selections.push(shot);
       }
 
+      normalizeShotReviewFields(shot);
       if (!shot.renderFiles) shot.renderFiles = { kling: {}, nano: {} };
 
       const relativePath = `rendered/shots/${shotId}/${filename}`;
@@ -2082,8 +2072,20 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // POST /api/storyboard/order - Save editorial sequence order
-  if (req.method === 'POST' && req.url.startsWith('/api/storyboard/order')) {
+  // GET /api/review/sequence - Load storyboard sequence with review metadata
+  if (req.method === 'GET' && req.url.startsWith('/api/review/sequence')) {
+    try {
+      const { projectId } = getProjectContext(req);
+      const sequence = readSequenceFile(projectId);
+      sendJSON(res, 200, { success: true, sequence });
+    } catch (err) {
+      sendJSON(res, 400, { success: false, error: err.message });
+    }
+    return;
+  }
+
+  // POST /api/review/shot - Save review updates for a single shot
+  if (req.method === 'POST' && req.url.startsWith('/api/review/shot')) {
     readBody(req, MAX_BODY_SIZE, (err, body) => {
       if (err) {
         sendJSON(res, 413, { success: false, error: 'Payload too large' });
@@ -2091,41 +2093,62 @@ const server = http.createServer((req, res) => {
       }
 
       try {
-        const data = JSON.parse(body);
-        const projectId = resolveProjectId(data.project || projectManager.getActiveProject(), { required: true });
-        const editorialOrder = data.editorialOrder;
-
-        if (!Array.isArray(editorialOrder) || editorialOrder.length === 0) {
-          sendJSON(res, 400, { success: false, error: 'editorialOrder must be a non-empty array' });
-          return;
-        }
-
-        const invalidShotId = editorialOrder.find(id => !SHOT_ID_REGEX.test(id || ''));
-        if (invalidShotId) {
-          sendJSON(res, 400, { success: false, error: `Invalid shot ID in editorialOrder: ${invalidShotId}` });
-          return;
-        }
+        const payload = JSON.parse(body || '{}');
+        const projectId = resolveProjectId(payload.project, { required: false });
+        const shotId = sanitizePathSegment(payload.shotId, SHOT_ID_REGEX, 'shotId');
 
         const sequence = readSequenceFile(projectId);
-        const existingShotIds = new Set((sequence.selections || []).map(s => s.shotId));
-
-        const missingShots = editorialOrder.filter(id => !existingShotIds.has(id));
-        if (missingShots.length > 0) {
-          sendJSON(res, 400, { success: false, error: `Unknown shot IDs: ${missingShots.join(', ')}` });
+        const shot = sequence.selections.find(item => item.shotId === shotId);
+        if (!shot) {
+          sendJSON(res, 404, { success: false, error: `Shot '${shotId}' not found` });
           return;
         }
 
-        const dedupedOrder = [...new Set(editorialOrder)];
-        if (dedupedOrder.length !== editorialOrder.length) {
-          sendJSON(res, 400, { success: false, error: 'editorialOrder contains duplicate shot IDs' });
-          return;
+        normalizeShotReviewFields(shot);
+
+        if (payload.reviewStatus !== undefined) {
+          if (!REVIEW_STATUS_VALUES.has(payload.reviewStatus)) {
+            sendJSON(res, 400, { success: false, error: 'Invalid reviewStatus value' });
+            return;
+          }
+          shot.reviewStatus = payload.reviewStatus;
         }
 
-        const trailingShots = [...existingShotIds].filter(id => !dedupedOrder.includes(id));
-        sequence.editorialOrder = dedupedOrder.concat(trailingShots);
+        if (payload.assignee !== undefined) {
+          if (typeof payload.assignee !== 'string' || payload.assignee.length > 120) {
+            sendJSON(res, 400, { success: false, error: 'Invalid assignee' });
+            return;
+          }
+          shot.assignee = payload.assignee.trim();
+        }
+
+        if (payload.appendComment !== undefined) {
+          if (typeof payload.appendComment !== 'string' || !payload.appendComment.trim()) {
+            sendJSON(res, 400, { success: false, error: 'Comment text is required' });
+            return;
+          }
+
+          shot.comments.push({
+            text: payload.appendComment.trim(),
+            timestamp: new Date().toISOString()
+          });
+        }
+
+        if (payload.comments !== undefined) {
+          if (!Array.isArray(payload.comments)) {
+            sendJSON(res, 400, { success: false, error: 'comments must be an array' });
+            return;
+          }
+          shot.comments = payload.comments
+            .filter(comment => comment && typeof comment.text === 'string' && comment.text.trim())
+            .map(comment => ({
+              text: comment.text.trim(),
+              timestamp: typeof comment.timestamp === 'string' ? comment.timestamp : new Date().toISOString()
+            }));
+        }
 
         writeSequenceFile(sequence, projectId);
-        sendJSON(res, 200, { success: true, editorialOrder: sequence.editorialOrder });
+        sendJSON(res, 200, { success: true, shot });
       } catch (parseErr) {
         sendJSON(res, 400, { success: false, error: parseErr.message || 'Invalid JSON' });
       }
