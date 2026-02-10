@@ -30,6 +30,12 @@
   letter-spacing: -0.01em;
 }
 
+.nav-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
 /* ===== STORYBOARD LAYOUT ===== */
 .storyboard-content {
   grid-column: 2 / -1;
