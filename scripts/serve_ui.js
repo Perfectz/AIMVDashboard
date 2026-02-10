@@ -290,15 +290,23 @@ function corsHeadersForRequest(req) {
   return {};
 }
 
+
+function getStoryboardPersistencePath(projectId = 'default') {
+  const base = path.join(projectManager.getProjectPath(projectId, 'rendered'), 'storyboard');
+  const sequencePath = path.join(base, 'sequence.json');
+  const previsPath = path.join(base, 'previs_map.json');
+
+  if (fs.existsSync(sequencePath) || !fs.existsSync(previsPath)) {
+    return sequencePath;
+  }
+  return previsPath;
+}
+
 /**
  * Read sequence.json file (project-aware)
  */
 function readSequenceFile(projectId = 'default') {
-  const sequencePath = path.join(
-    projectManager.getProjectPath(projectId, 'rendered'),
-    'storyboard',
-    'sequence.json'
-  );
+  const sequencePath = getStoryboardPersistencePath(projectId);
 
   try {
     const data = fs.readFileSync(sequencePath, 'utf8');
@@ -326,11 +334,7 @@ function readSequenceFile(projectId = 'default') {
  * Write sequence.json file (project-aware)
  */
 function writeSequenceFile(data, projectId = 'default') {
-  const sequencePath = path.join(
-    projectManager.getProjectPath(projectId, 'rendered'),
-    'storyboard',
-    'sequence.json'
-  );
+  const sequencePath = getStoryboardPersistencePath(projectId);
   const dir = path.dirname(sequencePath);
 
   if (!fs.existsSync(dir)) {
@@ -2271,10 +2275,8 @@ const server = http.createServer((req, res) => {
   }
 
 
-  // PUT /projects/:id/lint/readiness_report.json - Save readiness report
-  if (req.method === 'PUT' && req.url.match(/^\/projects\/([^\/]+)\/lint\/readiness_report\.json$/)) {
-    const projectId = req.url.match(/^\/projects\/([^\/]+)\/lint\/readiness_report\.json$/)[1];
-
+  // POST /api/storyboard/sequence - Persist storyboard order and lock state
+  if (req.method === 'POST' && req.url.startsWith('/api/storyboard/sequence')) {
     readBody(req, MAX_BODY_SIZE, (err, body) => {
       if (err) {
         sendJSON(res, 413, { success: false, error: 'Payload too large' });
@@ -2282,17 +2284,41 @@ const server = http.createServer((req, res) => {
       }
 
       try {
-        sanitizePathSegment(projectId, PROJECT_ID_REGEX, 'project');
-        const parsed = JSON.parse(body || '{}');
-        const lintDir = path.join(projectManager.getProjectPath(projectId), 'lint');
-        fs.mkdirSync(lintDir, { recursive: true });
+        const { projectId } = getProjectContext(req, { required: true });
+        const payload = JSON.parse(body);
+        const updates = Array.isArray(payload?.selections) ? payload.selections : null;
 
-        const filePath = path.join(lintDir, 'readiness_report.json');
-        fs.writeFileSync(filePath, JSON.stringify(parsed, null, 2), 'utf8');
+        if (!updates) {
+          sendJSON(res, 400, { success: false, error: 'selections array is required' });
+          return;
+        }
 
-        sendJSON(res, 200, { success: true, path: `projects/${projectId}/lint/readiness_report.json` });
-      } catch (saveErr) {
-        sendJSON(res, 400, { success: false, error: saveErr.message });
+        const sequence = readSequenceFile(projectId);
+        const currentSelections = Array.isArray(sequence.selections) ? sequence.selections : [];
+        const byId = new Map(currentSelections.map(shot => [shot.shotId, shot]));
+
+        const reordered = [];
+        updates.forEach(item => {
+          const shotId = item?.shotId;
+          if (!shotId || !byId.has(shotId)) return;
+          const shot = byId.get(shotId);
+          shot.locked = !!item.locked;
+          if (typeof item.sourceType === 'string' && item.sourceType.trim()) {
+            shot.sourceType = item.sourceType.trim();
+          }
+          reordered.push(shot);
+          byId.delete(shotId);
+        });
+
+        // Keep any unknown/unlisted shots at the end
+        byId.forEach(shot => reordered.push(shot));
+        sequence.selections = reordered;
+        sequence.totalShots = reordered.length;
+
+        writeSequenceFile(sequence, projectId);
+        sendJSON(res, 200, { success: true, totalShots: sequence.totalShots });
+      } catch (parseErr) {
+        sendJSON(res, 400, { success: false, error: parseErr.message });
       }
     });
     return;
