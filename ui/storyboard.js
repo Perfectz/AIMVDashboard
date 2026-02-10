@@ -6,6 +6,16 @@ let currentView = 'grid';
 let selectedShot = null;
 let selectedVariation = null;
 let currentProject = null;
+let commentsShot = null;
+let activeReviewFilters = new Set();
+
+const REVIEW_STATUSES = ['draft', 'in_review', 'approved', 'changes_requested'];
+const REVIEW_STATUS_LABELS = {
+  draft: 'Draft',
+  in_review: 'In Review',
+  approved: 'Approved',
+  changes_requested: 'Changes Requested'
+};
 
 // Toast notification system
 const toastContainer = document.getElementById('toastContainer');
@@ -95,6 +105,8 @@ function dismissToast(toastId) {
 let emptyState, gridView, timelineView, shotGrid, timelineTrack;
 let shotModal, modalTitle, variationGrid, shotDetails;
 let statTotalShots, statRendered, statSelected, statDuration;
+let reviewFilterChips;
+let commentsModal, commentsModalOverlay, commentsModalClose, commentsShotTitle, commentsList, commentsForm, commentAuthorInput, commentTextInput;
 
 /**
  * Initialize DOM element references
@@ -113,6 +125,41 @@ function initializeDOMElements() {
   statRendered = document.getElementById('stat-rendered');
   statSelected = document.getElementById('stat-selected');
   statDuration = document.getElementById('stat-duration');
+  reviewFilterChips = document.getElementById('reviewFilterChips');
+  commentsModal = document.getElementById('commentsModal');
+  commentsModalOverlay = document.getElementById('commentsModalOverlay');
+  commentsModalClose = document.getElementById('commentsModalClose');
+  commentsShotTitle = document.getElementById('commentsShotTitle');
+  commentsList = document.getElementById('commentsList');
+  commentsForm = document.getElementById('commentsForm');
+  commentAuthorInput = document.getElementById('commentAuthor');
+  commentTextInput = document.getElementById('commentText');
+}
+
+function normalizeShotReviewData(shot) {
+  if (!REVIEW_STATUSES.includes(shot.reviewStatus)) {
+    shot.reviewStatus = 'draft';
+  }
+
+  if (!Array.isArray(shot.comments)) {
+    shot.comments = [];
+  }
+
+  shot.comments = shot.comments
+    .filter(comment => comment && typeof comment === 'object')
+    .map(comment => ({
+      author: comment.author ? String(comment.author) : 'Unknown',
+      text: comment.text ? String(comment.text) : '',
+      timestamp: comment.timestamp || new Date().toISOString()
+    }))
+    .filter(comment => comment.text.trim().length > 0);
+
+  return shot;
+}
+
+function normalizeSequenceReviewData(data) {
+  if (!data || !Array.isArray(data.selections)) return;
+  data.selections.forEach(normalizeShotReviewData);
 }
 
 /**
@@ -380,7 +427,10 @@ async function loadSequence() {
       throw new Error('Sequence file not found');
     }
     sequenceData = await response.json();
+    normalizeSequenceReviewData(sequenceData);
+    await loadReviewMetadata();
     updateStats();
+    renderReviewFilterChips();
     renderView();
 
     if (sequenceData.selections && sequenceData.selections.length > 0) {
@@ -393,6 +443,61 @@ async function loadSequence() {
   } finally {
     hideLoading(loadingOverlay);
   }
+}
+
+async function loadReviewMetadata() {
+  try {
+    const projectParam = currentProject ? `?project=${currentProject.id}` : '';
+    const response = await fetch(`/api/load/review-metadata${projectParam}`);
+    if (!response.ok) return;
+
+    const result = await response.json();
+    if (!result.success || !result.reviewMetadata || !sequenceData?.selections) return;
+
+    sequenceData.selections.forEach((shot) => {
+      const metadata = result.reviewMetadata[shot.shotId];
+      if (!metadata) return;
+      shot.reviewStatus = metadata.reviewStatus;
+      shot.comments = metadata.comments;
+      normalizeShotReviewData(shot);
+    });
+  } catch (err) {
+    console.warn('Failed to load review metadata:', err);
+  }
+}
+
+function getFilteredShots() {
+  if (!sequenceData?.selections) return [];
+  if (activeReviewFilters.size === 0) {
+    return sequenceData.selections;
+  }
+  return sequenceData.selections.filter(shot => activeReviewFilters.has(shot.reviewStatus));
+}
+
+function renderReviewFilterChips() {
+  if (!reviewFilterChips || !sequenceData?.selections) return;
+  reviewFilterChips.innerHTML = '';
+
+  REVIEW_STATUSES.forEach((status) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'filter-chip';
+    if (activeReviewFilters.has(status)) {
+      chip.classList.add('active');
+    }
+    const count = sequenceData.selections.filter(shot => shot.reviewStatus === status).length;
+    chip.textContent = `${REVIEW_STATUS_LABELS[status]} (${count})`;
+    chip.addEventListener('click', () => {
+      if (activeReviewFilters.has(status)) {
+        activeReviewFilters.delete(status);
+      } else {
+        activeReviewFilters.add(status);
+      }
+      renderReviewFilterChips();
+      renderView();
+    });
+    reviewFilterChips.appendChild(chip);
+  });
 }
 
 /**
@@ -465,8 +570,9 @@ function renderView() {
  */
 function renderGridView() {
   shotGrid.innerHTML = '';
+  const shots = getFilteredShots();
 
-  sequenceData.selections.forEach(shot => {
+  shots.forEach(shot => {
     const card = createShotCard(shot);
     shotGrid.appendChild(card);
   });
@@ -552,6 +658,38 @@ function createShotCard(shot) {
   }
 
   info.appendChild(meta);
+
+  const reviewControls = document.createElement('div');
+  reviewControls.className = 'shot-review-controls';
+
+  const statusSelect = document.createElement('select');
+  statusSelect.className = `shot-status-select status-${shot.reviewStatus}`;
+  REVIEW_STATUSES.forEach((status) => {
+    const option = document.createElement('option');
+    option.value = status;
+    option.textContent = REVIEW_STATUS_LABELS[status];
+    option.selected = shot.reviewStatus === status;
+    statusSelect.appendChild(option);
+  });
+  statusSelect.addEventListener('click', (e) => e.stopPropagation());
+  statusSelect.addEventListener('change', async (e) => {
+    e.stopPropagation();
+    await updateShotReviewMetadata(shot.shotId, { reviewStatus: e.target.value });
+    statusSelect.className = `shot-status-select status-${shot.reviewStatus}`;
+  });
+  reviewControls.appendChild(statusSelect);
+
+  const commentsBtn = document.createElement('button');
+  commentsBtn.type = 'button';
+  commentsBtn.className = 'shot-comments-btn';
+  commentsBtn.textContent = `Comments (${shot.comments.length})`;
+  commentsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openCommentsModal(shot);
+  });
+  reviewControls.appendChild(commentsBtn);
+
+  info.appendChild(reviewControls);
   card.appendChild(info);
 
   return card;
@@ -562,10 +700,11 @@ function createShotCard(shot) {
  */
 function renderTimelineView() {
   timelineTrack.innerHTML = '';
+  const filteredShots = getFilteredShots();
 
   // Group shots by music section
   const sections = {};
-  sequenceData.selections.forEach(shot => {
+  filteredShots.forEach(shot => {
     const sectionName = shot.timing?.musicSection || 'Unknown';
     if (!sections[sectionName]) {
       sections[sectionName] = [];
@@ -863,7 +1002,9 @@ function renderShotDetails() {
     ['Shot ID', selectedShot.shotId],
     ['Duration', (selectedShot.timing?.duration || 8) + 's'],
     ['Music Section', selectedShot.timing?.musicSection || 'N/A'],
-    ['Status', selectedShot.status || 'not_rendered']
+    ['Status', selectedShot.status || 'not_rendered'],
+    ['Review Status', REVIEW_STATUS_LABELS[selectedShot.reviewStatus] || 'Draft'],
+    ['Comments', String(selectedShot.comments.length)]
   ];
   if (selectedShot.notes) fields.push(['Notes', selectedShot.notes]);
 
@@ -875,6 +1016,93 @@ function renderShotDetails() {
     p.appendChild(document.createTextNode(value));
     shotDetails.appendChild(p);
   });
+}
+
+function openCommentsModal(shot) {
+  commentsShot = shot;
+  commentsShotTitle.textContent = `${shot.shotId} Comments`;
+  renderCommentsList();
+  commentsModal.style.display = 'flex';
+}
+
+function closeCommentsModal() {
+  commentsModal.style.display = 'none';
+  commentsShot = null;
+  if (commentsForm) commentsForm.reset();
+}
+
+function renderCommentsList() {
+  if (!commentsList || !commentsShot) return;
+  commentsList.innerHTML = '';
+
+  if (commentsShot.comments.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'comments-empty';
+    empty.textContent = 'No comments yet. Add context for reviewers.';
+    commentsList.appendChild(empty);
+    return;
+  }
+
+  const sorted = [...commentsShot.comments].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  sorted.forEach((comment) => {
+    const item = document.createElement('div');
+    item.className = 'comment-item';
+
+    const meta = document.createElement('div');
+    meta.className = 'comment-meta';
+    const date = new Date(comment.timestamp);
+    meta.textContent = `${comment.author} · ${date.toLocaleString()}`;
+
+    const text = document.createElement('div');
+    text.className = 'comment-text';
+    text.textContent = comment.text;
+
+    item.appendChild(meta);
+    item.appendChild(text);
+    commentsList.appendChild(item);
+  });
+}
+
+async function updateShotReviewMetadata(shotId, updates) {
+  const shot = sequenceData?.selections?.find(s => s.shotId === shotId);
+  if (!shot) return false;
+
+  if (updates.reviewStatus && REVIEW_STATUSES.includes(updates.reviewStatus)) {
+    shot.reviewStatus = updates.reviewStatus;
+  }
+  if (Array.isArray(updates.comments)) {
+    shot.comments = updates.comments;
+  }
+
+  normalizeShotReviewData(shot);
+
+  try {
+    const projectParam = currentProject ? `?project=${currentProject.id}` : '';
+    const response = await fetch(`/api/save/review-metadata${projectParam}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        shotId,
+        reviewStatus: shot.reviewStatus,
+        comments: shot.comments
+      })
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Failed to save review metadata');
+    }
+  } catch (err) {
+    console.error('Failed to save review metadata:', err);
+    showToast('Save failed', err.message, 'error', 4000);
+    return false;
+  }
+
+  renderReviewFilterChips();
+  renderView();
+  if (selectedShot?.shotId === shotId) {
+    renderShotDetails();
+  }
+  return true;
 }
 
 /**
@@ -955,6 +1183,39 @@ function initializeButtons() {
   if (modalOverlay) modalOverlay.addEventListener('click', closeModal);
   if (modalCancel) modalCancel.addEventListener('click', closeModal);
   if (modalSave) modalSave.addEventListener('click', saveSelection);
+
+  if (commentsModalClose) commentsModalClose.addEventListener('click', closeCommentsModal);
+  if (commentsModalOverlay) commentsModalOverlay.addEventListener('click', closeCommentsModal);
+  if (commentsForm) {
+    commentsForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!commentsShot) return;
+
+      const author = (commentAuthorInput.value || '').trim();
+      const text = (commentTextInput.value || '').trim();
+      if (!author || !text) {
+        showToast('Missing fields', 'Add author and comment text', 'warning', 3000);
+        return;
+      }
+
+      const comments = commentsShot.comments.concat({
+        author,
+        text,
+        timestamp: new Date().toISOString()
+      });
+
+      const ok = await updateShotReviewMetadata(commentsShot.shotId, {
+        comments
+      });
+
+      if (ok) {
+        commentsShot = sequenceData.selections.find(s => s.shotId === commentsShot.shotId);
+        renderCommentsList();
+        commentsForm.reset();
+        showToast('Comment added', commentsShot.shotId, 'success', 2000);
+      }
+    });
+  }
 }
 
 // Project selector event listeners
@@ -1024,5 +1285,4 @@ if (newProjectBtn && newProjectModal) {
     showToast('No projects found', 'Run npm run migrate to initialize multi-project support', 'info', 0);
   }
 })();
-
 

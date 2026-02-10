@@ -838,3 +838,112 @@ body.focus-mode .left-nav {
 body.focus-mode .main-layout {
   grid-template-columns: 1fr;
 }
+
+.view-controls-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.review-filter-chips {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.45rem 0.8rem;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.filter-chip.active {
+  background: var(--accent-primary);
+  color: #0d0d12;
+  border-color: transparent;
+}
+
+.shot-review-controls {
+  margin-top: 0.85rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.shot-status-select {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0.4rem 0.55rem;
+}
+
+.shot-comments-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  font-size: 12px;
+  padding: 0.4rem 0.6rem;
+}
+
+.comments-modal-content {
+  max-width: 720px;
+}
+
+.comments-modal-body {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 1rem;
+}
+
+.comments-list {
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.85rem;
+  background: var(--bg-card);
+}
+
+.comments-empty {
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.comment-item {
+  border-bottom: 1px solid var(--border);
+  padding: 0.7rem 0;
+}
+
+.comment-item:last-child {
+  border-bottom: none;
+}
+
+.comment-meta {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-bottom: 0.4rem;
+}
+
+.comment-text {
+  font-size: 14px;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+
+.comments-form-actions {
+  margin-top: 0.5rem;
+  display: flex;
+  justify-content: flex-end;
+}

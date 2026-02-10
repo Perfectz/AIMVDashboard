@@ -76,9 +76,12 @@
         </div>
 
         <div class="view-controls">
-          <div class="view-mode-tabs">
-            <button class="view-tab active" data-view="grid"><span>Grid View</span></button>
-            <button class="view-tab" data-view="timeline"><span>Timeline View</span></button>
+          <div class="view-controls-left">
+            <div class="view-mode-tabs">
+              <button class="view-tab active" data-view="grid"><span>Grid View</span></button>
+              <button class="view-tab" data-view="timeline"><span>Timeline View</span></button>
+            </div>
+            <div class="review-filter-chips" id="reviewFilterChips"></div>
           </div>
           <div class="view-actions"><button class="btn btn-small" id="refreshBtn">Refresh</button></div>
         </div>
@@ -117,6 +120,22 @@
       </div>
     </div>
   </div>
+
+        <div class="modal" id="commentsModal" style="display: none;">
+          <div class="modal-overlay" id="commentsModalOverlay"></div>
+          <div class="modal-content comments-modal-content">
+            <div class="modal-header"><h2 id="commentsShotTitle">Shot Comments</h2><button class="modal-close" id="commentsModalClose">×</button></div>
+            <div class="modal-body comments-modal-body">
+              <div class="comments-list" id="commentsList"></div>
+              <form class="comments-form" id="commentsForm">
+                <div class="form-group"><label for="commentAuthor">Author</label><input type="text" id="commentAuthor" maxlength="60" required placeholder="Director" /></div>
+                <div class="form-group"><label for="commentText">Comment</label><textarea id="commentText" rows="4" maxlength="1000" required placeholder="Add review feedback"></textarea></div>
+                <div class="comments-form-actions"><button class="btn btn-primary" type="submit">Add Comment</button></div>
+              </form>
+            </div>
+          </div>
+        </div>
+
 
   <div class="modal" id="newProjectModal" style="display: none;">
     <div class="modal-overlay" id="newProjectModalOverlay"></div>

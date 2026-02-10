@@ -51,6 +51,9 @@ const ALLOWED_IMAGE_TYPES = ['.png', '.jpg', '.jpeg'];
 const MAX_MUSIC_SIZE = 50 * 1024 * 1024;  // 50MB
 const MAX_VIDEO_SIZE = 500 * 1024 * 1024; // 500MB
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;  // 10MB
+const REVIEW_STATUSES = new Set(['draft', 'in_review', 'approved', 'changes_requested']);
+const MAX_COMMENT_AUTHOR_LENGTH = 60;
+const MAX_COMMENT_TEXT_LENGTH = 1000;
 
 function isPathInside(basePath, targetPath) {
   const base = path.resolve(basePath);
@@ -320,6 +323,56 @@ function writeSequenceFile(data, projectId = 'default') {
   fs.writeFileSync(sequencePath, JSON.stringify(data, null, 2), 'utf8');
 }
 
+function normalizeReviewStatus(value) {
+  return REVIEW_STATUSES.has(value) ? value : 'draft';
+}
+
+function normalizeComment(comment) {
+  if (!comment || typeof comment !== 'object') return null;
+
+  const author = typeof comment.author === 'string' ? comment.author.trim() : '';
+  const text = typeof comment.text === 'string' ? comment.text.trim() : '';
+  const timestamp = typeof comment.timestamp === 'string' && comment.timestamp.trim()
+    ? comment.timestamp
+    : new Date().toISOString();
+
+  if (!author || !text) {
+    return null;
+  }
+
+  if (author.length > MAX_COMMENT_AUTHOR_LENGTH || text.length > MAX_COMMENT_TEXT_LENGTH) {
+    return null;
+  }
+
+  return { author, text, timestamp };
+}
+
+function sanitizeReviewMetadata(payload = {}) {
+  return {
+    reviewStatus: normalizeReviewStatus(payload.reviewStatus),
+    comments: Array.isArray(payload.comments)
+      ? payload.comments.map(normalizeComment).filter(Boolean)
+      : []
+  };
+}
+
+function getReviewMetadataMap(sequence) {
+  const metadata = {};
+  if (!sequence || !Array.isArray(sequence.selections)) {
+    return metadata;
+  }
+
+  sequence.selections.forEach((shot) => {
+    if (!shot || !shot.shotId) return;
+    const normalized = sanitizeReviewMetadata(shot);
+    shot.reviewStatus = normalized.reviewStatus;
+    shot.comments = normalized.comments;
+    metadata[shot.shotId] = normalized;
+  });
+
+  return metadata;
+}
+
 /**
  * Send JSON response
  */
@@ -577,6 +630,8 @@ const server = http.createServer((req, res) => {
           shotId,
           selectedVariation: 'none',
           status: 'rendered',
+          reviewStatus: 'draft',
+          comments: [],
           renderFiles: { kling: {}, nano: {} }
         };
         sequence.selections.push(shot);
@@ -601,6 +656,67 @@ const server = http.createServer((req, res) => {
         filePath: relativePath,
         message: 'Shot uploaded successfully'
       });
+    });
+    return;
+  }
+
+  // GET /api/load/review-metadata
+  if (req.method === 'GET' && req.url.startsWith('/api/load/review-metadata')) {
+    try {
+      const { projectId } = getProjectContext(req, { required: true });
+      const sequence = readSequenceFile(projectId);
+      const reviewMetadata = getReviewMetadataMap(sequence);
+      writeSequenceFile(sequence, projectId);
+      sendJSON(res, 200, { success: true, reviewMetadata });
+    } catch (err) {
+      sendJSON(res, 400, { success: false, error: err.message });
+    }
+    return;
+  }
+
+  // POST /api/save/review-metadata
+  if (req.method === 'POST' && req.url.startsWith('/api/save/review-metadata')) {
+    readBody(req, MAX_BODY_SIZE, (err, body) => {
+      if (err) {
+        sendJSON(res, 413, { success: false, error: 'Payload too large' });
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(body || '{}');
+        const { projectId } = getProjectContext(req, { required: true });
+        const shotId = sanitizePathSegment(parsed.shotId, SHOT_ID_REGEX, 'shotId');
+
+        const sequence = readSequenceFile(projectId);
+        if (!Array.isArray(sequence.selections)) {
+          sequence.selections = [];
+        }
+
+        const shot = sequence.selections.find(s => s.shotId === shotId);
+        if (!shot) {
+          sendJSON(res, 404, { success: false, error: `Shot '${shotId}' not found` });
+          return;
+        }
+
+        const current = sanitizeReviewMetadata(shot);
+        const updates = {
+          reviewStatus: parsed.reviewStatus !== undefined ? parsed.reviewStatus : current.reviewStatus,
+          comments: parsed.comments !== undefined ? parsed.comments : current.comments
+        };
+        const normalized = sanitizeReviewMetadata(updates);
+
+        shot.reviewStatus = normalized.reviewStatus;
+        shot.comments = normalized.comments;
+        writeSequenceFile(sequence, projectId);
+
+        sendJSON(res, 200, {
+          success: true,
+          shotId,
+          reviewMetadata: normalized
+        });
+      } catch (parseErr) {
+        sendJSON(res, 400, { success: false, error: parseErr.message || 'Invalid JSON' });
+      }
     });
     return;
   }

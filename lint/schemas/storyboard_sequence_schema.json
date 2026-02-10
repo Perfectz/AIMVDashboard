@@ -87,6 +87,33 @@
             "type": "string",
             "enum": ["not_rendered", "rendering", "rendered", "approved", "needs_revision"],
             "description": "Production status"
+          },
+          "reviewStatus": {
+            "type": "string",
+            "enum": ["draft", "in_review", "approved", "changes_requested"],
+            "description": "Review workflow status"
+          },
+          "comments": {
+            "type": "array",
+            "description": "Review comments attached to this shot",
+            "items": {
+              "type": "object",
+              "required": ["timestamp", "author", "text"],
+              "properties": {
+                "timestamp": {
+                  "type": "string",
+                  "description": "ISO timestamp when the comment was added"
+                },
+                "author": {
+                  "type": "string",
+                  "description": "Author label for the comment"
+                },
+                "text": {
+                  "type": "string",
+                  "description": "Comment content"
+                }
+              }
+            }
           }
         }
       }
