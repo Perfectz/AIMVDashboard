@@ -8,16 +8,8 @@ let saveStoryboardTimer = null;
 let selectedShot = null;
 let selectedVariation = null;
 let currentProject = null;
-let commentsShot = null;
-let activeReviewFilters = new Set();
-
-const REVIEW_STATUSES = ['draft', 'in_review', 'approved', 'changes_requested'];
-const REVIEW_STATUS_LABELS = {
-  draft: 'Draft',
-  in_review: 'In Review',
-  approved: 'Approved',
-  changes_requested: 'Changes Requested'
-};
+let assetManifest = [];
+let filteredAssets = [];
 
 // Toast notification system
 const toastContainer = document.getElementById('toastContainer');
@@ -107,8 +99,7 @@ function dismissToast(toastId) {
 let emptyState, gridView, timelineView, shotGrid, timelineTrack, timelineFilmstrip;
 let shotModal, modalTitle, variationGrid, shotDetails;
 let statTotalShots, statRendered, statSelected, statDuration;
-let reviewFilterChips;
-let commentsModal, commentsModalOverlay, commentsModalClose, commentsShotTitle, commentsList, commentsForm, commentAuthorInput, commentTextInput;
+let assetTypeFilter, assetStatusFilter, assetShotFilter, assetTableBody, assetCount, assetEmptyState;
 
 /**
  * Initialize DOM element references
@@ -128,41 +119,200 @@ function initializeDOMElements() {
   statRendered = document.getElementById('stat-rendered');
   statSelected = document.getElementById('stat-selected');
   statDuration = document.getElementById('stat-duration');
-  reviewFilterChips = document.getElementById('reviewFilterChips');
-  commentsModal = document.getElementById('commentsModal');
-  commentsModalOverlay = document.getElementById('commentsModalOverlay');
-  commentsModalClose = document.getElementById('commentsModalClose');
-  commentsShotTitle = document.getElementById('commentsShotTitle');
-  commentsList = document.getElementById('commentsList');
-  commentsForm = document.getElementById('commentsForm');
-  commentAuthorInput = document.getElementById('commentAuthor');
-  commentTextInput = document.getElementById('commentText');
+  assetTypeFilter = document.getElementById('assetTypeFilter');
+  assetStatusFilter = document.getElementById('assetStatusFilter');
+  assetShotFilter = document.getElementById('assetShotFilter');
+  assetTableBody = document.getElementById('assetTableBody');
+  assetCount = document.getElementById('assetCount');
+  assetEmptyState = document.getElementById('assetEmptyState');
 }
 
-function normalizeShotReviewData(shot) {
-  if (!REVIEW_STATUSES.includes(shot.reviewStatus)) {
-    shot.reviewStatus = 'draft';
-  }
-
-  if (!Array.isArray(shot.comments)) {
-    shot.comments = [];
-  }
-
-  shot.comments = shot.comments
-    .filter(comment => comment && typeof comment === 'object')
-    .map(comment => ({
-      author: comment.author ? String(comment.author) : 'Unknown',
-      text: comment.text ? String(comment.text) : '',
-      timestamp: comment.timestamp || new Date().toISOString()
-    }))
-    .filter(comment => comment.text.trim().length > 0);
-
-  return shot;
+function normalizeAssetManifest(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.assets)) return data.assets;
+  if (Array.isArray(data?.items)) return data.items;
+  return [];
 }
 
-function normalizeSequenceReviewData(data) {
-  if (!data || !Array.isArray(data.selections)) return;
-  data.selections.forEach(normalizeShotReviewData);
+function collectShotIds(asset) {
+  const used = asset.usedIn || asset.used_in || asset.usedInShots || asset.shotIds || [];
+  if (Array.isArray(used)) return used.map(String);
+  return [];
+}
+
+async function loadAssetManifest() {
+  try {
+    const projectParam = currentProject ? `?project=${currentProject.id}` : '';
+    const response = await fetch(`/projects/${currentProject.id}/bible/asset_manifest.json${projectParam}`);
+    if (!response.ok) {
+      assetManifest = [];
+      renderAssetPanel();
+      return;
+    }
+    const data = await response.json();
+    assetManifest = normalizeAssetManifest(data);
+    renderAssetPanel();
+  } catch (err) {
+    console.warn('Failed to load asset manifest:', err);
+    assetManifest = [];
+    renderAssetPanel();
+  }
+}
+
+function initializeAssetFilters() {
+  if (!assetTypeFilter || !assetStatusFilter || !assetShotFilter) return;
+
+  [assetTypeFilter, assetStatusFilter, assetShotFilter].forEach(select => {
+    select.addEventListener('change', () => renderAssetRows());
+  });
+}
+
+function getAssetField(asset, keys, fallback = 'Unknown') {
+  for (const key of keys) {
+    if (asset[key]) return String(asset[key]);
+  }
+  return fallback;
+}
+
+function renderAssetPanel() {
+  if (!assetTableBody || !assetTypeFilter || !assetStatusFilter || !assetShotFilter) return;
+
+  const allTypes = new Set();
+  const allStatuses = new Set();
+  const allShots = new Set();
+
+  assetManifest.forEach(asset => {
+    allTypes.add(getAssetField(asset, ['type'], 'unspecified'));
+    allStatuses.add(getAssetField(asset, ['status'], 'unknown'));
+    collectShotIds(asset).forEach(shotId => allShots.add(shotId));
+  });
+
+  assetTypeFilter.innerHTML = '<option value="all">All Types</option>';
+  [...allTypes].sort().forEach(type => {
+    const option = document.createElement('option');
+    option.value = type;
+    option.textContent = type;
+    assetTypeFilter.appendChild(option);
+  });
+
+  assetStatusFilter.innerHTML = '<option value="all">All Statuses</option>';
+  [...allStatuses].sort().forEach(status => {
+    const option = document.createElement('option');
+    option.value = status;
+    option.textContent = status;
+    assetStatusFilter.appendChild(option);
+  });
+
+  assetShotFilter.innerHTML = '<option value="all">Any Shot</option>';
+  [...allShots].sort().forEach(shotId => {
+    const option = document.createElement('option');
+    option.value = shotId;
+    option.textContent = shotId;
+    assetShotFilter.appendChild(option);
+  });
+
+  renderAssetRows();
+}
+
+function renderAssetRows() {
+  if (!assetTableBody) return;
+
+  const selectedType = assetTypeFilter?.value || 'all';
+  const selectedStatus = assetStatusFilter?.value || 'all';
+  const selectedShot = assetShotFilter?.value || 'all';
+
+  filteredAssets = assetManifest.filter(asset => {
+    const type = getAssetField(asset, ['type'], 'unspecified');
+    const status = getAssetField(asset, ['status'], 'unknown');
+    const usedIn = collectShotIds(asset);
+
+    if (selectedType !== 'all' && type !== selectedType) return false;
+    if (selectedStatus !== 'all' && status !== selectedStatus) return false;
+    if (selectedShot !== 'all' && !usedIn.includes(selectedShot)) return false;
+    return true;
+  });
+
+  assetTableBody.innerHTML = '';
+  if (assetCount) {
+    assetCount.textContent = `${filteredAssets.length} / ${assetManifest.length} assets`;
+  }
+
+  if (filteredAssets.length === 0) {
+    if (assetEmptyState) assetEmptyState.style.display = 'block';
+    return;
+  }
+
+  if (assetEmptyState) assetEmptyState.style.display = 'none';
+
+  filteredAssets.forEach(asset => {
+    const row = document.createElement('tr');
+    const assetName = getAssetField(asset, ['id', 'name', 'assetId'], 'Unnamed');
+    const type = getAssetField(asset, ['type'], 'unspecified');
+    const status = getAssetField(asset, ['status'], 'unknown');
+    const owner = getAssetField(asset, ['owner'], '-');
+    const source = getAssetField(asset, ['source'], '-');
+    const usedIn = collectShotIds(asset);
+    const missing = String(status).toLowerCase().includes('missing') || usedIn.length === 0;
+
+    row.innerHTML = `
+      <td>${assetName}</td>
+      <td>${type}</td>
+      <td>${status}</td>
+      <td>${owner}</td>
+      <td>${source}</td>
+      <td class="asset-used-in"></td>
+      <td><span class="asset-readiness ${missing ? 'asset-badge-missing' : 'asset-badge-ready'}">${missing ? 'Missing' : 'Ready'}</span></td>
+    `;
+
+    const usedInCell = row.querySelector('.asset-used-in');
+    if (usedIn.length === 0) {
+      usedInCell.textContent = '-';
+    } else {
+      usedIn.forEach((shotId, index) => {
+        const button = document.createElement('button');
+        button.className = 'asset-shot-link';
+        button.textContent = shotId;
+        button.addEventListener('click', () => jumpToShot(shotId));
+        usedInCell.appendChild(button);
+        if (index < usedIn.length - 1) {
+          usedInCell.appendChild(document.createTextNode(' '));
+        }
+      });
+    }
+
+    assetTableBody.appendChild(row);
+  });
+}
+
+function jumpToShot(shotId) {
+  if (!sequenceData?.selections?.length) {
+    showToast('Storyboard unavailable', 'Load storyboard data first', 'warning', 2500);
+    return;
+  }
+
+  const shot = sequenceData.selections.find(item => item.shotId === shotId);
+  if (!shot) {
+    showToast('Shot not found', `${shotId} is not in the current sequence`, 'warning', 3000);
+    return;
+  }
+
+  if (currentView !== 'grid') {
+    currentView = 'grid';
+    document.querySelectorAll('.view-tab').forEach(tab => {
+      tab.classList.toggle('active', tab.dataset.view === 'grid');
+    });
+    renderView();
+  }
+
+  const shotCards = [...document.querySelectorAll('.shot-card')];
+  const target = shotCards.find(card => card.querySelector('.shot-id')?.textContent === shotId);
+  if (target) {
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target.classList.add('asset-shot-highlight');
+    setTimeout(() => target.classList.remove('asset-shot-highlight'), 1200);
+  }
+
+  openShotModal(shot);
 }
 
 /**
@@ -2322,8 +2472,9 @@ if (newProjectBtn && newProjectModal) {
   if (projectsLoaded) {
     initializeViewTabs();
     initializeButtons();
-    updateReorderModeButtonLabel();
+    initializeAssetFilters();
     await loadSequence();
+    await loadAssetManifest();
     initMusicUpload();
   } else {
     showEmptyState();
