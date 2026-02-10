@@ -1830,6 +1830,74 @@ body {
   font-size: 13px;
 }
 
+.context-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 14, 23, 0.65);
+  backdrop-filter: blur(2px);
+  z-index: 1200;
+}
+
+.context-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(720px, 92vw);
+  height: 100vh;
+  background: var(--bg-primary);
+  border-left: 1px solid var(--border);
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.35);
+  transform: translateX(100%);
+  transition: transform 0.2s ease;
+  z-index: 1210;
+  display: flex;
+  flex-direction: column;
+}
+
+.context-drawer.open {
+  transform: translateX(0);
+}
+
+.context-drawer-header,
+.context-drawer-actions {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.context-drawer-actions {
+  justify-content: flex-start;
+}
+
+.context-drawer-content {
+  overflow: auto;
+  padding: 1rem 1.25rem 2rem;
+}
+
+.context-block {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.9rem;
+  margin-bottom: 0.9rem;
+  background: var(--bg-secondary);
+}
+
+.context-block h3 {
+  margin-bottom: 0.6rem;
+}
+
+.context-block ul {
+  margin: 0.4rem 0 0 1.2rem;
+}
+
+.context-warning {
+  color: var(--warning);
+  margin-bottom: 0.45rem;
+}
+
 /* Text Input Section */
 .text-input-section {
   display: grid;

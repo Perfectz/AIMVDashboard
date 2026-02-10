@@ -144,6 +144,13 @@ const breadcrumbs = document.getElementById('breadcrumbs');
 const generateShotBtn = document.getElementById('generateShotBtn');
 const shotRenders = document.getElementById('shotRenders');
 const shotRendersGrid = document.getElementById('shotRendersGrid');
+const previewContextBtn = document.getElementById('previewContextBtn');
+const contextDrawer = document.getElementById('contextDrawer');
+const contextDrawerOverlay = document.getElementById('contextDrawerOverlay');
+const closeContextDrawerBtn = document.getElementById('closeContextDrawerBtn');
+const contextDrawerContent = document.getElementById('contextDrawerContent');
+const copyContextMarkdownBtn = document.getElementById('copyContextMarkdownBtn');
+const downloadContextJsonBtn = document.getElementById('downloadContextJsonBtn');
 
 // Stats
 const statShots = document.getElementById('stat-shots');
@@ -2961,9 +2968,120 @@ function createRenderCard(imagePath, label, variation, projectParam) {
   return card;
 }
 
+let latestContextBundle = null;
+
+function renderContextDrawer(bundle) {
+  if (!contextDrawerContent) return;
+  const orderList = (bundle.selectedShotOrder || [])
+    .map((s) => `<li>${escapeHtml(s.shotId)} - Variation ${escapeHtml(s.selectedVariation || 'none')}</li>`)
+    .join('');
+
+  const shotsHtml = (bundle.shots || []).map((shot) => {
+    const refs = (shot.references || []).map((ref) => {
+      const assets = ref.assets?.length ? ` (${ref.assets.length} asset${ref.assets.length > 1 ? 's' : ''})` : '';
+      return `<li>${escapeHtml(ref.type)}: ${escapeHtml(ref.name || ref.id || 'Unknown')}${escapeHtml(assets)}</li>`;
+    }).join('');
+    return `
+      <div class="context-block">
+        <h3>${escapeHtml(shot.shotId)}</h3>
+        <p><strong>Script:</strong> ${escapeHtml(shot.scriptSnippet?.what || shot.scriptSnippet?.why || 'N/A')}</p>
+        <p><strong>Transcript:</strong> ${escapeHtml(shot.transcriptSnippet || 'N/A')}</p>
+        <ul>${refs || '<li>No references</li>'}</ul>
+      </div>`;
+  }).join('');
+
+  const warnings = (bundle.warnings || []).map((w) => `<div class="context-warning">⚠ ${escapeHtml(w)}</div>`).join('');
+
+  contextDrawerContent.innerHTML = `
+    <div class="context-block">
+      <h3>Selected Shot Order</h3>
+      <ul>${orderList || '<li>No selected shots</li>'}</ul>
+    </div>
+    <div class="context-block">
+      <h3>Missing Context Warnings</h3>
+      ${warnings || '<div>No warnings</div>'}
+    </div>
+    ${shotsHtml}
+  `;
+}
+
+function bundleToMarkdown(bundle) {
+  const order = (bundle.selectedShotOrder || []).map((s) => `- ${s.shotId}: Variation ${s.selectedVariation || 'none'}`).join('\n');
+  const warnings = (bundle.warnings || []).map((w) => `- ⚠️ ${w}`).join('\n');
+  const shots = (bundle.shots || []).map((shot) => {
+    const refs = (shot.references || []).map((ref) => `- ${ref.type}: ${ref.name || ref.id}`).join('\n') || '- none';
+    return `### ${shot.shotId}\n- Script: ${shot.scriptSnippet?.what || shot.scriptSnippet?.why || 'N/A'}\n- Transcript: ${shot.transcriptSnippet || 'N/A'}\n- Active references:\n${refs}`;
+  }).join('\n\n');
+
+  return `## AI Context Preview\n\n### Selected shot order\n${order || '- none'}\n\n### Missing context warnings\n${warnings || '- none'}\n\n${shots}`;
+}
+
+function downloadJson(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function openContextDrawer() {
+  if (!currentProject) return;
+  try {
+    const response = await fetch(`/api/export/context-bundle?project=${currentProject.id}`);
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || 'Failed to generate context bundle');
+    latestContextBundle = data.bundle;
+    renderContextDrawer(latestContextBundle);
+    contextDrawerOverlay.style.display = 'block';
+    contextDrawer.classList.add('open');
+    contextDrawer.setAttribute('aria-hidden', 'false');
+  } catch (err) {
+    showToast('Preview failed', err.message, 'error', 3500);
+  }
+}
+
+function closeContextDrawer() {
+  if (!contextDrawer || !contextDrawerOverlay) return;
+  contextDrawer.classList.remove('open');
+  contextDrawerOverlay.style.display = 'none';
+  contextDrawer.setAttribute('aria-hidden', 'true');
+}
+
 // Wire up generate shot button
 if (generateShotBtn) {
   generateShotBtn.addEventListener('click', generateShot);
+}
+
+if (previewContextBtn) {
+  previewContextBtn.addEventListener('click', openContextDrawer);
+}
+
+if (closeContextDrawerBtn) {
+  closeContextDrawerBtn.addEventListener('click', closeContextDrawer);
+}
+
+if (contextDrawerOverlay) {
+  contextDrawerOverlay.addEventListener('click', closeContextDrawer);
+}
+
+if (copyContextMarkdownBtn) {
+  copyContextMarkdownBtn.addEventListener('click', async () => {
+    if (!latestContextBundle) return;
+    await copyText(bundleToMarkdown(latestContextBundle));
+    showToast('Copied', 'AI context copied as markdown', 'success', 2000);
+  });
+}
+
+if (downloadContextJsonBtn) {
+  downloadContextJsonBtn.addEventListener('click', () => {
+    if (!latestContextBundle) return;
+    downloadJson(`context-bundle-${currentProject?.id || 'project'}.json`, latestContextBundle);
+    showToast('Downloaded', 'Context bundle JSON saved', 'success', 2000);
+  });
 }
 
 // Initialize character references
@@ -2995,6 +3113,5 @@ async function initializeReferences() {
     showToast('No projects found', 'Run npm run migrate to initialize multi-project support', 'info', 0);
   }
 })();
-
 
 

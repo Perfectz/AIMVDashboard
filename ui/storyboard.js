@@ -6,6 +6,7 @@ let currentView = 'grid';
 let selectedShot = null;
 let selectedVariation = null;
 let currentProject = null;
+let latestContextBundle = null;
 
 // Toast notification system
 const toastContainer = document.getElementById('toastContainer');
@@ -142,6 +143,117 @@ function showLoading(container, message = 'Loading...') {
 function hideLoading(overlay) {
   if (overlay && overlay.parentNode) {
     overlay.remove();
+  }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+async function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  document.body.removeChild(textarea);
+}
+
+function renderContextDrawer(bundle) {
+  const content = document.getElementById('contextDrawerContent');
+  if (!content) return;
+
+  const orderList = (bundle.selectedShotOrder || [])
+    .map((s) => `<li>${escapeHtml(s.shotId)} - Variation ${escapeHtml(s.selectedVariation || 'none')}</li>`)
+    .join('');
+
+  const shotsHtml = (bundle.shots || []).map((shot) => {
+    const refs = (shot.references || []).map((ref) => {
+      const assets = ref.assets?.length ? ` (${ref.assets.length} asset${ref.assets.length > 1 ? 's' : ''})` : '';
+      return `<li>${escapeHtml(ref.type)}: ${escapeHtml(ref.name || ref.id || 'Unknown')}${escapeHtml(assets)}</li>`;
+    }).join('');
+    return `
+      <div class="context-block">
+        <h3>${escapeHtml(shot.shotId)}</h3>
+        <p><strong>Script:</strong> ${escapeHtml(shot.scriptSnippet?.what || shot.scriptSnippet?.why || 'N/A')}</p>
+        <p><strong>Transcript:</strong> ${escapeHtml(shot.transcriptSnippet || 'N/A')}</p>
+        <ul>${refs || '<li>No references</li>'}</ul>
+      </div>`;
+  }).join('');
+
+  const warnings = (bundle.warnings || []).map((w) => `<div class="context-warning">⚠ ${escapeHtml(w)}</div>`).join('');
+
+  content.innerHTML = `
+    <div class="context-block">
+      <h3>Selected Shot Order</h3>
+      <ul>${orderList || '<li>No selected shots</li>'}</ul>
+    </div>
+    <div class="context-block">
+      <h3>Missing Context Warnings</h3>
+      ${warnings || '<div>No warnings</div>'}
+    </div>
+    ${shotsHtml}
+  `;
+}
+
+function bundleToMarkdown(bundle) {
+  const order = (bundle.selectedShotOrder || []).map((s) => `- ${s.shotId}: Variation ${s.selectedVariation || 'none'}`).join('\n');
+  const warnings = (bundle.warnings || []).map((w) => `- ⚠️ ${w}`).join('\n');
+  const shots = (bundle.shots || []).map((shot) => {
+    const refs = (shot.references || []).map((ref) => `- ${ref.type}: ${ref.name || ref.id}`).join('\n') || '- none';
+    return `### ${shot.shotId}\n- Script: ${shot.scriptSnippet?.what || shot.scriptSnippet?.why || 'N/A'}\n- Transcript: ${shot.transcriptSnippet || 'N/A'}\n- Active references:\n${refs}`;
+  }).join('\n\n');
+
+  return `## AI Context Preview\n\n### Selected shot order\n${order || '- none'}\n\n### Missing context warnings\n${warnings || '- none'}\n\n${shots}`;
+}
+
+function downloadJson(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function openContextDrawer() {
+  if (!currentProject) return;
+  try {
+    const response = await fetch(`/api/export/context-bundle?project=${currentProject.id}`);
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || 'Failed to generate context bundle');
+    latestContextBundle = data.bundle;
+    renderContextDrawer(latestContextBundle);
+
+    const drawer = document.getElementById('contextDrawer');
+    const overlay = document.getElementById('contextDrawerOverlay');
+    if (overlay) overlay.style.display = 'block';
+    if (drawer) {
+      drawer.classList.add('open');
+      drawer.setAttribute('aria-hidden', 'false');
+    }
+  } catch (err) {
+    showToast('Preview failed', err.message, 'error', 3500);
+  }
+}
+
+function closeContextDrawer() {
+  const drawer = document.getElementById('contextDrawer');
+  const overlay = document.getElementById('contextDrawerOverlay');
+  if (overlay) overlay.style.display = 'none';
+  if (drawer) {
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden', 'true');
   }
 }
 
@@ -937,14 +1049,20 @@ function initializeViewTabs() {
 function initializeButtons() {
   const exportBtn = document.getElementById('exportBtn');
   const refreshBtn = document.getElementById('refreshBtn');
+  const previewContextBtn = document.getElementById('previewContextBtn');
   const storyboardFocusBtn = document.getElementById('storyboardFocusBtn');
   const modalClose = document.getElementById('modalClose');
   const modalOverlay = document.getElementById('modalOverlay');
   const modalCancel = document.getElementById('modal-cancel');
   const modalSave = document.getElementById('modal-save');
+  const closeContextDrawerBtn = document.getElementById('closeContextDrawerBtn');
+  const contextDrawerOverlay = document.getElementById('contextDrawerOverlay');
+  const copyContextMarkdownBtn = document.getElementById('copyContextMarkdownBtn');
+  const downloadContextJsonBtn = document.getElementById('downloadContextJsonBtn');
 
   if (exportBtn) exportBtn.addEventListener('click', exportPDF);
   if (refreshBtn) refreshBtn.addEventListener('click', loadSequence);
+  if (previewContextBtn) previewContextBtn.addEventListener('click', openContextDrawer);
   if (storyboardFocusBtn) {
     storyboardFocusBtn.addEventListener('click', () => {
       document.body.classList.toggle('focus-mode');
@@ -955,6 +1073,22 @@ function initializeButtons() {
   if (modalOverlay) modalOverlay.addEventListener('click', closeModal);
   if (modalCancel) modalCancel.addEventListener('click', closeModal);
   if (modalSave) modalSave.addEventListener('click', saveSelection);
+  if (closeContextDrawerBtn) closeContextDrawerBtn.addEventListener('click', closeContextDrawer);
+  if (contextDrawerOverlay) contextDrawerOverlay.addEventListener('click', closeContextDrawer);
+  if (copyContextMarkdownBtn) {
+    copyContextMarkdownBtn.addEventListener('click', async () => {
+      if (!latestContextBundle) return;
+      await copyText(bundleToMarkdown(latestContextBundle));
+      showToast('Copied', 'AI context copied as markdown', 'success', 2000);
+    });
+  }
+  if (downloadContextJsonBtn) {
+    downloadContextJsonBtn.addEventListener('click', () => {
+      if (!latestContextBundle) return;
+      downloadJson(`context-bundle-${currentProject?.id || 'project'}.json`, latestContextBundle);
+      showToast('Downloaded', 'Context bundle JSON saved', 'success', 2000);
+    });
+  }
 }
 
 // Project selector event listeners
@@ -1024,5 +1158,4 @@ if (newProjectBtn && newProjectModal) {
     showToast('No projects found', 'Run npm run migrate to initialize multi-project support', 'info', 0);
   }
 })();
-
 
