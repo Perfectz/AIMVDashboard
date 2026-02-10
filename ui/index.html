@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Step 5: Prompts - AI Music Video</title>
+  <title>Step 5: Shots - AI Music Video</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -32,7 +32,7 @@
 
         <div class="nav-stats">
           <div class="nav-stat-item"><div class="nav-stat-value" id="stat-shots">0</div><div class="nav-stat-label">Shots</div></div>
-          <div class="nav-stat-item"><div class="nav-stat-value" id="stat-prompts">0</div><div class="nav-stat-label">Prompts</div></div>
+          <div class="nav-stat-item"><div class="nav-stat-value" id="stat-prompts">0</div><div class="nav-stat-label">Shot Files</div></div>
           <div class="nav-stat-item nav-stat-success"><div class="nav-stat-value" id="stat-passed">0</div><div class="nav-stat-label">Passed</div></div>
           <div class="nav-stat-item nav-stat-error"><div class="nav-stat-value" id="stat-failed">0</div><div class="nav-stat-label">Failed</div></div>
         </div>
@@ -45,8 +45,8 @@
           <button class="nav-item" data-workspace-url="step2.html" data-workspace-title="Step 2: Music"><span class="nav-icon">02</span><span class="nav-label">Step 2: Music</span></button>
           <button class="nav-item" data-workspace-url="step3.html" data-workspace-title="Step 3: Canon"><span class="nav-icon">03</span><span class="nav-label">Step 3: Canon</span></button>
           <button class="nav-item" data-workspace-url="step4.html" data-workspace-title="Step 4: References"><span class="nav-icon">04</span><span class="nav-label">Step 4: References</span></button>
-          <button class="nav-item active" id="promptsNavBtn"><span class="nav-icon">05</span><span class="nav-label">Step 5: Prompts</span><span class="nav-count" id="nav-count-all">0</span></button>
-          <button class="nav-item" data-workspace-url="storyboard.html" data-workspace-title="Step 6: Storyboard" id="openStoryboardNavBtn"><span class="nav-icon">06</span><span class="nav-label">Step 6: Storyboard</span></button>
+          <button class="nav-item active" id="promptsNavBtn"><span class="nav-icon">05</span><span class="nav-label">Step 5: Shots</span><span class="nav-count" id="nav-count-all">0</span></button>
+          <button class="nav-item" data-workspace-url="storyboard.html" data-workspace-title="Step 6: Storyboard Preview" id="openStoryboardNavBtn"><span class="nav-icon">06</span><span class="nav-label">Step 6: Storyboard Preview</span></button>
         </div>
 
         <div class="nav-divider"></div>
@@ -64,7 +64,7 @@
         </div>
 
         <div class="platform-filters">
-          <button class="platform-filter-btn active" data-platform="all"><span class="platform-icon">ALL</span><span class="platform-label">All Prompts</span><span class="platform-count" id="filter-count-all">0</span></button>
+          <button class="platform-filter-btn active" data-platform="all"><span class="platform-icon">ALL</span><span class="platform-label">All Shots</span><span class="platform-count" id="filter-count-all">0</span></button>
           <button class="platform-filter-btn" data-platform="kling"><span class="platform-icon">KL</span><span class="platform-label">Kling 3.0</span><span class="platform-count" id="filter-count-kling">0</span></button>
           <button class="platform-filter-btn" data-platform="nanobanana"><span class="platform-icon">NB</span><span class="platform-label">Nano Banana</span><span class="platform-count" id="filter-count-nanobanana">0</span></button>
           <button class="platform-filter-btn" data-platform="suno"><span class="platform-icon">SU</span><span class="platform-label">Suno</span><span class="platform-count" id="filter-count-suno">0</span></button>
@@ -89,8 +89,8 @@
       <main class="content">
         <div class="page-toolbar">
           <div class="page-toolbar-title">
-            <h1 id="pageToolbarHeading">Prompt Review</h1>
-            <p id="pageToolbarSubtitle">Search, validate, copy, and generate in one place.</p>
+            <h1 id="pageToolbarHeading">Shot Review</h1>
+            <p id="pageToolbarSubtitle">Find a shot, verify its text and references, then generate outputs.</p>
           </div>
           <div class="page-toolbar-actions">
             <button id="focusModeBtn" class="btn btn-secondary">Focus Mode</button>
@@ -102,24 +102,24 @@
           <nav class="breadcrumbs" id="breadcrumbs" style="display: none;"></nav>
 
           <div class="empty-state" id="emptyState" style="display: none;">
-          <h2>No Prompts Found</h2>
-          <p>This is expected in Phase 1.</p>
-          <p>Prompts will be generated in Phase 2 after:</p>
+          <h2>No Shots Ready Yet</h2>
+          <p>Generate shot files, then refresh the index to review them here.</p>
+          <p>Before indexing, make sure you have:</p>
           <ul>
             <li>Music is generated</li>
             <li>Shot intents are created</li>
             <li>Canon is filled in (characters, locations)</li>
           </ul>
-          <p class="note">To test the UI, create a test prompt file in <code>prompts/kling/</code> or run <code>npm run index</code> to regenerate the index.</p>
+          <p class="note">Create at least one shot file in <code>prompts/kling/</code>, then run <code>npm run index</code> and select a shot to continue.</p>
           <div class="empty-actions">
-            <button id="emptyRunIndex" class="btn btn-primary">Regenerate Index</button>
+            <button id="emptyRunIndex" class="btn btn-primary" title="Refresh the shot index from files">Regenerate Index</button>
             <button id="emptyOpenGuide" class="btn btn-secondary">Open Guide</button>
           </div>
           </div>
 
           <div class="prompt-viewer" id="promptViewer" style="display: none;">
           <div class="prompt-header">
-            <h2 id="promptTitle">Shot Title</h2>
+            <h2 id="promptTitle">Select a Shot</h2>
             <div class="prompt-meta">
               <span id="promptTool" class="tool-badge"></span>
               <span id="promptLintStatus" class="lint-status"></span>
@@ -134,8 +134,8 @@
           </div>
 
           <div class="prompt-actions">
-            <button id="copyBtn" class="btn btn-primary">Copy to Clipboard</button>
-            <button id="generateShotBtn" class="btn btn-generate" style="display: none;">Generate First + Last Frame</button>
+            <button id="copyBtn" class="btn btn-primary" title="Copy the selected shot text">Copy Shot Text</button>
+            <button id="generateShotBtn" class="btn btn-generate" style="display: none;" title="Generate first and last reference frames for this shot">Generate Reference Frames</button>
             <span id="copyFeedback" class="copy-feedback"></span>
           </div>
 
@@ -147,7 +147,7 @@
           </div>
 
             <div class="prompt-info">
-              <div class="info-row"><strong>File:</strong> <code id="promptFile"></code></div>
+              <div class="info-row"><strong>Shot File:</strong> <code id="promptFile"></code></div>
               <div class="info-row" id="promptVersionRow" style="display: none;"><strong>Version:</strong> <span id="promptVersion"></span></div>
               <div class="info-row" id="lintErrorsRow" style="display: none;"><strong>Lint Errors:</strong><ul id="lintErrorsList"></ul></div>
             </div>
@@ -157,7 +157,7 @@
         <div class="workspace-shell" id="workspaceShell" style="display:none;">
           <div class="workspace-shell-header">
             <div id="workspaceShellTitle">Workspace</div>
-            <button class="btn btn-secondary btn-sm" id="workspaceShellCloseBtn">Back to Prompts</button>
+            <button class="btn btn-secondary btn-sm" id="workspaceShellCloseBtn">Back to Shots</button>
           </div>
           <div id="workspaceShellLoading" class="workspace-shell-loading" style="display:none;">
             <div class="workspace-shell-loading-spinner"></div>
@@ -209,7 +209,7 @@
     <div class="command-palette-panel">
       <div class="command-palette-header">Quick Actions</div>
       <button class="command-item" data-command="focus">Toggle Focus Mode</button>
-      <button class="command-item" data-command="prompts">Return to Prompts</button>
+      <button class="command-item" data-command="prompts">Return to Shots</button>
       <button class="command-item" data-command="guide">Open Guide</button>
     </div>
   </div>

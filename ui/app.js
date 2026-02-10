@@ -184,12 +184,12 @@ let lastWorkspaceUrl = '';
 let workspaceLoadTimeoutId = null;
 const WORKSPACE_LOAD_TIMEOUT_MS = 10000;
 const WORKSPACE_VIEW_MAP = {
-  prompts: { url: '', title: 'Step 5: Prompts' },
+  prompts: { url: '', title: 'Step 5: Shots' },
   step1: { url: 'step1.html', title: 'Step 1: Theme' },
   step2: { url: 'step2.html', title: 'Step 2: Music' },
   step3: { url: 'step3.html', title: 'Step 3: Canon' },
   step4: { url: 'step4.html', title: 'Step 4: References' },
-  storyboard: { url: 'storyboard.html', title: 'Step 6: Storyboard' },
+  storyboard: { url: 'storyboard.html', title: 'Step 6: Storyboard Preview' },
   guide: { url: 'guide.html', title: 'User Guide' }
 };
 const isEmbeddedWorkspacePage = new URLSearchParams(window.location.search).get('embedded') === '1';
@@ -232,8 +232,8 @@ function updateToolbarContext(viewKey) {
   if (!pageToolbarHeading || !pageToolbarSubtitle) return;
 
   if (viewKey === 'prompts') {
-    pageToolbarHeading.textContent = 'Prompt Review';
-    pageToolbarSubtitle.textContent = 'Search, validate, copy, and generate in one place.';
+    pageToolbarHeading.textContent = 'Shot Review';
+    pageToolbarSubtitle.textContent = 'Find a shot, verify its text and references, then generate outputs.';
     return;
   }
 
@@ -241,7 +241,7 @@ function updateToolbarContext(viewKey) {
   pageToolbarSubtitle.textContent = 'Single-pane workspace view. Use the left navigation to switch steps.';
 }
 
-function showWorkspaceFrameLoading(message = 'Loading workspace...') {
+function showWorkspaceFrameLoading(message = 'Opening workspace...') {
   if (!workspaceShellLoading) return;
   const textEl = workspaceShellLoading.querySelector('.workspace-shell-loading-text');
   if (textEl) textEl.textContent = message;
@@ -269,7 +269,7 @@ function startWorkspaceLoadTimeout(urlForMessage = '') {
   }, WORKSPACE_LOAD_TIMEOUT_MS);
 }
 
-function showWorkspaceError(message = 'The page could not be loaded in this panel.') {
+function showWorkspaceError(message = 'This workspace view could not be opened in this panel.') {
   if (!workspaceShellError) return;
   if (workspaceShellErrorText) workspaceShellErrorText.textContent = message;
   workspaceShellError.style.display = 'flex';
@@ -371,7 +371,7 @@ async function createNewProject(name, description) {
  * Load prompts index (project-aware)
  */
 async function loadIndex() {
-  const loadingOverlay = showLoading(document.body, 'Loading prompts...');
+  const loadingOverlay = showLoading(document.body, 'Loading shots...');
 
   try {
     // Add project context to request
@@ -387,12 +387,12 @@ async function loadIndex() {
     // Select first shot if available
     if (indexData.shots && indexData.shots.length > 0) {
       selectShot(indexData.shots[0]);
-      showToast('Loaded', `${indexData.totalShots} shots loaded`, 'success', 2000);
+      showToast('Loaded', `${indexData.totalShots} shots ready for review`, 'success', 2000);
     }
   } catch (err) {
     console.error('Failed to load index:', err);
     showEmptyState();
-    showToast('No prompts found', 'Run npm run index to generate prompts', 'info', 0);
+    showToast('No shots found', 'Run npm run index to refresh shot files', 'info', 0);
   } finally {
     hideLoading(loadingOverlay);
   }
@@ -466,7 +466,7 @@ function updateBreadcrumbs() {
   }
 
   const platformNames = {
-    all: 'All Prompts',
+    all: 'All Shots',
     kling: 'Kling 3.0',
     nanobanana: 'Nano Banana',
     suno: 'Suno',
@@ -474,7 +474,7 @@ function updateBreadcrumbs() {
   };
 
   const parts = [
-    { label: platformNames[currentPlatform] || 'All Prompts', platform: currentPlatform },
+    { label: platformNames[currentPlatform] || 'All Shots', platform: currentPlatform },
     { label: currentShot.shotId, platform: null },
   ];
 
@@ -526,7 +526,7 @@ function updateBreadcrumbs() {
 function renderShotList() {
   if (!shotList) return;
   if (!indexData || !indexData.shots || indexData.shots.length === 0) {
-    shotList.innerHTML = '<p style="color: var(--text-secondary); padding: 1rem;">No shots found</p>';
+    shotList.innerHTML = '<p style="color: var(--text-secondary); padding: 1rem;">No shots match these filters. Adjust platform, lint state, or search.</p>';
     return;
   }
 
@@ -705,7 +705,7 @@ async function renderPrompt() {
   promptText.textContent = '';
   const loadingSpinner = document.createElement('div');
   loadingSpinner.className = 'loading-inline';
-  loadingSpinner.innerHTML = '<div class="loading-spinner-small"></div> <span>Loading prompt...</span>';
+  loadingSpinner.innerHTML = '<div class="loading-spinner-small"></div> <span>Loading shot text...</span>';
   promptText.appendChild(loadingSpinner);
 
   try {
@@ -719,9 +719,9 @@ async function renderPrompt() {
     // Parse and render prompt sections
     renderPromptSections(content, currentTool);
   } catch (err) {
-    promptText.textContent = 'Error loading prompt file.';
+    promptText.textContent = 'Could not load this shot file.';
     console.error('Failed to load prompt:', err);
-    showToast('Load error', `Failed to load prompt: ${err.message}`, 'error', 3000);
+    showToast('Load error', `Failed to load shot file: ${err.message}`, 'error', 3000);
   }
 
   // Update file info
@@ -953,9 +953,9 @@ async function copyToClipboard() {
 
   try {
     await copyText(fullText.trim());
-    showToast('Copied!', 'Full prompt copied to clipboard', 'success', 2000);
+    showToast('Copied!', 'Shot text copied to clipboard', 'success', 2000);
   } catch (err) {
-    showToast('Failed to copy', 'Could not copy prompt to clipboard', 'error', 3000);
+    showToast('Failed to copy', 'Could not copy shot text to clipboard', 'error', 3000);
   }
 }
 
@@ -1114,7 +1114,7 @@ function openWorkspacePane(url, title, options = {}) {
   lastWorkspaceUrl = url;
 
   if (!isSameTarget || forceReload) {
-    showWorkspaceFrameLoading(`Loading ${title || 'workspace'}...`);
+    showWorkspaceFrameLoading(`Opening ${title || 'workspace'}...`);
     startWorkspaceLoadTimeout(url);
     workspaceShellFrame.src = targetSrc;
   } else {
@@ -2682,7 +2682,7 @@ async function generateShot() {
   } finally {
     if (generateShotBtn) {
       generateShotBtn.disabled = false;
-      generateShotBtn.textContent = 'Generate First + Last Frame';
+      generateShotBtn.textContent = 'Generate Reference Frames';
       generateShotBtn.classList.remove('generating-shot');
     }
   }
