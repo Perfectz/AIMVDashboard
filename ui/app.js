@@ -184,7 +184,7 @@ let lastWorkspaceUrl = '';
 let workspaceLoadTimeoutId = null;
 const WORKSPACE_LOAD_TIMEOUT_MS = 10000;
 const WORKSPACE_VIEW_MAP = {
-  prompts: { url: '', title: 'Step 5: Prompts' },
+  prompts: { url: '', title: 'Step 5: Shots' },
   step1: { url: 'step1.html', title: 'Step 1: Theme' },
   step2: { url: 'step2.html', title: 'Step 2: Music' },
   step3: { url: 'step3.html', title: 'Step 3: Canon' },
@@ -466,7 +466,7 @@ function updateBreadcrumbs() {
   }
 
   const platformNames = {
-    all: 'All Prompts',
+    all: 'All Shots',
     kling: 'Kling 3.0',
     nanobanana: 'Nano Banana',
     suno: 'Suno',
@@ -474,7 +474,7 @@ function updateBreadcrumbs() {
   };
 
   const parts = [
-    { label: platformNames[currentPlatform] || 'All Prompts', platform: currentPlatform },
+    { label: platformNames[currentPlatform] || 'All Shots', platform: currentPlatform },
     { label: currentShot.shotId, platform: null },
   ];
 
@@ -1927,7 +1927,7 @@ async function saveCanonData(type, content, statusElementId, label) {
 async function loadCanonData() {
   if (!currentProject) return;
 
-  const types = ['script', 'characters', 'locations', 'style', 'cinematography'];
+  const types = ['script', 'youtubeScript', 'transcript', 'assets', 'characters', 'locations', 'style', 'cinematography'];
 
   for (const type of types) {
     try {
@@ -1993,6 +1993,43 @@ if (deleteMusicBtn) {
 }
 
 // Canon save button handlers
+
+const saveYoutubeScriptBtn = document.getElementById('saveYoutubeScriptBtn');
+if (saveYoutubeScriptBtn) {
+  saveYoutubeScriptBtn.addEventListener('click', async () => {
+    const content = document.getElementById('youtubeScriptJson').value.trim();
+    if (!content) {
+      showToast('Error', 'Please enter YouTube content script JSON', 'warning', 3000);
+      return;
+    }
+    await saveCanonData('youtubeScript', content, 'youtubeScriptStatus', 'YouTube Script');
+  });
+}
+
+const saveTranscriptBtn = document.getElementById('saveTranscriptBtn');
+if (saveTranscriptBtn) {
+  saveTranscriptBtn.addEventListener('click', async () => {
+    const content = document.getElementById('transcriptJson').value.trim();
+    if (!content) {
+      showToast('Error', 'Please enter transcript JSON', 'warning', 3000);
+      return;
+    }
+    await saveCanonData('transcript', content, 'transcriptStatus', 'Transcript');
+  });
+}
+
+const saveAssetsBtn = document.getElementById('saveAssetsBtn');
+if (saveAssetsBtn) {
+  saveAssetsBtn.addEventListener('click', async () => {
+    const content = document.getElementById('assetsJson').value.trim();
+    if (!content) {
+      showToast('Error', 'Please enter asset plan JSON', 'warning', 3000);
+      return;
+    }
+    await saveCanonData('assets', content, 'assetsStatus', 'Asset Plan');
+  });
+}
+
 const saveCharactersBtn = document.getElementById('saveCharactersBtn');
 if (saveCharactersBtn) {
   saveCharactersBtn.addEventListener('click', async () => {
@@ -2063,6 +2100,7 @@ function initializeCanon() {
 
 // Reference Images - Characters
 let charactersData = [];
+let locationsData = [];
 
 async function loadCharactersReferences() {
   if (!currentProject) return;
@@ -2077,6 +2115,163 @@ async function loadCharactersReferences() {
   } catch (err) {
     console.error('Error loading character references:', err);
   }
+}
+
+
+async function loadLocationReferences() {
+  if (!currentProject) return;
+
+  try {
+    const response = await fetch(`/api/references/locations?project=${currentProject.id}`);
+    if (response.ok) {
+      const data = await response.json();
+      locationsData = data.locations || [];
+      renderLocationReferences();
+    }
+  } catch (err) {
+    console.error('Error loading location references:', err);
+  }
+}
+
+function uploadLocationReferenceImage(locationName, slotNum, file) {
+  if (!file) return;
+  if (!/\.(png|jpg|jpeg)$/i.test(file.name)) {
+    showToast('Invalid file', 'Only PNG and JPEG images are supported', 'warning', 3000);
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('project', currentProject.id);
+  formData.append('location', locationName);
+  formData.append('slot', slotNum);
+  formData.append('image', file);
+
+  fetch('/api/upload/location-reference-image', {
+    method: 'POST',
+    body: formData
+  })
+    .then(r => r.json())
+    .then(result => {
+      if (result.success) {
+        showToast('Uploaded', `Location reference ${slotNum} uploaded`, 'success', 2000);
+        loadLocationReferences();
+      } else {
+        showToast('Upload failed', result.error || 'Unknown error', 'error', 4000);
+      }
+    })
+    .catch(err => {
+      showToast('Upload failed', err.message, 'error', 4000);
+    });
+}
+
+function buildLocationImageSlot(location, slotNum) {
+  const image = location.images.find(img => img.slot === slotNum);
+  const slot = document.createElement('div');
+  slot.className = 'reference-image-slot' + (image ? ' has-image' : '');
+  slot.style.position = 'relative';
+
+  slot.addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/jpg';
+    input.style.display = 'none';
+    input.addEventListener('change', () => {
+      if (input.files[0]) uploadLocationReferenceImage(location.name, slotNum, input.files[0]);
+      input.remove();
+    });
+    document.body.appendChild(input);
+    input.click();
+  });
+
+  slot.addEventListener('dragover', (e) => { e.preventDefault(); slot.classList.add('drag-over'); });
+  slot.addEventListener('dragleave', (e) => { e.preventDefault(); slot.classList.remove('drag-over'); });
+  slot.addEventListener('drop', (e) => {
+    e.preventDefault();
+    slot.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) uploadLocationReferenceImage(location.name, slotNum, file);
+  });
+
+  if (image) {
+    const img = document.createElement('img');
+    img.src = `/projects/${currentProject.id}/reference/locations/${encodeURIComponent(location.name)}/${image.filename}`;
+    img.alt = `${location.name} reference ${slotNum}`;
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.objectFit = 'cover';
+    img.style.borderRadius = '8px';
+    slot.appendChild(img);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'reference-image-delete';
+    delBtn.textContent = '×';
+    delBtn.title = 'Delete image';
+    delBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const response = await fetch(`/api/delete/location-reference-image?project=${currentProject.id}&location=${encodeURIComponent(location.name)}&slot=${slotNum}`, { method: 'DELETE' });
+      const result = await response.json();
+      if (result.success) loadLocationReferences();
+      else showToast('Error', result.error || 'Failed to delete image', 'error', 4000);
+    });
+    slot.appendChild(delBtn);
+  } else {
+    const icon = document.createElement('div');
+    icon.className = 'upload-icon';
+    icon.textContent = '+';
+    const label = document.createElement('div');
+    label.className = 'upload-label';
+    label.textContent = `Ref ${slotNum}`;
+    slot.appendChild(icon);
+    slot.appendChild(label);
+  }
+
+  return slot;
+}
+
+function renderLocationReferences() {
+  const container = document.getElementById('locationsReferenceList');
+  if (!container) return;
+
+  if (locationsData.length === 0) {
+    container.innerHTML = '<div class="empty-state-small">No location references yet. Add your first location.</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+
+  locationsData.forEach(location => {
+    const card = document.createElement('div');
+    card.className = 'character-reference-card';
+
+    const header = document.createElement('div');
+    header.className = 'character-reference-header';
+
+    const title = document.createElement('h3');
+    title.className = 'character-reference-title';
+    title.textContent = '📍 ' + location.name;
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'character-reference-delete';
+    delBtn.textContent = 'Delete';
+    delBtn.addEventListener('click', async () => {
+      if (!confirm(`Delete location "${location.name}" and all references?`)) return;
+      const response = await fetch(`/api/delete/location-reference?project=${currentProject.id}&location=${encodeURIComponent(location.name)}`, { method: 'DELETE' });
+      const result = await response.json();
+      if (result.success) loadLocationReferences();
+      else showToast('Error', result.error || 'Failed to delete location', 'error', 4000);
+    });
+
+    header.appendChild(title);
+    header.appendChild(delBtn);
+
+    const slotsWrap = document.createElement('div');
+    slotsWrap.className = 'reference-images-grid';
+    for (let i = 1; i <= 3; i++) slotsWrap.appendChild(buildLocationImageSlot(location, i));
+
+    card.appendChild(header);
+    card.appendChild(slotsWrap);
+    container.appendChild(card);
+  });
 }
 
 // Prompt slot labels
@@ -2570,6 +2765,43 @@ if (addCharacterBtn) {
   });
 }
 
+
+// Add Location Button Handler
+const addLocationBtn = document.getElementById('addLocationBtn');
+if (addLocationBtn) {
+  addLocationBtn.addEventListener('click', async () => {
+    const nameInput = document.getElementById('newLocationName');
+    const locationName = nameInput.value.trim();
+
+    if (!locationName) {
+      showToast('Error', 'Please enter a location name', 'warning', 3000);
+      return;
+    }
+
+    if (locationsData.some(l => l.name.toLowerCase() === locationName.toLowerCase())) {
+      showToast('Error', 'Location already exists', 'warning', 3000);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/add-location?project=${currentProject.id}&location=${encodeURIComponent(locationName)}`, {
+        method: 'POST'
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        showToast('Success', `Location "${locationName}" added`, 'success', 3000);
+        nameInput.value = '';
+        await loadLocationReferences();
+      } else {
+        showToast('Error', result.error || 'Failed to add location', 'error', 4000);
+      }
+    } catch (err) {
+      showToast('Error', 'Failed to add location: ' + err.message, 'error', 4000);
+    }
+  });
+}
+
 // AI Image Generation
 async function checkGenerateStatus() {
   try {
@@ -2971,6 +3203,9 @@ async function initializeReferences() {
   if (document.getElementById('charactersReferenceList')) {
     await checkGenerateStatus();
     loadCharactersReferences();
+  }
+  if (document.getElementById('locationsReferenceList')) {
+    loadLocationReferences();
   }
 }
 

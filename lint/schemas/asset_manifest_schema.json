@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://aimusicvideo.local/schemas/asset_manifest.json",
+  "title": "Asset Manifest Schema",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "status"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^ASSET_[A-Z0-9_]+$"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["broll", "a-roll", "music", "sfx", "image", "animation", "thumbnail", "other"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["needed", "in_progress", "ready", "used", "archived"]
+          },
+          "source": { "type": "string" },
+          "usedIn": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "owner": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      }
+    }
+  },
+  "required": ["version", "assets"]
+}

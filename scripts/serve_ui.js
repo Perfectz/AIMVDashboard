@@ -22,6 +22,7 @@ const PROJECT_ID_REGEX = /^[a-z0-9-]{1,50}$/;
 const SHOT_ID_REGEX = /^SHOT_\d{2,4}$/;
 const VARIATION_REGEX = /^[A-D]$/;
 const CHARACTER_REGEX = /^[A-Za-z0-9_-]{1,64}$/;
+const LOCATION_REGEX = /^[A-Za-z0-9_-]{1,64}$/;
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 const ALLOWED_ORIGINS = new Set([
   `http://localhost:${PORT}`,
@@ -106,11 +107,17 @@ function getContentType(filePath) {
 const MAX_BODY_SIZE = 1024 * 1024;
 
 // Allowed canon types (whitelist)
-const ALLOWED_CANON_TYPES = ['characters', 'locations', 'cinematography', 'style', 'script'];
+const ALLOWED_CANON_TYPES = ['characters', 'locations', 'cinematography', 'style', 'script', 'transcript', 'assets', 'youtubeScript'];
 
 // Map canon type names to actual filenames in bible/
 function canonFilename(type) {
-  const map = { 'style': 'visual_style.json', 'script': 'shot_list.json' };
+  const map = {
+    'style': 'visual_style.json',
+    'script': 'shot_list.json',
+    'transcript': 'transcript.json',
+    'assets': 'asset_manifest.json',
+    'youtubeScript': 'youtube_script.json'
+  };
   return map[type] || `${type}.json`;
 }
 
@@ -1325,6 +1332,170 @@ const server = http.createServer((req, res) => {
         sendJSON(res, 200, { success: true, message: 'Character deleted' });
       } else {
         sendJSON(res, 404, { success: false, error: 'Character not found' });
+      }
+    } catch (err) {
+      sendJSON(res, 500, { success: false, error: err.message });
+    }
+    return;
+  }
+
+
+  // GET /api/references/locations - List all locations with their reference images
+  if (req.method === 'GET' && req.url.startsWith('/api/references/locations')) {
+    try {
+      const url = parseRequestUrl(req);
+      const projectId = resolveProjectId(url.searchParams.get('project') || projectManager.getActiveProject(), { required: true });
+      const refDir = projectManager.getProjectPath(projectId, 'reference/locations');
+      if (!fs.existsSync(refDir)) {
+        sendJSON(res, 200, { locations: [] });
+        return;
+      }
+
+      const locations = fs.readdirSync(refDir).filter(name => {
+        const stats = fs.statSync(path.join(refDir, name));
+        return stats.isDirectory();
+      }).map(name => {
+        const locDir = path.join(refDir, name);
+        const files = fs.existsSync(locDir) ? fs.readdirSync(locDir) : [];
+        const images = files
+          .filter(f => /^ref_\d+\.(png|jpg|jpeg)$/i.test(f))
+          .map(f => {
+            const match = f.match(/ref_(\d+)\./);
+            return { filename: f, slot: match ? parseInt(match[1]) : 0 };
+          })
+          .filter(img => img.slot > 0);
+
+        return { name, images };
+      });
+
+      sendJSON(res, 200, { locations });
+    } catch (err) {
+      sendJSON(res, 500, { locations: [], error: err.message });
+    }
+    return;
+  }
+
+  // POST /api/add-location - Create a location folder
+  if (req.method === 'POST' && req.url.startsWith('/api/add-location')) {
+    try {
+      const url = parseRequestUrl(req);
+      const projectId = resolveProjectId(url.searchParams.get('project') || projectManager.getActiveProject(), { required: true });
+      const location = sanitizePathSegment(url.searchParams.get('location'), LOCATION_REGEX, 'location');
+      const locDir = safeResolve(projectManager.getProjectPath(projectId, 'reference/locations'), location);
+
+      if (fs.existsSync(locDir)) {
+        sendJSON(res, 400, { success: false, error: 'Location already exists' });
+        return;
+      }
+
+      fs.mkdirSync(locDir, { recursive: true });
+      sendJSON(res, 200, { success: true, message: 'Location added' });
+    } catch (err) {
+      sendJSON(res, 500, { success: false, error: err.message });
+    }
+    return;
+  }
+
+  // POST /api/upload/location-reference-image - Upload a location reference image
+  if (req.method === 'POST' && req.url.startsWith('/api/upload/location-reference-image')) {
+    const busboy = Busboy({ headers: req.headers, limits: { fileSize: 20 * 1024 * 1024 } });
+    let projectId = projectManager.getActiveProject();
+    let location = '';
+    let slot = 0;
+    let fileExt = '';
+    const fileChunks = [];
+
+    busboy.on('field', (name, val) => {
+      if (name === 'project') projectId = val;
+      if (name === 'location') location = val;
+      if (name === 'slot') slot = parseInt(val);
+    });
+
+    busboy.on('file', (name, file, info) => {
+      fileExt = path.extname(info.filename);
+      file.on('data', (chunk) => { fileChunks.push(chunk); });
+      file.on('error', () => {
+        fileChunks.length = 0;
+      });
+    });
+
+    busboy.on('close', () => {
+      if (fileChunks.length === 0 || !location || slot < 1) {
+        sendJSON(res, 400, { success: false, error: 'Missing file, location name, or slot number' });
+        return;
+      }
+
+      try {
+        projectId = resolveProjectId(projectId, { required: true });
+        sanitizePathSegment(location, LOCATION_REGEX, 'location');
+        if (!IMAGE_EXTENSIONS.has(fileExt.toLowerCase())) {
+          throw new Error('Invalid image format');
+        }
+
+        const locDir = safeResolve(projectManager.getProjectPath(projectId, 'reference/locations'), location);
+        if (!fs.existsSync(locDir)) {
+          fs.mkdirSync(locDir, { recursive: true });
+        }
+
+        const existingFiles = fs.readdirSync(locDir);
+        existingFiles.forEach(f => {
+          if (f.startsWith(`ref_${slot}.`)) {
+            fs.unlinkSync(path.join(locDir, f));
+          }
+        });
+
+        const newFilename = `ref_${slot}${fileExt}`;
+        const savePath = path.join(locDir, newFilename);
+        fs.writeFileSync(savePath, Buffer.concat(fileChunks));
+
+        sendJSON(res, 200, { success: true, message: 'Image uploaded', filename: newFilename });
+      } catch (err) {
+        sendJSON(res, 500, { success: false, error: 'Failed to save image: ' + err.message });
+      }
+    });
+
+    req.pipe(busboy);
+    return;
+  }
+
+  // DELETE /api/delete/location-reference-image - Delete a specific location reference image
+  if (req.method === 'DELETE' && req.url.startsWith('/api/delete/location-reference-image')) {
+    try {
+      const url = parseRequestUrl(req);
+      const projectId = resolveProjectId(url.searchParams.get('project') || projectManager.getActiveProject(), { required: true });
+      const location = sanitizePathSegment(url.searchParams.get('location'), LOCATION_REGEX, 'location');
+      const slot = parseInt(url.searchParams.get('slot'), 10);
+      if (!Number.isInteger(slot) || slot < 1 || slot > 9) {
+        throw new Error('Invalid slot');
+      }
+      const locDir = safeResolve(projectManager.getProjectPath(projectId, 'reference/locations'), location);
+      const files = fs.readdirSync(locDir);
+      const fileToDelete = files.find(f => f.startsWith(`ref_${slot}.`));
+
+      if (fileToDelete) {
+        fs.unlinkSync(path.join(locDir, fileToDelete));
+        sendJSON(res, 200, { success: true, message: 'Image deleted' });
+      } else {
+        sendJSON(res, 404, { success: false, error: 'Image not found' });
+      }
+    } catch (err) {
+      sendJSON(res, 500, { success: false, error: err.message });
+    }
+    return;
+  }
+
+  // DELETE /api/delete/location-reference - Delete entire location
+  if (req.method === 'DELETE' && req.url.startsWith('/api/delete/location-reference')) {
+    try {
+      const url = parseRequestUrl(req);
+      const projectId = resolveProjectId(url.searchParams.get('project') || projectManager.getActiveProject(), { required: true });
+      const location = sanitizePathSegment(url.searchParams.get('location'), LOCATION_REGEX, 'location');
+      const locDir = safeResolve(projectManager.getProjectPath(projectId, 'reference/locations'), location);
+      if (fs.existsSync(locDir)) {
+        fs.rmSync(locDir, { recursive: true, force: true });
+        sendJSON(res, 200, { success: true, message: 'Location deleted' });
+      } else {
+        sendJSON(res, 404, { success: false, error: 'Location not found' });
       }
     } catch (err) {
       sendJSON(res, 500, { success: false, error: err.message });
