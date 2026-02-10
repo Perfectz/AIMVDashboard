@@ -1777,6 +1777,8 @@ const server = http.createServer((req, res) => {
   // ===== GET FILE ROUTES =====
 
   let filePath;
+  const requestUrl = parseRequestUrl(req);
+  const requestPath = requestUrl.pathname;
 
   // Extract project context for project-specific routes
   let projectId;
@@ -1789,41 +1791,37 @@ const server = http.createServer((req, res) => {
 
   try {
     // Serve rendered files (project-specific)
-    if (req.url.startsWith('/rendered/')) {
-      const url = parseRequestUrl(req);
-      const cleanPath = url.pathname.replace(/^\/+/, '');
+    if (requestPath.startsWith('/rendered/')) {
+      const cleanPath = requestPath.replace(/^\/+/, '');
       filePath = safeResolve(projectManager.getProjectPath(projectId), cleanPath);
-    } else if (req.url.startsWith('/music/')) {
-      const url = parseRequestUrl(req);
-      const cleanPath = url.pathname.replace(/^\/+/, '');
+    } else if (requestPath.startsWith('/music/')) {
+      const cleanPath = requestPath.replace(/^\/+/, '');
       filePath = safeResolve(projectManager.getProjectPath(projectId), cleanPath);
-    } else if (req.url.startsWith('/projects/')) {
+    } else if (requestPath.startsWith('/projects/')) {
       // Serve project files (including reference images)
-      const url = parseRequestUrl(req);
-      const cleanPath = url.pathname.replace(/^\/projects\//, '');
+      const cleanPath = requestPath.replace(/^\/projects\//, '');
       filePath = safeResolve(PROJECTS_DIR, cleanPath);
-    } else if (req.url === '/' || req.url === '/index.html') {
+    } else if (requestPath === '/' || requestPath === '/index.html') {
       filePath = path.join(UI_DIR, 'index.html');
-    } else if (req.url.startsWith('/ui/')) {
+    } else if (requestPath.startsWith('/ui/')) {
       // UI assets
-      filePath = safeResolve(ROOT_DIR, req.url.replace(/^\/+/, ''));
-    } else if (req.url.startsWith('/prompts_index.json')) {
+      filePath = safeResolve(ROOT_DIR, requestPath.replace(/^\/+/, ''));
+    } else if (requestPath.startsWith('/prompts_index.json')) {
       // Serve prompts index (project-specific)
       filePath = path.join(projectManager.getProjectPath(projectId), 'prompts_index.json');
-    } else if (req.url.startsWith('/lint/report.json')) {
+    } else if (requestPath.startsWith('/lint/report.json')) {
       // Serve lint report (project-specific)
       filePath = path.join(projectManager.getProjectPath(projectId), 'lint', 'report.json');
-    } else if (req.url === '/prompts/ai_music_analysis_prompt.txt') {
+    } else if (requestPath === '/prompts/ai_music_analysis_prompt.txt') {
       // Serve AI analysis prompt (shared, not project-specific)
       filePath = path.join(ROOT_DIR, 'prompts', 'ai_music_analysis_prompt.txt');
-    } else if (req.url.startsWith('/prompts/')) {
+    } else if (requestPath.startsWith('/prompts/')) {
       // Serve prompt files (project-specific)
-      const url = parseRequestUrl(req);
-      const cleanPath = url.pathname.replace(/^\/+/, '');
+      const cleanPath = requestPath.replace(/^\/+/, '');
       filePath = safeResolve(projectManager.getProjectPath(projectId), cleanPath);
     } else {
       // Try serving from UI directory
-      filePath = safeResolve(UI_DIR, req.url.replace(/^\/+/, ''));
+      filePath = safeResolve(UI_DIR, requestPath.replace(/^\/+/, ''));
     }
   } catch (pathErr) {
     res.writeHead(403, { 'Content-Type': 'text/html' });
