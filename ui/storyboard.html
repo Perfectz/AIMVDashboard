@@ -83,6 +83,50 @@
           <div class="view-actions"><button class="btn btn-small" id="refreshBtn">Refresh</button></div>
         </div>
 
+        <section class="asset-panel" id="assetPanel">
+          <div class="asset-panel-header">
+            <div>
+              <h2>Asset Manifest</h2>
+              <p>Track status, ownership, and storyboard usage for all assets.</p>
+            </div>
+            <span class="asset-count" id="assetCount">0 assets</span>
+          </div>
+          <div class="asset-filters">
+            <label>Type
+              <select id="assetTypeFilter">
+                <option value="all">All Types</option>
+              </select>
+            </label>
+            <label>Status
+              <select id="assetStatusFilter">
+                <option value="all">All Statuses</option>
+              </select>
+            </label>
+            <label>Used in Shot
+              <select id="assetShotFilter">
+                <option value="all">Any Shot</option>
+              </select>
+            </label>
+          </div>
+          <div class="asset-empty" id="assetEmptyState" style="display:none;">No assets found in <code>bible/asset_manifest.json</code>.</div>
+          <div class="asset-table-wrap">
+            <table class="asset-table" id="assetTable">
+              <thead>
+                <tr>
+                  <th>Asset</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Owner</th>
+                  <th>Source</th>
+                  <th>Used In</th>
+                  <th>Readiness</th>
+                </tr>
+              </thead>
+              <tbody id="assetTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
         <div class="empty-state" id="emptyState">
           <h2>No Rendered Assets Found</h2>
           <p>Place rendered videos and images in the <code>rendered/shots/</code> directory.</p>
