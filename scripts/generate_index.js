@@ -84,7 +84,7 @@ function parsePromptMetadata(content, filename) {
  * Scan prompts directory and collect prompt files
  */
 function scanPrompts() {
-  const tools = ['kling', 'nanobanana', 'suno'];
+  const tools = ['kling', 'nanobanana', 'suno', 'seedream'];
   const allPrompts = [];
 
   tools.forEach(tool => {
@@ -228,7 +228,8 @@ function generateIndex() {
     tools: {
       kling: prompts.filter(p => p.tool === 'kling').length,
       nanobanana: prompts.filter(p => p.tool === 'nanobanana').length,
-      suno: prompts.filter(p => p.tool === 'suno').length
+      suno: prompts.filter(p => p.tool === 'suno').length,
+      seedream: prompts.filter(p => p.tool === 'seedream').length
     },
     shots: shotGroups,
     allPrompts: promptsWithLint
@@ -242,7 +243,8 @@ function generateIndex() {
   console.log(`Total prompts: ${prompts.length}`);
   console.log(`  - Kling: ${index.tools.kling}`);
   console.log(`  - Nano Banana: ${index.tools.nanobanana}`);
-  console.log(`  - Suno: ${index.tools.suno}\n`);
+  console.log(`  - Suno: ${index.tools.suno}`);
+  console.log(`  - SeedDream: ${index.tools.seedream}\n`);
 
   if (prompts.length === 0) {
     console.log('ℹ️  No prompts found. This is expected in Phase 1.');

@@ -13,15 +13,30 @@
 const fs = require('fs');
 const path = require('path');
 const Ajv = require('ajv');
+const projectManager = require('../scripts/project_manager');
 
 // Initialize JSON Schema validator
 const ajv = new Ajv({ allErrors: true });
 
-// Paths
-const BIBLE_DIR = path.join(__dirname, '..', 'bible');
-const PROMPTS_DIR = path.join(__dirname, '..', 'prompts');
+// Get project ID from CLI args or use default
+const projectId = process.argv[2] || 'default';
+
+// Verify project exists
+if (!projectManager.projectExists(projectId)) {
+  console.error(`\n❌ Error: Project '${projectId}' not found`);
+  console.error('   Available projects:');
+  projectManager.listProjects().forEach(p => {
+    console.error(`   - ${p.id}: ${p.name}`);
+  });
+  console.error('\nUsage: npm run lint [project-id]\n');
+  process.exit(1);
+}
+
+// Paths (project-aware)
+const BIBLE_DIR = projectManager.getProjectPath(projectId, 'bible');
+const PROMPTS_DIR = projectManager.getProjectPath(projectId, 'prompts');
 const SCHEMAS_DIR = path.join(__dirname, 'schemas');
-const REPORT_PATH = path.join(__dirname, 'report.json');
+const REPORT_PATH = path.join(projectManager.getProjectPath(projectId), 'lint', 'report.json');
 
 // Lint results
 const results = {
@@ -354,6 +369,10 @@ function validatePrompts() {
  * Write lint report to file
  */
 function writeReport() {
+  const reportDir = path.dirname(REPORT_PATH);
+  if (!fs.existsSync(reportDir)) {
+    fs.mkdirSync(reportDir, { recursive: true });
+  }
   fs.writeFileSync(REPORT_PATH, JSON.stringify(results, null, 2));
   console.log(`Lint report written to: ${REPORT_PATH}\n`);
 }
@@ -377,12 +396,13 @@ function printSummary() {
  * Main execution
  */
 function main() {
+  const project = projectManager.getProject(projectId);
   console.log('\n');
   console.log('╔═════════════════════════════════════════╗');
   console.log('║   AI MUSIC VIDEO - PROMPT LINTER       ║');
   console.log('║   Version: 2026-02-07                  ║');
   console.log('╚═════════════════════════════════════════╝');
-  console.log('\n');
+  console.log(`\nProject: ${project.name} (${projectId})\n`);
 
   validateBibleFiles();
   validatePrompts();

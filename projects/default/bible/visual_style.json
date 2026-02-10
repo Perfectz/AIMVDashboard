@@ -1,74 +1,86 @@
 {
-  "version": "2026-02-07",
-  "overallStyle": "Stylized cyberpunk with cinematic realism",
+  "version": "2026-02-08",
+  "overallStyle": "Cinematic, futuristic, surreal music video with strong high-concept sci-fi influences. Two parallel worlds—water and volcanic—with completely different temperatures, physics, and visual languages, unified by shared height, floating structures, and emotional parallel.",
   "influences": [
     {
-      "source": "Blade Runner",
-      "aspect": "lighting + mood"
+      "source": "Blade Runner 2049",
+      "aspect": "Environmental mood and atmosphere, scale of landscapes, color saturation in hostile environments"
     },
     {
-      "source": "Christopher Nolan",
-      "aspect": "scale + seriousness"
+      "source": "Gravity (2013)",
+      "aspect": "Floating isolation, suspended physics, slow-motion vulnerability in hostile space"
     },
     {
-      "source": "Expedition 33 + What Dreams May Come",
-      "aspect": "dreamlike surreal color"
+      "source": "Ghost in the Shell (1995)",
+      "aspect": "Submerged consciousness, water as metaphor for time and identity, contemplative pacing"
     },
     {
-      "source": "1990s anime",
-      "aspect": "expressive silhouettes, emotion"
+      "source": "Dark Souls / Elden Ring",
+      "aspect": "Volcanic ruins aesthetic, lone warrior against overwhelming architecture, environmental combat"
+    },
+    {
+      "source": "Denis Villeneuve cinematography",
+      "aspect": "Widescreen scale, minimal dialogue, environment as character, slow deliberate movement"
+    },
+    {
+      "source": "Terrence Malick",
+      "aspect": "Natural light interaction with human form, contemplative emotional weight without exposition"
     }
   ],
   "colorPalette": {
     "primary": [
-      "deep blues",
-      "electric purple",
-      "acid green"
+      "muted teal (water world)",
+      "deep blue-green (water world)",
+      "volcanic orange-red (volcanic world)",
+      "charcoal black (volcanic structures)"
     ],
     "accent": [
-      "hot pink",
-      "amber orange"
+      "soft cyan glow (water caustics)",
+      "bioluminescent gold (water progression)",
+      "ember yellow-white (volcanic sparks)",
+      "warm fading earth tones (her costume)"
     ],
-    "mood": "high-contrast night with saturated neons"
+    "mood": "Two contrasting palettes: cool subdued teal-blue for water world, hot intense orange-red for volcanic world. Both share darkness as a base and use accent color as environmental energy."
   },
   "lightingSignature": {
-    "quality": "cinematic dramatic, high-contrast moody",
+    "quality": "Cinematic dramatic with world-specific character. Water world uses soft ambient and refracted light. Volcanic world uses harsh directional uplight from lava.",
     "sources": [
-      "neon signs",
-      "street lights",
-      "holographic displays",
-      "scattered urban glow"
+      "Water: refracted ambient light, caustic patterns, bioluminescent architecture, soft diffused glow",
+      "Volcanic: molten lava uplight, glowing structural cracks, ember particles, heat haze",
+      "Both: environmental light only, no artificial key lights that break the world logic"
     ],
     "contrast": "high",
-    "signature": "neon reflections on wet surfaces, rim lighting from city glow"
+    "signature": "Water world: caustic light patterns rippling across skin and surfaces, soft ethereal glow. Volcanic world: dramatic uplight casting orange-red glow from below, heat distortion warping edges, rim lighting from lava."
   },
   "texture": {
-    "quality": "cinematic realism with slight stylization",
+    "quality": "Cinematic realism with slight stylization. Surfaces feel tangible and weathered.",
     "emphasis": [
-      "rain on glass",
-      "weathered concrete",
-      "glowing holograms",
-      "atmospheric depth"
+      "Water world: smooth organic curves, refracted light on skin, floating fabric textures, caustic water patterns, translucent architectural surfaces",
+      "Volcanic world: cracked rock, exposed structural metal, ash coating, molten glow in crevices, heat-damaged materials, ember-scarred surfaces"
     ]
   },
   "atmosphere": {
-    "depth": "atmospheric depth with layered fog and light",
+    "depth": "Both worlds use atmospheric depth to create scale. Water world uses particle-filled water space and layered translucency. Volcanic world uses ash, ember particles, and heat haze.",
     "effects": [
-      "rain",
-      "fog",
-      "steam",
-      "volumetric light rays"
+      "Water world: floating particles (motes, bubbles), caustic light refractions, underwater physics on hair/fabric, gentle currents",
+      "Volcanic world: falling ash, rising ember sparks, heat haze distortion, glowing cracks, platform collapse debris",
+      "Shared: height and floating structures in both worlds, atmospheric depth suggesting vast scale"
     ]
   },
   "forbiddenElements": [
-    "cartoon comedy style",
-    "flat lighting",
-    "plastic skin",
+    "cartoon or comedy style",
+    "flat lighting without environmental motivation",
+    "plastic or artificial skin texture",
     "distorted anatomy",
-    "visible text/logos",
+    "visible text, logos, or on-screen explanations",
     "watermarks",
-    "camera shake"
+    "camera shake or handheld wobble",
+    "overt symbolism or religious iconography",
+    "melodrama or chaotic editing for its own sake",
+    "bright cheerful colors in either world",
+    "modern real-world objects (phones, cars, buildings)",
+    "literal backstory elements (hospitals, money, geography)"
   ],
-  "negativePromptBase": "no text, logos, watermarks, distorted anatomy, cartoon style, flat lighting, plastic skin",
-  "notes": "Prompt minimalism rule: Prefer clarity over prose. Remove decorative adjectives that do not affect motion, composition, lighting, or identity."
+  "negativePromptBase": "no text, logos, watermarks, distorted anatomy, cartoon style, flat lighting, plastic skin, modern objects, cheerful colors, literal backstory elements, on-screen text, camera shake",
+  "notes": "The two worlds should share a sense of HEIGHT and FLOATING STRUCTURES but with completely different temperatures and physics. Water world: cool, slow, resistant but supportive. Volcanic world: hot, fast, hostile and demanding. All symbolism through environment, posture, and motion—never through text, icons, or literal narrative. Overall tone: melancholic, serious, contemplative. Emotionally heavy but never melodramatic."
 }

@@ -10,6 +10,9 @@
     "serve": "node scripts/serve_ui.js",
     "init-phase2": "node scripts/init_phase2.js",
     "migrate": "node scripts/migrate_to_projects.js",
+    "restart": "node scripts/restart.js",
+    "generate": "node scripts/generate_image.js",
+    "generate-kling": "node scripts/generate_prompts_kling.js",
     "test": "npm run validate && npm run lint"
   },
   "keywords": [
@@ -27,6 +30,6 @@
     "busboy": "^1.6.0"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   }
 }

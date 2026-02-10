@@ -1,0 +1,310 @@
+You are a music analysis AI. I will provide you with a music file (MP3), and you need to analyze it and return a structured JSON file following the exact schema below.
+
+## Your Task
+
+Analyze the provided music file and extract:
+1. **Basic Metadata**: Song title, artist (if known), total duration, BPM, time signature, musical key
+2. **Song Structure**: Section boundaries (intro, verse, chorus, bridge, outro) with precise timestamps
+3. **Energy Levels**: Rate each section's intensity (low/medium/high/climax)
+4. **Mood**: Describe the emotional tone of each section
+5. **Beat Grid** (if possible): Precise beat timestamps
+6. **Key Moments**: Drops, build-ups, transitions, breakdowns with timestamps
+
+## Output Format
+
+Return ONLY the JSON below (no additional text, no markdown code blocks, just raw JSON):
+
+```json
+{
+  "version": "2026-02-07",
+  "songTitle": "ANALYZE_AND_FILL",
+  "artist": "ANALYZE_AND_FILL",
+  "duration": 0,
+  "bpm": 0,
+  "timeSignature": "4/4",
+  "key": "ANALYZE_AND_FILL (e.g., C major, A minor)",
+  "sections": [
+    {
+      "id": "intro",
+      "label": "Intro",
+      "startTime": 0,
+      "endTime": 0,
+      "duration": 0,
+      "energy": "low",
+      "mood": "DESCRIBE_MOOD",
+      "hasVocals": false,
+      "notes": "DESCRIBE_WHAT_HAPPENS_MUSICALLY"
+    },
+    {
+      "id": "verse1",
+      "label": "Verse 1",
+      "startTime": 0,
+      "endTime": 0,
+      "duration": 0,
+      "energy": "medium",
+      "mood": "DESCRIBE_MOOD",
+      "hasVocals": true,
+      "notes": "DESCRIBE_WHAT_HAPPENS_MUSICALLY"
+    },
+    {
+      "id": "chorus1",
+      "label": "Chorus 1",
+      "startTime": 0,
+      "endTime": 0,
+      "duration": 0,
+      "energy": "high",
+      "mood": "DESCRIBE_MOOD",
+      "hasVocals": true,
+      "notes": "DESCRIBE_WHAT_HAPPENS_MUSICALLY"
+    }
+  ],
+  "beatGrid": {
+    "beats": [],
+    "downbeats": [],
+    "bars": []
+  },
+  "keyMoments": [
+    {
+      "timestamp": 0,
+      "type": "drop",
+      "description": "DESCRIBE_WHAT_HAPPENS",
+      "intensity": 90
+    },
+    {
+      "timestamp": 0,
+      "type": "buildup",
+      "description": "DESCRIBE_WHAT_HAPPENS",
+      "intensity": 75
+    },
+    {
+      "timestamp": 0,
+      "type": "transition",
+      "description": "DESCRIBE_WHAT_HAPPENS",
+      "intensity": 60
+    }
+  ],
+  "tempoChanges": [],
+  "energyCurve": [
+    { "timestamp": 0, "energy": 20 },
+    { "timestamp": 0, "energy": 50 },
+    { "timestamp": 0, "energy": 85 }
+  ],
+  "analysisSource": "SPECIFY_AI_OR_TOOL_USED (e.g., Claude Sonnet 4.5, ChatGPT 4, Gemini)",
+  "analyzedAt": "CURRENT_ISO_TIMESTAMP",
+  "notes": "Any additional observations about the music"
+}
+```
+
+## Field Definitions
+
+### Basic Fields
+- **version**: Always use "2026-02-07"
+- **songTitle**: Extract from metadata or identify from lyrics/style
+- **artist**: Extract from metadata or mark as "Unknown"
+- **duration**: Total length in seconds (e.g., 180.5)
+- **bpm**: Beats per minute (analyze tempo, typical range: 60-180)
+- **timeSignature**: Usually "4/4", could be "3/4", "6/8", etc.
+- **key**: Musical key (e.g., "C major", "A minor", "G# minor")
+
+### Sections Array
+Each section must have:
+- **id**: Unique lowercase identifier (intro, verse1, chorus1, verse2, bridge, chorus2, outro, etc.)
+- **label**: Human-readable label (Intro, Verse 1, Chorus 1, etc.)
+- **startTime**: When section starts (seconds, e.g., 32.5)
+- **endTime**: When section ends (seconds, e.g., 56.0)
+- **duration**: Length of section (auto-calculate: endTime - startTime)
+- **energy**: One of: "low", "medium", "high", "climax"
+  - "low" = Ambient, quiet, atmospheric (10-40% intensity)
+  - "medium" = Steady beat, building (40-70% intensity)
+  - "high" = Full energy, chorus peaks (70-90% intensity)
+  - "climax" = Peak moments, drops, final chorus (90-100% intensity)
+- **mood**: Emotional tone (e.g., "mysterious", "euphoric", "tense", "melancholic", "triumphant")
+- **hasVocals**: true if vocals present, false if instrumental
+- **notes**: Brief description of what happens musically in this section
+
+### Beat Grid (Optional but Recommended)
+- **beats**: Array of all beat timestamps in seconds [0, 0.5, 1.0, 1.5, ...]
+- **downbeats**: Array of first beat of each bar (every 4 beats in 4/4 time)
+- **bars**: Array of bar start timestamps
+
+If you cannot extract precise beat grid, leave arrays empty: []
+
+### Key Moments Array
+Identify important musical events:
+- **timestamp**: When event occurs (seconds)
+- **type**: One of:
+  - "drop" = Bass drop, chorus entry (high-energy moment)
+  - "buildup" = Tension building toward a drop
+  - "breakdown" = Instrumental break, intensity surge
+  - "transition" = Section change, mood shift
+  - "peak" = Maximum energy point
+  - "vocal_entry" = Vocals begin
+  - "vocal_exit" = Vocals end
+  - "instrumental_break" = No vocals, instrumental focus
+- **description**: What happens at this moment
+- **intensity**: 0-100 scale of energy at this moment
+
+### Tempo Changes (Optional)
+If BPM changes during the song:
+```json
+[
+  { "timestamp": 90.0, "bpm": 140 },
+  { "timestamp": 120.0, "bpm": 128 }
+]
+```
+If tempo is steady, leave as empty array: []
+
+### Energy Curve (Optional but Recommended)
+Sample energy levels throughout the song for visualization:
+```json
+[
+  { "timestamp": 0, "energy": 20 },
+  { "timestamp": 30, "energy": 50 },
+  { "timestamp": 60, "energy": 85 },
+  { "timestamp": 90, "energy": 100 },
+  { "timestamp": 150, "energy": 40 },
+  { "timestamp": 180, "energy": 10 }
+]
+```
+
+Sample every 20-30 seconds, or at major section changes.
+
+## Analysis Guidelines
+
+1. **Listen to the entire song** before analyzing
+2. **Identify section boundaries accurately** - Use changes in melody, rhythm, instrumentation
+3. **Be precise with timestamps** - Try for ±1 second accuracy for sections, ±0.1 second for beats if possible
+4. **Match energy levels to actual intensity** - Don't make everything "high", use the full range
+5. **Describe moods specifically** - "mysterious" is better than "dark", "triumphant" is better than "happy"
+6. **Identify ALL key moments** - Especially drops, transitions, and build-ups
+7. **If uncertain about BPM**, use a tap tempo tool or count beats manually
+8. **If song has multiple tempo changes**, document each one
+
+## Validation
+
+Before returning the JSON, verify:
+- All timestamps are in ascending order (startTime < endTime for each section)
+- Section boundaries don't overlap
+- BPM is realistic (40-240 range)
+- Energy levels use only: "low", "medium", "high", "climax"
+- Duration matches actual song length
+- All required fields are filled (no "ANALYZE_AND_FILL" placeholders)
+
+## Example Output
+
+Here's a complete example for reference:
+
+```json
+{
+  "version": "2026-02-07",
+  "songTitle": "Echoes in the Dark",
+  "artist": "Synthwave Dreams",
+  "duration": 180.5,
+  "bpm": 128,
+  "timeSignature": "4/4",
+  "key": "D minor",
+  "sections": [
+    {
+      "id": "intro",
+      "label": "Intro",
+      "startTime": 0,
+      "endTime": 8,
+      "duration": 8,
+      "energy": "low",
+      "mood": "mysterious",
+      "hasVocals": false,
+      "notes": "Atmospheric pad with slow bass pulse"
+    },
+    {
+      "id": "verse1",
+      "label": "Verse 1",
+      "startTime": 8,
+      "endTime": 32,
+      "duration": 24,
+      "energy": "medium",
+      "mood": "introspective",
+      "hasVocals": true,
+      "notes": "Vocals enter, steady beat begins"
+    },
+    {
+      "id": "chorus1",
+      "label": "Chorus 1",
+      "startTime": 32,
+      "endTime": 56,
+      "duration": 24,
+      "energy": "high",
+      "mood": "euphoric",
+      "hasVocals": true,
+      "notes": "Synth melody peaks, full instrumentation"
+    },
+    {
+      "id": "bridge",
+      "label": "Bridge",
+      "startTime": 80,
+      "endTime": 104,
+      "duration": 24,
+      "energy": "climax",
+      "mood": "intense",
+      "hasVocals": false,
+      "notes": "Instrumental break, building tension"
+    },
+    {
+      "id": "outro",
+      "label": "Outro",
+      "startTime": 152,
+      "endTime": 180.5,
+      "duration": 28.5,
+      "energy": "low",
+      "mood": "reflective",
+      "hasVocals": false,
+      "notes": "Gradual fade with atmospheric elements"
+    }
+  ],
+  "beatGrid": {
+    "beats": [0, 0.46875, 0.9375, 1.40625, 1.875, 2.34375],
+    "downbeats": [0, 1.875, 3.75, 5.625, 7.5],
+    "bars": [0, 1.875, 3.75, 5.625, 7.5]
+  },
+  "keyMoments": [
+    {
+      "timestamp": 32,
+      "type": "drop",
+      "description": "First chorus drop",
+      "intensity": 90
+    },
+    {
+      "timestamp": 80,
+      "type": "breakdown",
+      "description": "Bridge instrumental breakdown",
+      "intensity": 95
+    },
+    {
+      "timestamp": 104,
+      "type": "drop",
+      "description": "Final chorus drop (peak moment)",
+      "intensity": 100
+    }
+  ],
+  "tempoChanges": [],
+  "energyCurve": [
+    { "timestamp": 0, "energy": 20 },
+    { "timestamp": 32, "energy": 85 },
+    { "timestamp": 104, "energy": 100 },
+    { "timestamp": 180.5, "energy": 10 }
+  ],
+  "analysisSource": "Claude Sonnet 4.5",
+  "analyzedAt": "2026-02-07T10:30:00Z",
+  "notes": "BPM confirmed at 128, steady throughout. No tempo changes."
+}
+```
+
+## Important Reminders
+
+- Return ONLY valid JSON (no markdown, no code blocks, no additional text)
+- Fill in ALL placeholder values (no "ANALYZE_AND_FILL" in final output)
+- Timestamps must be precise and accurate
+- Energy levels must match actual song intensity
+- Include at least 3-5 sections minimum (intro, verses, choruses, outro)
+- Identify all major drops, build-ups, and transitions
+
+Now, please analyze the music file I've provided and return the completed JSON.

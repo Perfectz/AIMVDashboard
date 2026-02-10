@@ -1,68 +1,169 @@
-# AI Music Video - .gitignore
-# Version: 2026-02-07
+# AI Music Video Dashboard - .gitignore
+# Version: 2026-02-07 (Multi-Project)
+#
+# Strategy: Commit the dashboard system and demo skeleton only
+# Ignore all actual project data (music, videos, prompts, etc.)
 
-# Node modules
+# ========================================
+# Node Modules
+# ========================================
 node_modules/
 package-lock.json
 
-# Generated files
-prompts_index.json
+# ========================================
+# Projects Directory
+# ========================================
+# Ignore ALL projects except demo skeleton
+projects/*
+!projects/.gitkeep
+!projects/demo-project/
+
+# Demo project: Ignore content files
+projects/demo-project/bible/*.json
+projects/demo-project/prompts/kling/*.txt
+projects/demo-project/prompts/nanobanana/*.txt
+projects/demo-project/prompts/suno/*.txt
+projects/demo-project/rendered/shots/*
+projects/demo-project/rendered/storyboard/sequence.json
+projects/demo-project/music/*.mp3
+projects/demo-project/music/*.txt
+projects/demo-project/music/*.json
+projects/demo-project/reference/**/*.png
+projects/demo-project/reference/**/*.jpg
+projects/demo-project/reference/**/*.jpeg
+projects/demo-project/lint/report.json
+
+# Demo project: Explicitly keep these files
+!projects/demo-project/.gitkeep
+!projects/demo-project/**/.gitkeep
+!projects/demo-project/project.json
+!projects/demo-project/prompts_index.json
+!projects/demo-project/README.md
+
+# Ignore projects index (generated at runtime)
+projects/projects_index.json
+
+# ========================================
+# Media Files (All Formats)
+# ========================================
+# Audio
+*.mp3
+*.wav
+*.flac
+*.m4a
+*.aac
+*.ogg
+
+# Video
+*.mp4
+*.mov
+*.avi
+*.webm
+*.mkv
+*.wmv
+*.flv
+
+# Images (except examples/)
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.bmp
+*.tiff
+*.svg
+
+# Exception: Keep example files
+!examples/**/*.png
+!examples/**/*.jpg
+!examples/**/*.json
+
+# Exception: Keep UI assets
+!ui/**/*.png
+!ui/**/*.jpg
+!ui/**/*.svg
+
+# ========================================
+# Generated/Runtime Files
+# ========================================
+# Lint reports (generated)
+**/lint/report.json
 lint/report.json
 
-# Actual prompts (generated in Phase 2)
-prompts/kling/*.txt
-prompts/nanobanana/*.txt
-prompts/suno/*.txt
+# Prompts index (generated) - but keep demo project's template
+projects/*/prompts_index.json
+!projects/demo-project/prompts_index.json
 
-# Keep template files
-!prompts/**/_template.md
+# Sequence files (user data)
+**/rendered/storyboard/sequence.json
 
-# Reference images (large files)
-reference/characters/**/*.png
-reference/characters/**/*.jpg
-reference/characters/**/*.jpeg
-reference/locations/**/*.png
-reference/locations/**/*.jpg
-reference/locations/**/*.jpeg
+# ========================================
+# Temporary & Debug Files
+# ========================================
+*.tmp
+*.temp
+*.log
+*.cache
+.cache/
+DEBUG_*.md
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Keep guide.json files
-!reference/**/guide.json
-
-# Music files
-music/*.mp3
-music/*.wav
-music/*.flac
-
-# Rendered video assets
-render_sheets/*.mp4
-render_sheets/*.mov
-render_sheets/*.avi
-
-# Edit project files (large)
-edit/*.ccut
-edit/*.prproj
-
-# OS files
+# ========================================
+# OS & System Files
+# ========================================
 .DS_Store
+.AppleDouble
+.LSOverride
 Thumbs.db
 desktop.ini
-
-# IDE / Editor
-.vscode/
-.idea/
+$RECYCLE.BIN/
 *.swp
 *.swo
 *~
 
-# Logs
-*.log
-npm-debug.log*
+# ========================================
+# IDE & Editor Files
+# ========================================
+.vscode/
+.idea/
+*.sublime-*
+.vs/
+*.code-workspace
 
-# Temporary files
-*.tmp
-*.temp
-.cache/
+# ========================================
+# Claude Code
+# ========================================
+.claude/
 
-# Environment variables (if added later)
+# ========================================
+# Environment Files
+# ========================================
 .env
 .env.local
+.env.*.local
+.env.production
+
+# ========================================
+# Build/Output Directories
+# ========================================
+dist/
+build/
+out/
+coverage/
+
+# ========================================
+# Legacy Files (old single-project structure)
+# ========================================
+# These are ignored if they exist at root level
+/bible/*.json
+/prompts/kling/*.txt
+/prompts/nanobanana/*.txt
+/prompts/suno/*.txt
+/reference/characters/**/*.png
+/reference/locations/**/*.png
+/music/*.mp3
+/rendered/**/*.mp4
+/lint/report.json
+/prompts_index.json

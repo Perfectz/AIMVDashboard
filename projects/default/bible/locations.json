@@ -1,38 +1,41 @@
 {
-  "version": "2026-02-07",
-  "_TODO_PHASE_2": "Replace LOC_NEON_ALLEY with actual location definitions before Phase 2 production",
+  "version": "2026-02-08",
   "locations": [
     {
-      "id": "LOC_NEON_ALLEY",
-      "name": "TODO: Location Name",
+      "id": "LOC_WATER_STILL_PLATFORM",
+      "name": "Still Platform (Water World)",
       "setting": {
-        "type": "TODO: e.g., 'city street', 'interior apartment', 'rooftop'",
-        "scale": "TODO: e.g., 'intimate', 'expansive', 'claustrophobic'",
-        "architecture": "TODO: Architectural style and key structural elements",
-        "timeOfDay": "TODO: e.g., 'night', 'twilight', 'pre-dawn'"
+        "type": "floating platform in submerged sanctuary",
+        "scale": "intimate, enclosed yet open to vertical space above and below",
+        "architecture": "Futuristic structures softened by water physics. Smooth curved surfaces, semi-translucent walls, organic geometries. Platform is small and stable—the only solid ground in a suspended reality.",
+        "timeOfDay": "timeless, perpetual dim twilight with no sun or moon visible"
       },
       "atmosphere": {
-        "lighting": "TODO: e.g., 'harsh neon', 'soft twilight', 'dramatic chiaroscuro'",
-        "weather": "TODO: e.g., 'rain-slicked', 'fog-heavy', 'clear'",
+        "lighting": "Dim ambient glow from refracted light sources within the water. Soft caustic patterns on surfaces. Gentle luminescence from architectural elements. No harsh light.",
+        "weather": "Submerged environment—slow-moving particles (motes, bubbles, dust-like elements) drift through space. Gentle currents visible in particle movement.",
         "colorPalette": [
-          "TODO: Dominant color 1",
-          "TODO: Dominant color 2",
-          "TODO: Accent color"
+          "muted teal",
+          "deep blue-green",
+          "soft cyan glow",
+          "warm fading gold accents"
         ],
-        "mood": "TODO: e.g., 'tense', 'melancholic', 'hopeful'"
+        "mood": "Calm, dim, quietly oppressive yet strangely safe. Time feels slow and heavy."
       },
       "visualAnchors": [
-        "TODO: Signature visual element 1 that identifies this location",
-        "TODO: Signature visual element 2 that identifies this location"
+        "Slow-moving luminous particles drifting through water space",
+        "Caustic light refractions rippling across walls and floor",
+        "Semi-translucent architectural surfaces with soft inner glow",
+        "Floating fabric, hair, and debris moving as if underwater",
+        "Small stable platform with smooth curved edges as the only solid ground"
       ],
       "soundscape": {
-        "ambient": "TODO: Background sound environment (reference only)",
-        "signature": "TODO: Distinctive sound (reference only)"
+        "ambient": "Deep submerged resonance, muffled low frequencies, distant metallic tones",
+        "signature": "Slow rhythmic pulse like a heartbeat transmitted through water"
       },
       "allowedVariation": {
         "cameraAngle": true,
         "timeOfDay": false,
-        "crowdDensity": true,
+        "crowdDensity": false,
         "weatherIntensity": true
       },
       "referenceImages": [
@@ -40,13 +43,227 @@
         "ref_02.png",
         "ref_03.png"
       ],
-      "notes": "TODO: Internal notes about this location. This template is a placeholder - replace with actual location definition before generating prompts."
+      "notes": "Her starting and ending location. Used for early stillness (Act I) and final reach pose (Act IV). The platform represents her one point of stability in a world that resists movement."
+    },
+    {
+      "id": "LOC_WATER_CORRIDOR",
+      "name": "Corridor of Currents (Water World)",
+      "setting": {
+        "type": "suspended corridor with visible water flow",
+        "scale": "narrow and linear, creating a sense of path and direction",
+        "architecture": "Long passage between floating structures. Walls are semi-open with gaps where water currents are visible. Floor is uneven or partially absent. Architectural ribbing creates a skeletal tunnel effect.",
+        "timeOfDay": "timeless, perpetual dim twilight"
+      },
+      "atmosphere": {
+        "lighting": "Directional light filtering through gaps in the corridor structure. Light shifts as currents move, creating animated caustic patterns. Brighter than the Still Platform but still subdued.",
+        "weather": "Active water currents visible as streams of particles and displaced debris. Ribbons of light and shadow shift with flow. Hair and fabric pulled by current direction.",
+        "colorPalette": [
+          "deeper teal",
+          "shifting cyan streams",
+          "dark blue shadows between structural ribs",
+          "occasional warm light breakthrough"
+        ],
+        "mood": "Transitional, testing, uncomfortable. The space demands movement but resists it."
+      },
+      "visualAnchors": [
+        "Visible water currents shown as streams of particles flowing in specific directions",
+        "Architectural ribbing creating a skeletal tunnel frame",
+        "Gaps in walls where light and current break through",
+        "Fabric and hair pulled by directional water flow",
+        "Uneven or partially absent floor requiring careful navigation"
+      ],
+      "soundscape": {
+        "ambient": "Flowing water pressure, structural groans, current whistle through gaps",
+        "signature": "Rushing current sound that intensifies with flow direction"
+      },
+      "allowedVariation": {
+        "cameraAngle": true,
+        "timeOfDay": false,
+        "crowdDensity": false,
+        "weatherIntensity": true
+      },
+      "referenceImages": [
+        "ref_01.png",
+        "ref_02.png",
+        "ref_03.png"
+      ],
+      "notes": "Where she attempts her first movements (Act II) and learns to work with currents. Visual emphasis on the contrast between her awkward movement and the elegant flow of the environment."
+    },
+    {
+      "id": "LOC_WATER_OPEN_CHAMBER",
+      "name": "Open Chamber (Water World)",
+      "setting": {
+        "type": "large open suspended space within the water sanctuary",
+        "scale": "expansive, open, liberating compared to earlier spaces",
+        "architecture": "Vast chamber with distant curved walls and high ceiling lost in darkness above. Multiple floating platforms at different heights. Open water space between structures allows free movement.",
+        "timeOfDay": "timeless, but brighter than other water locations—suggests progression"
+      },
+      "atmosphere": {
+        "lighting": "Multiple soft light sources from different directions. Richer caustic patterns. Bioluminescent elements in the architecture provide warm accents. More depth and dimension than earlier locations.",
+        "weather": "Gentle omnidirectional currents. Particles drift in complex patterns. The water feels supportive rather than resistant.",
+        "colorPalette": [
+          "lighter teal with warmth",
+          "bioluminescent soft gold",
+          "aquamarine highlights",
+          "deep blue-black in distant depths"
+        ],
+        "mood": "Open, progressive, cautiously hopeful. The space feels like achievement."
+      },
+      "visualAnchors": [
+        "Vast open water space with multiple floating platforms at varying heights",
+        "Bioluminescent architectural elements providing warm golden accents",
+        "Complex particle patterns in open water showing multiple gentle currents",
+        "Distant curved walls lost in atmospheric depth",
+        "Light ribbons tracing through the open space"
+      ],
+      "soundscape": {
+        "ambient": "Open resonance, harmonic water tones, distant structural music",
+        "signature": "Gentle chime-like quality of light interacting with water particles"
+      },
+      "allowedVariation": {
+        "cameraAngle": true,
+        "timeOfDay": false,
+        "crowdDensity": false,
+        "weatherIntensity": true
+      },
+      "referenceImages": [
+        "ref_01.png",
+        "ref_02.png",
+        "ref_03.png"
+      ],
+      "notes": "Act IV location where she moves more confidently. Represents progression—larger, more forgiving space. She has learned to travel by working with currents."
+    },
+    {
+      "id": "LOC_VOLCANIC_LANDING",
+      "name": "Initial Landing Zone (Volcanic World)",
+      "setting": {
+        "type": "broken platform floating over molten energy",
+        "scale": "medium, unstable, precarious",
+        "architecture": "Fractured remains of a futuristic city. A single large platform fragment with exposed structural interior, broken edges, cracks glowing with molten energy. Debris orbits slowly. Below: visible lava/molten energy field.",
+        "timeOfDay": "perpetual volcanic twilight, orange-red ambient from below, dark sky above"
+      },
+      "atmosphere": {
+        "lighting": "Strong uplight from molten energy below casting orange-red glow upward. Dark sky above with ember particles. High contrast between hot underlight and dark overcast. Heat haze distortion visible at edges.",
+        "weather": "Ash particles falling slowly. Heat shimmer distorting air above lava. Occasional ember sparks rising from below. Hot, dry, oppressive.",
+        "colorPalette": [
+          "deep volcanic orange",
+          "molten red-amber",
+          "dark charcoal black of broken structures",
+          "ember yellow-white in cracks and sparks"
+        ],
+        "mood": "Hot, unstable, overwhelming, demanding immediate action."
+      },
+      "visualAnchors": [
+        "Glowing molten cracks running through the broken platform surface",
+        "Molten energy field visible below through gaps and broken edges",
+        "Fractured futuristic architecture with exposed internal structure",
+        "Slowly orbiting debris fragments around the main platform",
+        "Heat haze distortion at platform edges and above lava"
+      ],
+      "soundscape": {
+        "ambient": "Deep rumbling, cracking rock, hissing heat, distant structural collapse",
+        "signature": "Low bass rumble of molten energy pulsing beneath"
+      },
+      "allowedVariation": {
+        "cameraAngle": true,
+        "timeOfDay": false,
+        "crowdDensity": false,
+        "weatherIntensity": true
+      },
+      "referenceImages": [
+        "ref_01.png",
+        "ref_02.png",
+        "ref_03.png"
+      ],
+      "notes": "Where he first arrives (Act I) in a defensive fighting stance. Establishes the hostile, unstable nature of his world. Must feel dangerous from the first frame."
+    },
+    {
+      "id": "LOC_VOLCANIC_BATTLE_SPINE",
+      "name": "Battle Spine (Volcanic World)",
+      "setting": {
+        "type": "network of bridges, staircases, and narrow paths across lava",
+        "scale": "long and linear with dangerous depth below, claustrophobic width",
+        "architecture": "Interconnected fragments of destroyed city infrastructure—bridges that end abruptly, staircases to nowhere, narrow walkways between larger platforms. Everything floats over molten energy. Structural elements shift and collapse unpredictably.",
+        "timeOfDay": "perpetual volcanic twilight"
+      },
+      "atmosphere": {
+        "lighting": "Strong directional uplight from lava below. Side-lighting from glowing structural cracks. Flickering light from falling debris and shifting platforms. Dynamic, unstable lighting.",
+        "weather": "Active environment: falling debris, shifting platforms, rising heat. Ash and ember particles dense in the air. Occasional volcanic flare-ups from below.",
+        "colorPalette": [
+          "intense molten orange-red from below",
+          "dark structural silhouettes",
+          "ember spark whites and yellows",
+          "deep shadow blacks between structures"
+        ],
+        "mood": "Intense, combat-ready, escalating danger. The arena of his fight."
+      },
+      "visualAnchors": [
+        "Narrow bridges and walkways spanning gaps over molten energy",
+        "Platforms that shift, crack, or collapse during action",
+        "Dense ash and ember particle field in the air",
+        "Staircases and paths that end abruptly at broken edges",
+        "Glowing structural cracks spreading through architecture"
+      ],
+      "soundscape": {
+        "ambient": "Cracking stone, metal stress, falling debris impacts, lava bubbling",
+        "signature": "Sharp crack of platform splitting during combat"
+      },
+      "allowedVariation": {
+        "cameraAngle": true,
+        "timeOfDay": false,
+        "crowdDensity": false,
+        "weatherIntensity": true
+      },
+      "referenceImages": [
+        "ref_01.png",
+        "ref_02.png",
+        "ref_03.png"
+      ],
+      "notes": "Primary combat location (Acts II and III). Designed for martial arts sequences. The environment itself is a combatant—platforms collapse, gaps widen, heat intensifies. Enemies emerge as environmental constructs: shapes of rock, molten fragments, energy. Fights are intense but elegant."
+    },
+    {
+      "id": "LOC_VOLCANIC_HIGH_EDGE",
+      "name": "High Edge / Lookout (Volcanic World)",
+      "setting": {
+        "type": "elevated fractured platform overlooking the volcanic expanse",
+        "scale": "elevated, exposed, panoramic view of destruction below",
+        "architecture": "The highest remaining fragment of the destroyed city. A single platform jutting out over the void. Structural remnants of a former tower or observation point. Broken and isolated, nothing beyond its edge.",
+        "timeOfDay": "perpetual volcanic twilight"
+      },
+      "atmosphere": {
+        "lighting": "Uplight from distant lava creates warm glow on platform underside. Sky above dark with drifting ember particles. Character backlit by volcanic glow when facing outward. Dramatic rim lighting from below.",
+        "weather": "High altitude: less ash, clearer air but visible heat distortion. Wind suggested by fabric movement. Ember particles sparse but visible against dark sky.",
+        "colorPalette": [
+          "warm volcanic glow from below",
+          "dark sky above",
+          "silhouette black of platform edge",
+          "distant ember orange scattered in air"
+        ],
+        "mood": "Elevated, contemplative, resolute. A pause in the storm."
+      },
+      "visualAnchors": [
+        "Single platform edge jutting into void with nothing beyond",
+        "Panoramic view of volcanic destruction below and behind",
+        "Dramatic uplight creating rim glow on platform underside",
+        "Heat distortion warping the air at the platform edge",
+        "Structural remnants of a former tower or observation point"
+      ],
+      "soundscape": {
+        "ambient": "High wind, distant rumbling, occasional deep boom from below",
+        "signature": "Wind whistling past broken architecture"
+      },
+      "allowedVariation": {
+        "cameraAngle": true,
+        "timeOfDay": false,
+        "crowdDensity": false,
+        "weatherIntensity": true
+      },
+      "referenceImages": [
+        "ref_01.png",
+        "ref_02.png",
+        "ref_03.png"
+      ],
+      "notes": "Used for pause moments (Act III) and the final reach shot (Act IV). Where his relationship to fighting shifts from domination to navigation. Final shot: extending one hand forward toward edge of frame, heat distorting the air, matching her pose in the water world."
     }
-  ],
-  "_INSTRUCTIONS": {
-    "howToAddLocation": "Copy the LOC_NEON_ALLEY object, change the 'id' to LOC_YOURNAME, fill in all TODO fields, and add to the locations array.",
-    "namingConvention": "Location IDs must start with LOC_ followed by uppercase name (e.g., LOC_ROOFTOP, LOC_SUBWAY, LOC_APARTMENT)",
-    "referenceImageRequirement": "Each location MUST have exactly 3 reference images in reference/locations/{id}/ directory",
-    "invariantRule": "visualAnchors define signature elements that MUST appear in every shot at this location for consistency"
-  }
+  ]
 }

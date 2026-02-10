@@ -1,78 +1,87 @@
 {
-  "version": "2026-02-07",
+  "version": "2026-02-08",
   "shotDuration": {
     "default": 8,
     "unit": "seconds",
-    "notes": "One shot = 8 seconds editorial unit. Kling may generate longer clips, but system assumes only first ~8 seconds are usable. Prompts must describe ONE continuous action suitable for 8-second shot."
+    "notes": "8 seconds is the base editorial unit. Water world shots may feel longer due to slow pacing. Volcanic world shots may feel shorter due to faster cuts. Both conform to 8-second generation window."
   },
   "cameraMovement": {
-    "philosophy": "Smooth cinematic motion only - deliberate and motivated. No shaky cam.",
+    "philosophy": "Two distinct camera personalities matching each world. Water world camera is patient and gliding. Volcanic world camera is dynamic and tracking. Both are deliberate and motivated—never arbitrary.",
     "allowed": [
       {
-        "type": "push in",
-        "description": "Slow dolly push toward subject to increase intimacy or reveal detail",
+        "type": "slow glide",
+        "description": "Water world primary movement. Camera drifts smoothly through water space as if neutrally buoyant. Used for following her observation and small movements.",
         "speed": "slow"
       },
       {
-        "type": "pull back",
-        "description": "Slow dolly pull to reveal environment or create emotional distance",
-        "speed": "slow"
+        "type": "locked hold",
+        "description": "Water world stillness. Camera holds completely still on her stillness, allowing the environment to move around a fixed frame. Used for contemplative moments.",
+        "speed": "n/a"
       },
       {
         "type": "dolly tracking",
-        "description": "Follow subject smoothly, maintaining consistent distance",
+        "description": "Volcanic world primary movement. Camera tracks his movement through combat spaces, following his path along bridges and platforms. Dynamic but readable.",
         "speed": "medium"
       },
       {
-        "type": "slow pan",
-        "description": "Horizontal camera rotation to reveal space or follow action",
+        "type": "crane up/down",
+        "description": "Both worlds. Vertical movement revealing scale—height of floating structures, depth of lava below, vastness of water space above.",
         "speed": "slow"
       },
       {
-        "type": "crane up",
-        "description": "Vertical rise to reveal scale or create god's-eye perspective",
+        "type": "orbital",
+        "description": "Both worlds. Slow orbit around character in key emotional beats. Used sparingly for moments of decision or transition.",
         "speed": "slow"
       },
       {
-        "type": "orbit",
-        "description": "Circular movement around subject to show dimensionality",
+        "type": "push in",
+        "description": "Both worlds. Slow move toward character for emotional emphasis. Water world: gentle drift closer. Volcanic world: deliberate approach.",
         "speed": "slow"
       },
       {
-        "type": "static hold",
-        "description": "No camera movement - let action play out in frame",
-        "speed": "n/a"
+        "type": "pull back / reveal",
+        "description": "Both worlds. Pulling away from character to reveal environment scale. Used for establishing shots and moments of overwhelming space.",
+        "speed": "medium"
+      },
+      {
+        "type": "slight lag tracking",
+        "description": "Volcanic world only. Camera slightly behind his movement, struggling to keep up during intense action. Creates urgency without chaos.",
+        "speed": "fast"
       }
     ],
     "forbidden": [
-      "shaky cam",
-      "handheld wobble",
+      "shaky cam or handheld wobble",
       "crash zoom",
       "whip pan",
-      "dutch angle (unless narratively justified)"
+      "dutch angle (no tilted horizon)",
+      "snap cuts within a single shot",
+      "360-degree spin",
+      "unmotivated camera movement",
+      "rapid back-and-forth cutting within a shot",
+      "GoPro or first-person perspective"
     ]
   },
   "lenses": {
     "available": [
       {
         "focalLength": "24mm wide",
-        "use": "Establishing shots, environmental context, emphasizing space",
-        "effect": "Wide field of view, slight distortion, sense of expansive space"
+        "use": "Establishing shots revealing full location scale. Water world open chamber. Volcanic world panoramic destruction views.",
+        "effect": "Wide field of view, environmental immersion, sense of vast scale and isolation within space"
       },
       {
         "focalLength": "35mm anamorphic",
-        "use": "Balanced storytelling, character in environment, cinematic feel",
-        "effect": "Anamorphic bokeh, moderate depth, cinematic compression, widescreen aesthetic"
+        "use": "Default lens for both worlds. Medium shots of character within environment. Action sequences where context matters.",
+        "effect": "Cinematic widescreen feel with natural perspective. Character and environment balanced. Slight anamorphic flare from light sources."
       },
       {
         "focalLength": "50mm",
-        "use": "Natural perspective, human-eye view, intimate moments",
-        "effect": "Natural field of view, moderate depth of field, realistic spatial relationships"
+        "use": "Character-focused medium shots. Water world: her face during observation. Volcanic world: his face during pause moments.",
+        "effect": "Natural perspective closest to human eye. Intimate but not intrusive. Clean separation from background."
       },
       {
         "focalLength": "85mm portrait",
-        "use": "Close-ups, emotional beats, character focus",
-        "effect": "Compressed depth, cinematic bokeh, subject isolation, flattering compression"
+        "use": "Close-ups and emotional moments. Both worlds: detailed facial expression, hands reaching, micro-movements. Key for the final parallel reach shots.",
+        "effect": "Compressed depth, beautiful bokeh from environmental particles (water motes or ember sparks). Isolates character from world."
       }
     ],
     "default": "35mm anamorphic"
@@ -80,74 +89,98 @@
   "framing": {
     "compositions": [
       {
-        "type": "rule of thirds",
-        "use": "Dynamic framing for active subjects, visual interest"
-      },
-      {
         "type": "centered",
-        "use": "Symmetrical scenes, emphasis on subject power or isolation"
+        "use": "Mirrored moments between worlds. Both characters in identical center-frame compositions but with opposite physics. Used for direct cross-cutting comparison."
       },
       {
-        "type": "symmetrical",
-        "use": "Formalism, architectural beauty, visual harmony"
-      },
-      {
-        "type": "leading lines",
-        "use": "Draw eye toward subject, create depth"
+        "type": "rule of thirds",
+        "use": "Standard narrative framing. Character placed on one third with environment filling the other two-thirds. Emphasizes relationship between character and world."
       },
       {
         "type": "depth layering",
-        "use": "Foreground/midground/background separation for cinematic depth"
+        "use": "Environmental scale shots. Water world: foreground particles, mid-ground character, background architecture. Volcanic world: foreground debris, mid-ground character, background lava glow."
+      },
+      {
+        "type": "profile / silhouette",
+        "use": "Transitional moments and emotional beats. Character in profile against their world's light source. Water: silhouette against soft glow. Volcanic: silhouette against lava uplight."
+      },
+      {
+        "type": "leading lines",
+        "use": "Water world corridors and volcanic world bridges naturally create leading lines toward the character. Used for path/journey shots."
+      },
+      {
+        "type": "symmetrical",
+        "use": "Final parallel reach shots only. Both characters in near-identical symmetrical compositions, extending one hand forward. The visual rhyme is the emotional climax."
       }
     ],
     "shotSizes": [
       {
-        "type": "extreme close-up",
-        "description": "Eyes, hands, objects - detail and emotion"
-      },
-      {
-        "type": "close-up",
-        "description": "Face filling frame - intimate emotion"
-      },
-      {
-        "type": "medium shot",
-        "description": "Waist up - conversation, action"
-      },
-      {
-        "type": "medium wide",
-        "description": "Full body with some environment - context"
+        "type": "extreme wide",
+        "description": "Full environment visible with character as small figure within. Establishes world scale and character isolation."
       },
       {
         "type": "wide shot",
-        "description": "Full figure in environment - establishing"
+        "description": "Full body with substantial environment context. Default for action sequences and movement."
       },
       {
-        "type": "extreme wide",
-        "description": "Vast environment, tiny figure - scale and isolation"
+        "type": "medium wide",
+        "description": "Full body with moderate environment. Transitional framing between action and emotion."
+      },
+      {
+        "type": "medium shot",
+        "description": "Waist up. Primary framing for character beats. Shows body language and costume detail."
+      },
+      {
+        "type": "close-up",
+        "description": "Face and shoulders. Emotional moments, reactions, decision points. Water world: her eyes during observation. Volcanic world: his face showing fatigue."
+      },
+      {
+        "type": "extreme close-up",
+        "description": "Single feature (eyes, hand, detail). Water world: her hand testing a current. Volcanic world: his fist clenching then opening. Used sparingly for maximum impact."
       }
     ]
   },
   "depthOfField": {
-    "default": "shallow",
-    "philosophy": "Use shallow focus for character intimacy and subject isolation. Use deep focus for environmental context and spatial relationships."
+    "default": "medium",
+    "philosophy": "Use shallow focus for character intimacy and emotional isolation. Use deep focus for environmental context and world-building. Water world tends toward softer, more diffused depth. Volcanic world uses sharper contrast between focused subject and blurred heat haze."
   },
   "constraints": [
     {
-      "rule": "One action per shot - describe single continuous action suitable for 8-second duration",
+      "rule": "One action per shot—no multi-event sequences within 8-second window",
       "enforcement": "CRITICAL"
     },
     {
-      "rule": "No scene cuts within shot - each shot is one continuous take",
+      "rule": "No scene cuts or location changes within a single shot",
       "enforcement": "CRITICAL"
     },
     {
-      "rule": "Camera movement must be continuous and describable in one sentence",
+      "rule": "Camera movement must be continuous and describable in a single sentence",
       "enforcement": "CRITICAL"
     },
     {
-      "rule": "No ambiguous or conflicting camera directions",
+      "rule": "No cross-references between shots—each prompt must be standalone",
       "enforcement": "CRITICAL"
+    },
+    {
+      "rule": "Mirrored framing setups must use matching compositions between worlds (center, profile, thirds)",
+      "enforcement": "WARNING"
+    },
+    {
+      "rule": "Water world shots default to slower camera speed than volcanic world shots",
+      "enforcement": "WARNING"
+    },
+    {
+      "rule": "Cross-cutting between worlds increases in Acts II-III, slows in Act IV",
+      "enforcement": "WARNING"
+    },
+    {
+      "rule": "Final reach shots must be nearly identical in framing: centered, medium shot, hand extended forward",
+      "enforcement": "CRITICAL"
+    },
+    {
+      "rule": "Transitions between worlds should be motivated by shared shapes, gestures, or color",
+      "enforcement": "WARNING"
     }
   ],
-  "notes": "Camera language serves story and emotion. Every movement must be motivated. Prefer simplicity and clarity over complexity."
+  "notes": "The cinematography serves two parallel narratives that never intersect on screen. The camera must be a distinct presence in each world: a quiet companion in the water world, a dynamic pursuer in the volcanic world. Mirrored compositions create the emotional bridge between worlds. Light crossing their faces in parallel moments, interpreted differently by each world's physics. Editing rhythm: cross-cutting increases in Acts II-III to emphasize the mismatch of speed (her patience vs his force), then slows in Act IV to prepare for the final parallel reach. Aspect ratio should feel cinematic widescreen (2.39:1 equivalent)."
 }

@@ -500,6 +500,113 @@ This moves your data to `projects/default/` and creates the multi-project struct
 
 ---
 
+## Music Analysis System
+
+The music analysis system provides structured temporal data (sections, beats, energy levels) to enable precise shot timing and synchronization with music.
+
+### Why Music Analysis?
+
+When creating shots for a music video, Claude needs to know:
+- **Section boundaries** - Where intro/verse/chorus start/end (for scene pacing)
+- **Energy levels** - How intense each section is (to match visual energy)
+- **Beat grid** - Precise beat timestamps (to sync action to rhythm)
+- **Key moments** - Drops, build-ups, transitions (for dramatic timing)
+
+Without this data, shot timing would be guesswork.
+
+### File Location
+
+Each project can have a music analysis file:
+```
+projects/YOUR_PROJECT/
+└── music/
+    ├── song.mp3           # The audio file
+    └── analysis.json      # Music analysis data (NEW)
+```
+
+### Essential Music Data
+
+**Minimum Required**:
+- Total duration (seconds)
+- BPM (beats per minute)
+- Song sections with timestamps (intro, verse, chorus, etc.)
+- Energy level per section (low/medium/high/climax)
+
+**Example**:
+```json
+{
+  "version": "2026-02-07",
+  "songTitle": "Echoes in the Dark",
+  "duration": 180.5,
+  "bpm": 128,
+  "sections": [
+    {
+      "id": "intro",
+      "label": "Intro",
+      "startTime": 0,
+      "endTime": 8,
+      "energy": "low",
+      "mood": "mysterious"
+    },
+    {
+      "id": "chorus1",
+      "label": "Chorus 1",
+      "startTime": 32,
+      "endTime": 56,
+      "energy": "high",
+      "mood": "euphoric"
+    }
+  ]
+}
+```
+
+### Advanced Features (Optional)
+
+- **Beat Grid**: Precise beat timestamps for frame-accurate sync
+- **Key Moments**: Drops, build-ups, transitions with timestamps
+- **Energy Curve**: Energy levels sampled throughout song (for visualization)
+- **Tempo Changes**: If BPM varies during the song
+
+See [docs/MUSIC_ANALYSIS.md](docs/MUSIC_ANALYSIS.md) for complete documentation.
+
+### How to Get Music Analysis
+
+**Option A: AI Music Tool Export**
+- Generate music with Suno (provides BPM, duration automatically)
+- Request section timestamps via Suno API/UI
+- Export to `analysis.json`
+
+**Option B: Audio Analysis Tool**
+- Use Essentia, Spotify API, Librosa, or Sonic Visualiser
+- Extract BPM, beat grid, section detection
+- Format as `analysis.json`
+
+**Option C: Manual Input**
+- Listen to song in DAW (Digital Audio Workstation)
+- Mark section boundaries manually
+- Measure BPM with tap tempo tool
+- Fill out `analysis.json` by hand
+
+### Validation
+
+```bash
+npm run validate
+```
+
+Validates `music/analysis.json` against the schema.
+
+### Example Workflow
+
+1. **Upload Music**: Drag MP3 to music upload zone in UI
+2. **Analyze Music**: Create `music/analysis.json` (AI tool or manual)
+3. **Validate**: Run `npm run validate` to check schema
+4. **Create Shots**: Claude reads analysis.json and uses section data for timing
+5. **Compile Prompts**: Each shot intent includes precise startTime/endTime from sections
+
+See the full example at [examples/music_analysis_example.json](examples/music_analysis_example.json).
+
+---
+
 ## Visual Reference System
 
 Reference images are authoritative visual anchors to prevent drift.

@@ -1,0 +1,162 @@
+{
+  "version": "2026-02-07",
+  "songTitle": "Echoes in the Dark",
+  "artist": "Synthwave Dreams",
+  "duration": 180.5,
+  "bpm": 128,
+  "timeSignature": "4/4",
+  "key": "D minor",
+  "sections": [
+    {
+      "id": "intro",
+      "label": "Intro",
+      "startTime": 0,
+      "endTime": 8,
+      "duration": 8,
+      "energy": "low",
+      "mood": "mysterious",
+      "hasVocals": false,
+      "notes": "Atmospheric pad with slow bass pulse"
+    },
+    {
+      "id": "verse1",
+      "label": "Verse 1",
+      "startTime": 8,
+      "endTime": 32,
+      "duration": 24,
+      "energy": "medium",
+      "mood": "introspective",
+      "hasVocals": true,
+      "notes": "Vocals enter, steady beat begins"
+    },
+    {
+      "id": "chorus1",
+      "label": "Chorus 1",
+      "startTime": 32,
+      "endTime": 56,
+      "duration": 24,
+      "energy": "high",
+      "mood": "euphoric",
+      "hasVocals": true,
+      "notes": "Synth melody peaks, full instrumentation"
+    },
+    {
+      "id": "verse2",
+      "label": "Verse 2",
+      "startTime": 56,
+      "endTime": 80,
+      "duration": 24,
+      "energy": "medium",
+      "mood": "tense",
+      "hasVocals": true,
+      "notes": "Stripped back, focus on vocals"
+    },
+    {
+      "id": "bridge",
+      "label": "Bridge",
+      "startTime": 80,
+      "endTime": 104,
+      "duration": 24,
+      "energy": "climax",
+      "mood": "intense",
+      "hasVocals": false,
+      "notes": "Instrumental break, building tension"
+    },
+    {
+      "id": "chorus2",
+      "label": "Chorus 2 (Final)",
+      "startTime": 104,
+      "endTime": 152,
+      "duration": 48,
+      "energy": "climax",
+      "mood": "triumphant",
+      "hasVocals": true,
+      "notes": "Extended final chorus with layered vocals"
+    },
+    {
+      "id": "outro",
+      "label": "Outro",
+      "startTime": 152,
+      "endTime": 180.5,
+      "duration": 28.5,
+      "energy": "low",
+      "mood": "reflective",
+      "hasVocals": false,
+      "notes": "Gradual fade with atmospheric elements"
+    }
+  ],
+  "beatGrid": {
+    "beats": [
+      0, 0.46875, 0.9375, 1.40625, 1.875, 2.34375, 2.8125, 3.28125,
+      3.75, 4.21875, 4.6875, 5.15625, 5.625, 6.09375, 6.5625, 7.03125,
+      7.5, 7.96875, 8.4375
+    ],
+    "downbeats": [
+      0, 1.875, 3.75, 5.625, 7.5, 9.375, 11.25, 13.125,
+      15, 16.875, 18.75, 20.625, 22.5, 24.375, 26.25, 28.125,
+      30, 31.875, 33.75
+    ],
+    "bars": [
+      0, 1.875, 3.75, 5.625, 7.5, 11.25, 15, 18.75,
+      22.5, 26.25, 30, 33.75, 37.5
+    ]
+  },
+  "keyMoments": [
+    {
+      "timestamp": 7.5,
+      "type": "transition",
+      "description": "Beat drops, verse begins",
+      "intensity": 60
+    },
+    {
+      "timestamp": 31.875,
+      "type": "buildup",
+      "description": "Pre-chorus rise into first chorus",
+      "intensity": 75
+    },
+    {
+      "timestamp": 32,
+      "type": "drop",
+      "description": "First chorus drop",
+      "intensity": 90
+    },
+    {
+      "timestamp": 80,
+      "type": "breakdown",
+      "description": "Bridge instrumental breakdown",
+      "intensity": 95
+    },
+    {
+      "timestamp": 96,
+      "type": "buildup",
+      "description": "Building toward final chorus",
+      "intensity": 85
+    },
+    {
+      "timestamp": 104,
+      "type": "drop",
+      "description": "Final chorus drop (peak moment)",
+      "intensity": 100
+    },
+    {
+      "timestamp": 152,
+      "type": "transition",
+      "description": "Transition to outro fade",
+      "intensity": 50
+    }
+  ],
+  "tempoChanges": [],
+  "energyCurve": [
+    { "timestamp": 0, "energy": 20 },
+    { "timestamp": 8, "energy": 50 },
+    { "timestamp": 32, "energy": 85 },
+    { "timestamp": 56, "energy": 60 },
+    { "timestamp": 80, "energy": 90 },
+    { "timestamp": 104, "energy": 100 },
+    { "timestamp": 152, "energy": 40 },
+    { "timestamp": 180.5, "energy": 10 }
+  ],
+  "analysisSource": "Suno API v3.5 + Manual Curation",
+  "analyzedAt": "2026-02-07T10:30:00Z",
+  "notes": "BPM confirmed at 128, steady throughout. No tempo changes. Key moments manually verified against waveform."
+}

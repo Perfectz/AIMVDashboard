@@ -1,35 +1,40 @@
 {
-  "version": "2026-02-07",
-  "_TODO_PHASE_2": "Replace CHAR_PROTAGONIST with actual character definitions before Phase 2 production",
+  "version": "2026-02-08",
   "characters": [
     {
-      "id": "CHAR_PROTAGONIST",
-      "name": "TODO: Character Name",
+      "id": "CHAR_HER",
+      "name": "Her (Water World)",
       "physicalCore": {
-        "age": "TODO: e.g., 'early 30s', 'mid-20s'",
-        "build": "TODO: e.g., 'athletic', 'slender', 'stocky'",
-        "height": "TODO: e.g., 'tall', 'average', 'short'",
-        "skinTone": "TODO: Skin tone description",
+        "age": "late 20s",
+        "build": "slender, graceful",
+        "height": "average",
+        "skinTone": "warm brown with cool undertones, as if lit from within by refracted water light",
         "additionalFeatures": [
-          "TODO: Add unchanging physical traits (scars, tattoos, etc.)"
+          "Movements carry a fluid, deliberate quality even when still",
+          "Body language reads as contained energy rather than passivity",
+          "Posture shifts from closed and guarded (early) to open and upright (late)"
         ]
       },
       "faceSignature": {
-        "structure": "TODO: e.g., 'angular jawline, high cheekbones'",
-        "eyes": "TODO: Eye color and characteristics",
-        "hair": "TODO: Hair color, length, style",
+        "structure": "soft oval face with defined cheekbones, gentle jawline",
+        "eyes": "deep brown eyes, large and expressive, reflective quality as if holding unshed tears",
+        "hair": "long dark hair that moves as if underwater even in still air, loose and flowing past shoulders",
         "distinctiveFeatures": [
-          "TODO: Memorable facial features"
+          "Eyes that communicate volumes with minimal movement",
+          "Lips slightly parted in observation, rarely fully closed or open",
+          "Subtle tension in brow that softens across the arc"
         ]
       },
       "costume": {
         "default": {
-          "description": "TODO: Main outfit description",
+          "description": "Futuristic yet simple draped clothing that flows with water physics. Layered soft fabrics with asymmetric hem that moves independently. No armor, no hard edges. The garment feels alive in the water environment, responding to currents.",
           "colorPalette": [
-            "TODO: Color 1",
-            "TODO: Color 2"
+            "warm fading earth tones",
+            "muted terracotta",
+            "faded gold",
+            "cool teal highlights at edges"
           ],
-          "signature": "TODO: Signature wardrobe item that should always appear"
+          "signature": "Asymmetric draped outer layer that floats and trails in water currents, creating visual echo of her movements"
         },
         "variations": []
       },
@@ -44,13 +49,67 @@
         "ref_02.png",
         "ref_03.png"
       ],
-      "notes": "TODO: Internal notes about this character. This template is a placeholder - replace with actual character definition before generating prompts."
+      "notes": "Symbol of adaptation, endurance, and learning to move within a hostile but non-violent environment. Emotional state: afraid that time will never move forward, lonely, dependent on systems and others, quietly determined. Personality: sensitive, observant, emotionally restrained but deeply feeling. Movement vocabulary: slow, controlled, economical. Minimal gestures carry big emotional weight (eye movement, hands, breath). Movement is initially awkward, then becomes quietly confident. She is NOT a warrior—she is an endurer."
+    },
+    {
+      "id": "CHAR_HIM",
+      "name": "Him (Volcanic World)",
+      "physicalCore": {
+        "age": "early 30s",
+        "build": "athletic, lean-muscular, built for speed and precision rather than bulk",
+        "height": "tall",
+        "skinTone": "medium warm tone, weathered by heat and exertion, with visible perspiration in later acts",
+        "additionalFeatures": [
+          "Visible fatigue accumulates across acts: heavier breathing, slower recovery",
+          "Hands show controlled tension—fists when fighting, open when reaching",
+          "Body carries the weight of repeated combat in posture"
+        ]
+      },
+      "faceSignature": {
+        "structure": "strong angular jaw, pronounced brow ridge, sharp features carved by intensity",
+        "eyes": "dark intense eyes with focused, scanning quality, narrowed in concentration",
+        "hair": "short-cropped dark hair, practical, close to the head, slightly disheveled by combat",
+        "distinctiveFeatures": [
+          "Set jaw conveying determination and controlled aggression",
+          "Brow furrow that deepens with effort but relaxes in final act",
+          "Micro-expressions of pain suppression visible in close-ups"
+        ]
+      },
+      "costume": {
+        "default": {
+          "description": "Futuristic functional clothing allowing freedom of movement. Layered textiles with light armor elements and tactical straps. The outfit connects visually to the fire/volcanic environment but remains human and grounded. Shows progressive wear and damage across acts.",
+          "colorPalette": [
+            "deep charcoal black",
+            "volcanic red accents",
+            "burnt orange undertones",
+            "dark gunmetal gray"
+          ],
+          "signature": "Chest-crossing tactical strap system with faint ember-glow threading that mirrors the volcanic cracks in the environment"
+        },
+        "variations": [
+          {
+            "id": "BATTLE_WORN",
+            "description": "Same outfit with progressive damage: torn fabric, scorch marks, loosened straps. Used in Acts III and IV to show accumulated toll of combat.",
+            "colorPalette": [
+              "faded charcoal",
+              "exposed volcanic red where fabric is torn",
+              "ash-gray dust coating"
+            ]
+          }
+        ]
+      },
+      "allowedVariation": {
+        "lighting": true,
+        "expression": true,
+        "pose": true,
+        "distance": true
+      },
+      "referenceImages": [
+        "ref_01.png",
+        "ref_02.png",
+        "ref_03.png"
+      ],
+      "notes": "Symbol of effort, force, and trying to overpower an unstable reality. Emotional state: afraid of being too late or not strong enough, anxious, driven, carrying responsibility. Personality: disciplined, intense, protective, focused. Movement vocabulary: martial arts-based with precise, clean technique and controlled aggression. Fast, directional, tailored to environmental obstacles. Visible fatigue later: heavier breathing, slower rises, but refusal to stay down. His arc shifts from trying to DOMINATE the world to NAVIGATING it with intention."
     }
-  ],
-  "_INSTRUCTIONS": {
-    "howToAddCharacter": "Copy the CHAR_PROTAGONIST object, change the 'id' to CHAR_YOURNAME, fill in all TODO fields, and add to the characters array.",
-    "namingConvention": "Character IDs must start with CHAR_ followed by uppercase name (e.g., CHAR_DETECTIVE, CHAR_HACKER)",
-    "referenceImageRequirement": "Each character MUST have exactly 3 reference images in reference/characters/{id}/ directory",
-    "invariantRule": "physicalCore and faceSignature define identity anchors that MUST appear in every prompt featuring this character"
-  }
+  ]
 }

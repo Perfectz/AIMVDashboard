@@ -1,12 +1,19 @@
 {
   "version": "2026-02-07",
-  "activeProject": "default",
+  "activeProject": "where-time-breaks",
   "projects": [
     {
       "id": "default",
       "name": "My First Music Video",
       "createdAt": "2026-02-07T23:56:48.791Z",
       "lastModified": "2026-02-07T23:56:48.791Z",
+      "status": "active"
+    },
+    {
+      "id": "where-time-breaks",
+      "name": "Where Time Breaks",
+      "createdAt": "2026-02-07T00:00:00Z",
+      "lastModified": "2026-02-07T00:00:00Z",
       "status": "active"
     }
   ]

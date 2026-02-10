@@ -1,0 +1,210 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Music Analysis Schema",
+  "description": "Schema for storing music analysis data from AI tools (e.g., Suno metadata, audio analysis APIs)",
+  "type": "object",
+  "required": ["version", "songTitle", "duration", "bpm", "sections"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "Schema version (YYYY-MM-DD)"
+    },
+    "songTitle": {
+      "type": "string",
+      "description": "Song title"
+    },
+    "artist": {
+      "type": "string",
+      "description": "Artist name"
+    },
+    "duration": {
+      "type": "number",
+      "description": "Total duration in seconds",
+      "minimum": 0
+    },
+    "bpm": {
+      "type": "number",
+      "description": "Beats per minute",
+      "minimum": 40,
+      "maximum": 240
+    },
+    "timeSignature": {
+      "type": "string",
+      "pattern": "^\\d+/\\d+$",
+      "description": "Time signature (e.g., 4/4, 3/4, 6/8)",
+      "default": "4/4"
+    },
+    "key": {
+      "type": "string",
+      "description": "Musical key (e.g., C major, A minor)",
+      "pattern": "^[A-G][#b]? (major|minor)$"
+    },
+    "sections": {
+      "type": "array",
+      "description": "Song structure sections with timestamps",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "label", "startTime", "endTime", "energy"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique section ID (e.g., intro, verse1, chorus1)"
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable label (e.g., Intro, Verse 1, Chorus)"
+          },
+          "startTime": {
+            "type": "number",
+            "description": "Start timestamp in seconds",
+            "minimum": 0
+          },
+          "endTime": {
+            "type": "number",
+            "description": "End timestamp in seconds",
+            "minimum": 0
+          },
+          "duration": {
+            "type": "number",
+            "description": "Section duration in seconds (auto-calculated)",
+            "minimum": 0
+          },
+          "energy": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "climax"],
+            "description": "Energy/intensity level"
+          },
+          "mood": {
+            "type": "string",
+            "description": "Emotional tone (e.g., tense, euphoric, melancholic)"
+          },
+          "hasVocals": {
+            "type": "boolean",
+            "description": "Whether vocals are present in this section"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Additional notes about this section"
+          }
+        }
+      }
+    },
+    "beatGrid": {
+      "type": "object",
+      "description": "Precise beat timestamps",
+      "properties": {
+        "beats": {
+          "type": "array",
+          "description": "Array of beat timestamps in seconds",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "downbeats": {
+          "type": "array",
+          "description": "Array of downbeat (first beat of bar) timestamps",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "bars": {
+          "type": "array",
+          "description": "Array of bar start timestamps",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "keyMoments": {
+      "type": "array",
+      "description": "Important musical events (drops, build-ups, transitions)",
+      "items": {
+        "type": "object",
+        "required": ["timestamp", "type"],
+        "properties": {
+          "timestamp": {
+            "type": "number",
+            "description": "Event timestamp in seconds",
+            "minimum": 0
+          },
+          "type": {
+            "type": "string",
+            "enum": ["drop", "buildup", "breakdown", "transition", "peak", "vocal_entry", "vocal_exit", "instrumental_break"],
+            "description": "Type of musical event"
+          },
+          "description": {
+            "type": "string",
+            "description": "Human-readable description"
+          },
+          "intensity": {
+            "type": "number",
+            "description": "Intensity level (0-100)",
+            "minimum": 0,
+            "maximum": 100
+          }
+        }
+      }
+    },
+    "tempoChanges": {
+      "type": "array",
+      "description": "Tempo changes throughout the song",
+      "items": {
+        "type": "object",
+        "required": ["timestamp", "bpm"],
+        "properties": {
+          "timestamp": {
+            "type": "number",
+            "description": "When tempo changes (seconds)",
+            "minimum": 0
+          },
+          "bpm": {
+            "type": "number",
+            "description": "New BPM value",
+            "minimum": 40,
+            "maximum": 240
+          }
+        }
+      }
+    },
+    "energyCurve": {
+      "type": "array",
+      "description": "Energy levels sampled throughout the song (for visualization)",
+      "items": {
+        "type": "object",
+        "required": ["timestamp", "energy"],
+        "properties": {
+          "timestamp": {
+            "type": "number",
+            "description": "Sample timestamp in seconds",
+            "minimum": 0
+          },
+          "energy": {
+            "type": "number",
+            "description": "Energy level (0-100)",
+            "minimum": 0,
+            "maximum": 100
+          }
+        }
+      }
+    },
+    "analysisSource": {
+      "type": "string",
+      "description": "Tool/AI that generated this analysis (e.g., Suno, Spotify API, Essentia)"
+    },
+    "analyzedAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z?)?$",
+      "description": "When this analysis was generated (ISO 8601)"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional notes about the music or analysis"
+    }
+  }
+}
