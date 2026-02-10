@@ -919,118 +919,138 @@ body.focus-mode .main-layout {
   grid-template-columns: 1fr;
 }
 
-.review-filter-label {
+/* ===== READINESS PANEL ===== */
+.readiness-panel {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1rem 1.25rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.readiness-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.readiness-title-wrap h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.readiness-title-wrap p {
+  margin: 0.25rem 0 0;
   font-size: 12px;
   color: var(--text-tertiary);
-  margin-right: 0.5rem;
 }
 
-.review-filter-select {
-  background: var(--bg-card);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.55rem 0.75rem;
-  margin-right: 0.75rem;
-}
-
-.view-actions {
+.readiness-actions {
   display: flex;
-  align-items: center;
+  gap: 0.5rem;
 }
 
-.shot-status-select {
-  position: absolute;
-  bottom: 1rem;
-  left: 1rem;
-  z-index: 4;
-  background: rgba(13, 13, 18, 0.85);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 10px;
+.readiness-counts {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.readiness-count {
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-size: 12px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 0.45rem 0.6rem;
 }
 
-.shot-comments-btn {
-  position: absolute;
-  bottom: 1rem;
-  right: 1rem;
-  z-index: 4;
+.readiness-ready {
+  background: rgba(52, 168, 83, 0.16);
+  color: #7ee0a3;
+}
+
+.readiness-blocked {
+  background: rgba(234, 67, 53, 0.16);
+  color: #ff9f95;
+}
+
+.readiness-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.readiness-group {
+  background: var(--bg-card);
   border: 1px solid var(--border);
-  background: rgba(13, 13, 18, 0.9);
-  color: var(--text-primary);
-  border-radius: 8px;
-  font-size: 10px;
-  padding: 0.45rem 0.6rem;
+  border-radius: 10px;
+  padding: 0.65rem;
+}
+
+.readiness-filter-link {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.readiness-filter-link.active,
+.readiness-filter-link:hover {
+  color: var(--accent-primary);
+}
+
+.readiness-shot-list {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.readiness-shot-chip {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 11px;
   cursor: pointer;
 }
 
-.comments-modal-content {
-  max-width: 760px;
+.readiness-shot-chip:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
 }
 
-.comments-list {
+.readiness-clear,
+.readiness-extra {
+  font-size: 11px;
+  color: var(--text-quaternary);
+}
+
+.readiness-recommendations {
   display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-  max-height: 45vh;
-  overflow-y: auto;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
-.comment-item {
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  border-radius: 10px;
-  padding: 0.9rem 1rem;
-}
-
-.comment-text {
-  color: var(--text-primary);
-  font-size: 14px;
-  margin-bottom: 0.4rem;
-}
-
-.comment-time {
+.readiness-recommendation {
+  font-size: 11px;
   color: var(--text-tertiary);
-  font-size: 12px;
+  border-left: 2px solid var(--border-hover);
+  padding-left: 0.45rem;
 }
 
-.comment-compose textarea {
-  width: 100%;
-  background: var(--bg-card);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 0.8rem;
-  margin-bottom: 0.75rem;
-}
-
-.comments-empty {
+.readiness-filter-empty {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 1rem;
   color: var(--text-tertiary);
-  font-size: 14px;
-}
-
-.assignee-editor {
-  margin-top: 1rem;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.6rem;
-  align-items: center;
-}
-
-.assignee-editor label {
-  grid-column: 1 / -1;
-}
-
-.assignee-editor input {
-  background: var(--bg-elevated);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.55rem 0.7rem;
+  font-size: 13px;
 }

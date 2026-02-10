@@ -2270,20 +2270,11 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // GET /api/review/sequence - Load storyboard sequence with review metadata
-  if (req.method === 'GET' && req.url.startsWith('/api/review/sequence')) {
-    try {
-      const { projectId } = getProjectContext(req);
-      const sequence = readSequenceFile(projectId);
-      sendJSON(res, 200, { success: true, sequence });
-    } catch (err) {
-      sendJSON(res, 400, { success: false, error: err.message });
-    }
-    return;
-  }
 
-  // POST /api/review/shot - Save review updates for a single shot
-  if (req.method === 'POST' && req.url.startsWith('/api/review/shot')) {
+  // PUT /projects/:id/lint/readiness_report.json - Save readiness report
+  if (req.method === 'PUT' && req.url.match(/^\/projects\/([^\/]+)\/lint\/readiness_report\.json$/)) {
+    const projectId = req.url.match(/^\/projects\/([^\/]+)\/lint\/readiness_report\.json$/)[1];
+
     readBody(req, MAX_BODY_SIZE, (err, body) => {
       if (err) {
         sendJSON(res, 413, { success: false, error: 'Payload too large' });
@@ -2291,64 +2282,17 @@ const server = http.createServer((req, res) => {
       }
 
       try {
-        const payload = JSON.parse(body || '{}');
-        const projectId = resolveProjectId(payload.project, { required: false });
-        const shotId = sanitizePathSegment(payload.shotId, SHOT_ID_REGEX, 'shotId');
+        sanitizePathSegment(projectId, PROJECT_ID_REGEX, 'project');
+        const parsed = JSON.parse(body || '{}');
+        const lintDir = path.join(projectManager.getProjectPath(projectId), 'lint');
+        fs.mkdirSync(lintDir, { recursive: true });
 
-        const sequence = readSequenceFile(projectId);
-        const shot = sequence.selections.find(item => item.shotId === shotId);
-        if (!shot) {
-          sendJSON(res, 404, { success: false, error: `Shot '${shotId}' not found` });
-          return;
-        }
+        const filePath = path.join(lintDir, 'readiness_report.json');
+        fs.writeFileSync(filePath, JSON.stringify(parsed, null, 2), 'utf8');
 
-        normalizeShotReviewFields(shot);
-
-        if (payload.reviewStatus !== undefined) {
-          if (!REVIEW_STATUS_VALUES.has(payload.reviewStatus)) {
-            sendJSON(res, 400, { success: false, error: 'Invalid reviewStatus value' });
-            return;
-          }
-          shot.reviewStatus = payload.reviewStatus;
-        }
-
-        if (payload.assignee !== undefined) {
-          if (typeof payload.assignee !== 'string' || payload.assignee.length > 120) {
-            sendJSON(res, 400, { success: false, error: 'Invalid assignee' });
-            return;
-          }
-          shot.assignee = payload.assignee.trim();
-        }
-
-        if (payload.appendComment !== undefined) {
-          if (typeof payload.appendComment !== 'string' || !payload.appendComment.trim()) {
-            sendJSON(res, 400, { success: false, error: 'Comment text is required' });
-            return;
-          }
-
-          shot.comments.push({
-            text: payload.appendComment.trim(),
-            timestamp: new Date().toISOString()
-          });
-        }
-
-        if (payload.comments !== undefined) {
-          if (!Array.isArray(payload.comments)) {
-            sendJSON(res, 400, { success: false, error: 'comments must be an array' });
-            return;
-          }
-          shot.comments = payload.comments
-            .filter(comment => comment && typeof comment.text === 'string' && comment.text.trim())
-            .map(comment => ({
-              text: comment.text.trim(),
-              timestamp: typeof comment.timestamp === 'string' ? comment.timestamp : new Date().toISOString()
-            }));
-        }
-
-        writeSequenceFile(sequence, projectId);
-        sendJSON(res, 200, { success: true, shot });
-      } catch (parseErr) {
-        sendJSON(res, 400, { success: false, error: parseErr.message || 'Invalid JSON' });
+        sendJSON(res, 200, { success: true, path: `projects/${projectId}/lint/readiness_report.json` });
+      } catch (saveErr) {
+        sendJSON(res, 400, { success: false, error: saveErr.message });
       }
     });
     return;
