@@ -1350,14 +1350,14 @@ function createShotCard(shot) {
   });
   thumbnail.appendChild(reviewStatus);
 
-  const commentsBtn = document.createElement('button');
-  commentsBtn.className = 'shot-comments-btn';
-  commentsBtn.textContent = `Comments (${shot.comments?.length || 0})`;
-  commentsBtn.addEventListener('click', (e) => {
+  const thumbnailCommentsBtn = document.createElement('button');
+  thumbnailCommentsBtn.className = 'shot-comments-btn';
+  thumbnailCommentsBtn.textContent = `Comments (${shot.comments?.length || 0})`;
+  thumbnailCommentsBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     openCommentsModal(shot);
   });
-  thumbnail.appendChild(commentsBtn);
+  thumbnail.appendChild(thumbnailCommentsBtn);
 
   card.appendChild(thumbnail);
 
