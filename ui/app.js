@@ -3193,6 +3193,186 @@ function createRenderCard(imagePath, label, variation, projectParam) {
   return card;
 }
 
+
+async function safeFetchJson(url, fallback = null) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return fallback;
+    return await response.json();
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeShots(shotListData) {
+  if (!shotListData) return [];
+  if (Array.isArray(shotListData)) return shotListData;
+  if (Array.isArray(shotListData.shots)) return shotListData.shots;
+  return [];
+}
+
+function hasPreviewAsset(entry) {
+  if (!entry || typeof entry !== 'object') return false;
+  const previewKeys = [
+    'previewImage', 'previewVideo', 'image', 'video', 'selectedVideo', 'selectedPreview',
+    'thumbnail', 'framePath', 'videoPath', 'assetPath'
+  ];
+  return previewKeys.some((key) => !!entry[key]);
+}
+
+async function hasLocationReference(projectId, locationId) {
+  const guide = await safeFetchJson(`/projects/${projectId}/reference/locations/${encodeURIComponent(locationId)}/guide.json`, null);
+  return !!guide;
+}
+
+async function aggregateHomeData(projectId = 'default') {
+  const [shotListData, transcriptData, manifestData, storyboardData, referencesData] = await Promise.all([
+    safeFetchJson(`/projects/${projectId}/bible/shot_list.json`, {}),
+    safeFetchJson(`/projects/${projectId}/bible/transcript.json`, {}),
+    safeFetchJson(`/projects/${projectId}/bible/asset_manifest.json`, {}),
+    safeFetchJson(`/projects/${projectId}/rendered/storyboard/sequence.json`, {}),
+    safeFetchJson(`/api/references/characters?project=${projectId}`, { characters: [] })
+  ]);
+
+  const shots = normalizeShots(shotListData);
+  const transcriptSegments = Array.isArray(transcriptData?.segments) ? transcriptData.segments : [];
+  const manifestAssets = Array.isArray(manifestData?.assets) ? manifestData.assets : [];
+  const storyboardSelections = Array.isArray(storyboardData?.selections) ? storyboardData.selections : [];
+
+  const readyShots = shots.filter((shot) => shot?.status === 'ready' || shot?.ready === true);
+  const blockedShots = shots.filter((shot) => {
+    if (shot?.status === 'blocked' || shot?.blocked === true) return true;
+    return Array.isArray(shot?.blockers) && shot.blockers.length > 0;
+  });
+
+  const transcriptSegmentIds = new Set(transcriptSegments.map((segment) => segment.id || segment.segmentId).filter(Boolean));
+  const shotsWithTranscript = shots.filter((shot) => shot?.transcriptSegmentId || shot?.segmentId);
+  const missingTranscriptShots = shotsWithTranscript.filter((shot) => {
+    const segmentId = shot.transcriptSegmentId || shot.segmentId;
+    return segmentId && !transcriptSegmentIds.has(segmentId);
+  });
+
+  const manifestAssetMap = new Map(manifestAssets.map((asset) => [asset.id || asset.assetId, asset]));
+  const missingAssetsByShot = [];
+  shots.forEach((shot) => {
+    const requiredAssets = Array.isArray(shot?.requiredAssets) ? shot.requiredAssets : [];
+    requiredAssets.forEach((assetId) => {
+      const asset = manifestAssetMap.get(assetId);
+      const missing = !asset || asset.status === 'missing' || asset.exists === false || asset.available === false;
+      if (missing) {
+        missingAssetsByShot.push({ shotId: shot.shotId || shot.id || 'UNKNOWN_SHOT', assetId });
+      }
+    });
+  });
+
+  const characterRefs = Array.isArray(referencesData?.characters) ? referencesData.characters : [];
+  const characterIdsWithRefs = new Set(characterRefs
+    .filter((character) => (character.images?.length || 0) + (character.generatedImages?.length || 0) > 0)
+    .map((character) => character.name));
+
+  const requiredCharacterIds = new Set();
+  const requiredLocationIds = new Set();
+  const shotReferenceGaps = [];
+
+  for (const shot of shots) {
+    const shotId = shot.shotId || shot.id || 'UNKNOWN_SHOT';
+    const missing = [];
+
+    const characters = Array.isArray(shot?.characters) ? shot.characters : [];
+    characters.forEach((character) => {
+      const charId = character?.id || character;
+      if (!charId) return;
+      requiredCharacterIds.add(charId);
+      if (!characterIdsWithRefs.has(charId)) {
+        missing.push(`character ${charId}`);
+      }
+    });
+
+    const locations = Array.isArray(shot?.locations) ? shot.locations : [];
+    for (const location of locations) {
+      const locationId = location?.id || location;
+      if (!locationId) continue;
+      requiredLocationIds.add(locationId);
+      const hasRef = await hasLocationReference(projectId, locationId);
+      if (!hasRef) {
+        missing.push(`location ${locationId}`);
+      }
+    }
+
+    if (missing.length > 0) {
+      shotReferenceGaps.push({ shotId, missing });
+    }
+  }
+
+  let missingCharacterRefs = 0;
+  requiredCharacterIds.forEach((charId) => {
+    if (!characterIdsWithRefs.has(charId)) missingCharacterRefs += 1;
+  });
+
+  let missingLocationRefs = 0;
+  for (const locationId of requiredLocationIds) {
+    const hasRef = await hasLocationReference(projectId, locationId);
+    if (!hasRef) missingLocationRefs += 1;
+  }
+
+  const coveredShotIds = new Set();
+  storyboardSelections.forEach((selection) => {
+    if (hasPreviewAsset(selection)) {
+      coveredShotIds.add(selection.shotId || selection.id);
+    }
+  });
+
+  const coveredShots = [...coveredShotIds].filter(Boolean).length;
+  const totalShots = shots.length;
+  const coveragePercent = totalShots > 0 ? Math.round((coveredShots / totalShots) * 100) : 0;
+
+  const nextBestActions = [];
+  if (missingLocationRefs > 0) {
+    const gap = shotReferenceGaps.find((item) => item.missing.some((entry) => entry.startsWith('location')));
+    if (gap) nextBestActions.push({ text: `Add location refs for ${gap.shotId}`, href: `step4.html?shot=${gap.shotId}&focus=locations` });
+  }
+  if (missingCharacterRefs > 0) {
+    const gap = shotReferenceGaps.find((item) => item.missing.some((entry) => entry.startsWith('character')));
+    if (gap) nextBestActions.push({ text: `Add character refs for ${gap.shotId}`, href: `step4.html?shot=${gap.shotId}&focus=characters` });
+  }
+  if (missingTranscriptShots.length > 0) {
+    nextBestActions.push({ text: `Fill transcript segments for ${missingTranscriptShots[0].shotId || missingTranscriptShots[0].id}`, href: `step2.html?focus=transcript` });
+  }
+  if (missingAssetsByShot.length > 0) {
+    nextBestActions.push({ text: `Update asset manifest for ${missingAssetsByShot[0].shotId}`, href: `step3.html?focus=assets` });
+  }
+  if (coveragePercent < 100 && totalShots > 0) {
+    nextBestActions.push({ text: 'Publish storyboard preview image/video for uncovered shots', href: 'storyboard.html' });
+  }
+
+  return {
+    projectId,
+    shots: {
+      total: totalShots,
+      ready: readyShots.length,
+      blocked: blockedShots.length
+    },
+    missingReferences: {
+      total: missingCharacterRefs + missingLocationRefs,
+      characters: missingCharacterRefs,
+      locations: missingLocationRefs
+    },
+    missingTranscriptSegments: missingTranscriptShots.length,
+    missingAssets: missingAssetsByShot.length,
+    storyboard: {
+      coveragePercent,
+      coveredShots
+    },
+    shotReferenceGaps,
+    nextBestActions
+  };
+}
+
+window.AIMVDashboardData = {
+  safeFetchJson,
+  aggregateHomeData
+};
+
 // Wire up generate shot button
 if (generateShotBtn) {
   generateShotBtn.addEventListener('click', generateShot);
@@ -3211,6 +3391,11 @@ async function initializeReferences() {
 
 // Initialize
 (async () => {
+  const isHomePage = window.location.pathname.endsWith('/home.html') || window.location.pathname === '/';
+  if (isHomePage) {
+    return;
+  }
+
   updateToolbarContext('prompts');
   const projectsLoaded = await loadProjects();
   if (projectsLoaded) {

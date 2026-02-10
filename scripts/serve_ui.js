@@ -2325,7 +2325,9 @@ const server = http.createServer((req, res) => {
       // Serve project files (including reference images)
       const cleanPath = requestPath.replace(/^\/projects\//, '');
       filePath = safeResolve(PROJECTS_DIR, cleanPath);
-    } else if (requestPath === '/' || requestPath === '/index.html') {
+    } else if (requestPath === '/') {
+      filePath = path.join(UI_DIR, 'home.html');
+    } else if (requestPath === '/index.html') {
       filePath = path.join(UI_DIR, 'index.html');
     } else if (requestPath.startsWith('/ui/')) {
       // UI assets
