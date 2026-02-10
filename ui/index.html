@@ -89,8 +89,8 @@
       <main class="content">
         <div class="page-toolbar">
           <div class="page-toolbar-title">
-            <h1>Prompt Review</h1>
-            <p>Search, validate, copy, and generate in one place.</p>
+            <h1 id="pageToolbarHeading">Prompt Review</h1>
+            <p id="pageToolbarSubtitle">Search, validate, copy, and generate in one place.</p>
           </div>
           <div class="page-toolbar-actions">
             <button id="focusModeBtn" class="btn btn-secondary">Focus Mode</button>
@@ -159,6 +159,18 @@
             <div id="workspaceShellTitle">Workspace</div>
             <button class="btn btn-secondary btn-sm" id="workspaceShellCloseBtn">Back to Prompts</button>
           </div>
+          <div id="workspaceShellLoading" class="workspace-shell-loading" style="display:none;">
+            <div class="workspace-shell-loading-spinner"></div>
+            <div class="workspace-shell-loading-text">Loading workspace...</div>
+          </div>
+          <div id="workspaceShellError" class="workspace-shell-error" style="display:none;">
+            <h3>Unable to load workspace page</h3>
+            <p id="workspaceShellErrorText">The page could not be loaded in this panel.</p>
+            <div class="workspace-shell-error-actions">
+              <button class="btn btn-secondary btn-sm" id="workspaceShellRetryBtn">Retry</button>
+              <button class="btn btn-secondary btn-sm" id="workspaceShellOpenNewBtn">Open in New Tab</button>
+            </div>
+          </div>
           <iframe id="workspaceShellFrame" class="workspace-shell-frame" title="Embedded Workspace"></iframe>
         </div>
       </main>
@@ -197,12 +209,8 @@
     <div class="command-palette-panel">
       <div class="command-palette-header">Quick Actions</div>
       <button class="command-item" data-command="focus">Toggle Focus Mode</button>
-      <button class="command-item" data-command="step1">Open Step 1: Theme</button>
-      <button class="command-item" data-command="step2">Open Step 2: Music</button>
-      <button class="command-item" data-command="step3">Open Step 3: Canon</button>
-      <button class="command-item" data-command="step4">Open Step 4: References</button>
+      <button class="command-item" data-command="prompts">Return to Prompts</button>
       <button class="command-item" data-command="guide">Open Guide</button>
-      <button class="command-item" data-command="storyboard">Go to Storyboard</button>
     </div>
   </div>
 

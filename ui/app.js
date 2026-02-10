@@ -166,6 +166,13 @@ const workspaceShell = document.getElementById('workspaceShell');
 const workspaceShellFrame = document.getElementById('workspaceShellFrame');
 const workspaceShellTitle = document.getElementById('workspaceShellTitle');
 const workspaceShellCloseBtn = document.getElementById('workspaceShellCloseBtn');
+const workspaceShellLoading = document.getElementById('workspaceShellLoading');
+const workspaceShellError = document.getElementById('workspaceShellError');
+const workspaceShellErrorText = document.getElementById('workspaceShellErrorText');
+const workspaceShellRetryBtn = document.getElementById('workspaceShellRetryBtn');
+const workspaceShellOpenNewBtn = document.getElementById('workspaceShellOpenNewBtn');
+const pageToolbarHeading = document.getElementById('pageToolbarHeading');
+const pageToolbarSubtitle = document.getElementById('pageToolbarSubtitle');
 
 // Sidebar toggle
 const shotsSidebar = document.getElementById('shotsSidebar');
@@ -173,6 +180,7 @@ const sidebarToggle = document.getElementById('sidebarToggle');
 const mainLayout = document.querySelector('.main-layout');
 const emptyRunIndexBtn = document.getElementById('emptyRunIndex');
 const emptyOpenGuideBtn = document.getElementById('emptyOpenGuide');
+let lastWorkspaceUrl = '';
 const WORKSPACE_VIEW_MAP = {
   prompts: { url: '', title: 'Step 5: Prompts' },
   step1: { url: 'step1.html', title: 'Step 1: Theme' },
@@ -182,6 +190,10 @@ const WORKSPACE_VIEW_MAP = {
   storyboard: { url: 'storyboard.html', title: 'Step 6: Storyboard' },
   guide: { url: 'guide.html', title: 'User Guide' }
 };
+const isEmbeddedWorkspacePage = new URLSearchParams(window.location.search).get('embedded') === '1';
+if (isEmbeddedWorkspacePage) {
+  document.body.classList.add('embedded-mode');
+}
 
 /**
  * Show loading state
@@ -210,6 +222,52 @@ function showLoading(container, message = 'Loading...') {
 function hideLoading(overlay) {
   if (overlay && overlay.parentNode) {
     overlay.remove();
+  }
+}
+
+function updateToolbarContext(viewKey) {
+  const target = WORKSPACE_VIEW_MAP[viewKey] || WORKSPACE_VIEW_MAP.prompts;
+  if (!pageToolbarHeading || !pageToolbarSubtitle) return;
+
+  if (viewKey === 'prompts') {
+    pageToolbarHeading.textContent = 'Prompt Review';
+    pageToolbarSubtitle.textContent = 'Search, validate, copy, and generate in one place.';
+    return;
+  }
+
+  pageToolbarHeading.textContent = target.title;
+  pageToolbarSubtitle.textContent = 'Single-pane workspace view. Use the left navigation to switch steps.';
+}
+
+function showWorkspaceFrameLoading(message = 'Loading workspace...') {
+  if (!workspaceShellLoading) return;
+  const textEl = workspaceShellLoading.querySelector('.workspace-shell-loading-text');
+  if (textEl) textEl.textContent = message;
+  workspaceShellLoading.style.display = 'flex';
+}
+
+function hideWorkspaceFrameLoading() {
+  if (!workspaceShellLoading) return;
+  workspaceShellLoading.style.display = 'none';
+}
+
+function showWorkspaceError(message = 'The page could not be loaded in this panel.') {
+  if (!workspaceShellError) return;
+  if (workspaceShellErrorText) workspaceShellErrorText.textContent = message;
+  workspaceShellError.style.display = 'flex';
+}
+
+function hideWorkspaceError() {
+  if (!workspaceShellError) return;
+  workspaceShellError.style.display = 'none';
+}
+
+function setWorkspaceMode(enabled) {
+  if (!mainLayout || !shotsSidebar) return;
+  mainLayout.classList.toggle('workspace-pane-mode', enabled);
+  if (enabled) {
+    shotsSidebar.classList.remove('collapsed');
+    mainLayout.classList.remove('sidebar-collapsed');
   }
 }
 
@@ -990,6 +1048,16 @@ function getViewKeyFromPathname(pathname) {
   return Object.keys(WORKSPACE_VIEW_MAP).find((key) => WORKSPACE_VIEW_MAP[key].url === file) || null;
 }
 
+function buildEmbeddedWorkspaceUrl(url) {
+  try {
+    const next = new URL(url, window.location.href);
+    next.searchParams.set('embedded', '1');
+    return `${next.pathname}${next.search}${next.hash || ''}`;
+  } catch {
+    return url;
+  }
+}
+
 function updateViewInUrl(view, replace = false) {
   const next = new URL(window.location.href);
   if (!view || view === 'prompts') {
@@ -1007,14 +1075,19 @@ function updateViewInUrl(view, replace = false) {
 function openWorkspacePane(url, title, options = {}) {
   const { updateHistory = true, replaceHistory = false } = options;
   if (!workspaceShell || !workspaceShellFrame || !promptsWorkspace) return;
+  setWorkspaceMode(true);
+  hideWorkspaceError();
   promptsWorkspace.style.display = 'none';
   workspaceShell.style.display = 'block';
-  workspaceShellFrame.src = url;
+  showWorkspaceFrameLoading(`Loading ${title || 'workspace'}...`);
+  lastWorkspaceUrl = url;
+  workspaceShellFrame.src = buildEmbeddedWorkspaceUrl(lastWorkspaceUrl);
   if (workspaceShellTitle) workspaceShellTitle.textContent = title;
   workspaceNavButtons.forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.workspaceUrl === url);
   });
   if (promptsNavBtn) promptsNavBtn.classList.remove('active');
+  updateToolbarContext(getViewKeyFromUrl(url));
   if (updateHistory) {
     updateViewInUrl(getViewKeyFromUrl(url), replaceHistory);
   }
@@ -1023,11 +1096,15 @@ function openWorkspacePane(url, title, options = {}) {
 function closeWorkspacePane(options = {}) {
   const { updateHistory = true, replaceHistory = false } = options;
   if (!workspaceShell || !promptsWorkspace) return;
+  setWorkspaceMode(false);
   workspaceShell.style.display = 'none';
+  hideWorkspaceFrameLoading();
+  hideWorkspaceError();
   if (workspaceShellFrame) workspaceShellFrame.src = 'about:blank';
   promptsWorkspace.style.display = 'block';
   workspaceNavButtons.forEach((btn) => btn.classList.remove('active'));
   if (promptsNavBtn) promptsNavBtn.classList.add('active');
+  updateToolbarContext('prompts');
   if (updateHistory) {
     updateViewInUrl('prompts', replaceHistory);
   }
@@ -1047,6 +1124,7 @@ function applyViewFromUrl(options = {}) {
     closeWorkspacePane({ updateHistory: true, replaceHistory: true });
     return;
   }
+  updateToolbarContext(view);
   openWorkspacePane(target.url, target.title, { updateHistory, replaceHistory });
 }
 
@@ -1060,12 +1138,8 @@ document.querySelectorAll('.command-item').forEach((btn) => {
   btn.addEventListener('click', () => {
     const cmd = btn.dataset.command;
     if (cmd === 'focus' && focusModeBtn) focusModeBtn.click();
-    if (cmd === 'step1') openWorkspacePane('step1.html', 'Step 1: Theme');
-    if (cmd === 'step2') openWorkspacePane('step2.html', 'Step 2: Music');
-    if (cmd === 'step3') openWorkspacePane('step3.html', 'Step 3: Canon');
-    if (cmd === 'step4') openWorkspacePane('step4.html', 'Step 4: References');
+    if (cmd === 'prompts') closeWorkspacePane();
     if (cmd === 'guide') openWorkspacePane('guide.html', 'User Guide');
-    if (cmd === 'storyboard') openWorkspacePane('storyboard.html', 'Storyboard');
     closeCommandPalette();
   });
 });
@@ -1099,6 +1173,20 @@ if (promptsNavBtn) {
 if (workspaceShellCloseBtn) {
   workspaceShellCloseBtn.addEventListener('click', closeWorkspacePane);
 }
+if (workspaceShellRetryBtn) {
+  workspaceShellRetryBtn.addEventListener('click', () => {
+    if (!workspaceShellFrame || !lastWorkspaceUrl) return;
+    hideWorkspaceError();
+    showWorkspaceFrameLoading(`Loading ${workspaceShellTitle?.textContent || 'workspace'}...`);
+    workspaceShellFrame.src = buildEmbeddedWorkspaceUrl(lastWorkspaceUrl);
+  });
+}
+if (workspaceShellOpenNewBtn) {
+  workspaceShellOpenNewBtn.addEventListener('click', () => {
+    if (!lastWorkspaceUrl) return;
+    window.open(lastWorkspaceUrl, '_blank', 'noopener');
+  });
+}
 
 if (workspaceShellFrame) {
   workspaceShellFrame.addEventListener('load', () => {
@@ -1107,11 +1195,31 @@ if (workspaceShellFrame) {
       innerUrl = new URL(workspaceShellFrame.contentWindow.location.href);
     } catch {
       // Ignore cross-origin iframe navigation (not expected in local app)
+      hideWorkspaceFrameLoading();
+      showWorkspaceError('The workspace page blocked embedding. Open it in a new tab.');
+      return;
+    }
+
+    const frameText = (workspaceShellFrame.contentDocument?.body?.innerText || '').slice(0, 300);
+    if (/404\s*-\s*file\s*not\s*found/i.test(frameText)) {
+      hideWorkspaceFrameLoading();
+      showWorkspaceError(`"${innerUrl.pathname}" returned a 404. Check that the file exists in /ui.`);
       return;
     }
 
     const view = getViewKeyFromPathname(innerUrl.pathname);
-    if (!view) return;
+    if (!view) {
+      hideWorkspaceFrameLoading();
+      showWorkspaceError(`Unknown workspace route: ${innerUrl.pathname}`);
+      return;
+    }
+    if (innerUrl.searchParams.get('embedded') !== '1' && view !== 'prompts') {
+      const target = WORKSPACE_VIEW_MAP[view];
+      if (target) {
+        workspaceShellFrame.src = buildEmbeddedWorkspaceUrl(target.url);
+        return;
+      }
+    }
 
     const params = new URLSearchParams(window.location.search);
     const currentView = params.get('view') || 'prompts';
@@ -1122,11 +1230,16 @@ if (workspaceShellFrame) {
       } else if (currentView !== 'prompts') {
         updateViewInUrl('prompts', false);
       }
+      hideWorkspaceFrameLoading();
       return;
     }
 
     const target = WORKSPACE_VIEW_MAP[view];
-    if (!target) return;
+    if (!target) {
+      hideWorkspaceFrameLoading();
+      showWorkspaceError(`No workspace mapping found for "${view}".`);
+      return;
+    }
 
     if (workspaceShell.style.display === 'none') {
       openWorkspacePane(target.url, target.title, { updateHistory: currentView !== view, replaceHistory: true });
@@ -1142,6 +1255,9 @@ if (workspaceShellFrame) {
     if (currentView !== view) {
       updateViewInUrl(view, false);
     }
+    hideWorkspaceFrameLoading();
+    hideWorkspaceError();
+    updateToolbarContext(view);
   });
 }
 
@@ -2809,6 +2925,7 @@ async function initializeReferences() {
 
 // Initialize
 (async () => {
+  updateToolbarContext('prompts');
   const projectsLoaded = await loadProjects();
   if (projectsLoaded) {
     // Only load prompts index on the main prompts page (index.html)

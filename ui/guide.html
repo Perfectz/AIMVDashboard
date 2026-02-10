@@ -331,6 +331,20 @@
     .file-tree-file {
       color: #79c0ff;
     }
+
+    body.embedded-mode .guide-container {
+      display: block;
+      height: auto;
+    }
+
+    body.embedded-mode .left-nav {
+      display: none;
+    }
+
+    body.embedded-mode .guide-content {
+      max-width: none;
+      padding: 24px 28px 40px;
+    }
   </style>
 </head>
 <body>
@@ -1190,5 +1204,13 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
       <div style="height: 64px;"></div>
     </div>
   </div>
+  <script>
+    (function() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('embedded') === '1') {
+        document.body.classList.add('embedded-mode');
+      }
+    })();
+  </script>
 </body>
 </html>

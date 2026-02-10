@@ -2891,6 +2891,7 @@ body {
 .page-toolbar-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--spacer-sm);
 }
 
@@ -2983,6 +2984,7 @@ body.focus-mode .main-layout {
   overflow: hidden;
   background: var(--bg-card);
   min-height: calc(100vh - 210px);
+  position: relative;
 }
 
 .workspace-shell-header {
@@ -3002,6 +3004,72 @@ body.focus-mode .main-layout {
   background: #fff;
 }
 
+.workspace-shell-loading {
+  position: absolute;
+  inset: 49px 0 0 0;
+  background: rgba(26, 31, 46, 0.7);
+  backdrop-filter: blur(2px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  z-index: 2;
+}
+
+.workspace-shell-loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent-light);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.workspace-shell-loading-text {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.workspace-shell-error {
+  position: absolute;
+  inset: 49px 0 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 20px;
+  background: rgba(20, 24, 36, 0.9);
+  z-index: 3;
+}
+
+.workspace-shell-error h3 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  color: var(--text-primary);
+}
+
+.workspace-shell-error p {
+  margin: 0 0 16px 0;
+  color: var(--text-secondary);
+  max-width: 460px;
+  line-height: 1.6;
+}
+
+.workspace-shell-error-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.main-layout.workspace-pane-mode {
+  grid-template-columns: minmax(200px, 280px) minmax(400px, 1fr);
+}
+
+.main-layout.workspace-pane-mode .sidebar {
+  display: none;
+}
+
 @media (max-width: 992px) {
   .workspace-shell {
     min-height: calc(100vh - 180px);
@@ -3009,4 +3077,35 @@ body.focus-mode .main-layout {
   .workspace-shell-frame {
     height: calc(100vh - 235px);
   }
+}
+
+/* Embedded workspace pages loaded inside index.html iframe */
+body.embedded-mode .container {
+  height: auto;
+}
+
+body.embedded-mode .main-layout {
+  grid-template-columns: 1fr !important;
+  height: auto;
+  min-height: 0;
+}
+
+body.embedded-mode .left-nav,
+body.embedded-mode .sidebar,
+body.embedded-mode .page-toolbar {
+  display: none !important;
+}
+
+body.embedded-mode .content,
+body.embedded-mode .storyboard-content {
+  grid-column: 1 / -1 !important;
+  padding: 16px;
+}
+
+body.embedded-mode .content {
+  overflow: visible;
+}
+
+body.embedded-mode .breadcrumbs {
+  margin-bottom: var(--spacer-md);
 }
