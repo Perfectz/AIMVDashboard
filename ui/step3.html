@@ -142,11 +142,28 @@
                 <div class="text-input-actions">
                   <button class="btn btn-secondary btn-sm" id="saveScriptBtn">Save Shot List</button>
                 </div>
+                <div class="shot-list-split-layout">
+                  <section class="shot-list-pane shot-list-pane-left">
+                    <div class="shot-list-pane-title">YouTube Content Script</div>
+                    <textarea
+                      id="youtubeContentScript"
+                      class="shot-list-textarea"
+                      placeholder="Paste or edit the YouTube content script here..."
+                      rows="6"
+                    ></textarea>
+                    <div class="shot-list-pane-title">Transcript Blocks</div>
+                    <div id="transcriptBlocks" class="transcript-blocks"></div>
+                  </section>
+
+                  <section class="shot-list-pane shot-list-pane-right">
+                    <div class="shot-list-pane-title">Shot List Cards</div>
+                    <div id="shotCards" class="shot-cards"></div>
+                  </section>
+                </div>
                 <textarea
                   id="scriptJson"
-                  placeholder='{"version": "2026-02-08", "shots": [{"id": "SHOT_01", "shotNumber": 1, "timing": {"start": 3, "duration": 8, "end": 11, "musicSection": "intro_1"}, "intent": {"what": "...", "why": "...", "emotionalBeat": "..."}}]}'
-                  rows="20"
-                  style="font-family: 'Monaco', 'Courier New', monospace; font-size: 12px;"
+                  rows="2"
+                  style="display:none;"
                 ></textarea>
                 <div class="text-input-status" id="scriptStatus"></div>
               </div>
