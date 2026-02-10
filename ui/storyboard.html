@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Step 6: Storyboard - AI Music Video</title>
+  <title>Step 6: Storyboard Preview - AI Music Video</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -23,8 +23,8 @@
     <div class="main-layout">
       <nav class="left-nav">
         <div class="nav-brand">
-          <h1>Storyboard</h1>
-          <p class="nav-subtitle">Visual sequence and shot selection</p>
+          <h1>Storyboard Preview</h1>
+          <p class="nav-subtitle">Ordered timeline for selected shots and references</p>
         </div>
 
         <div class="project-selector-section">
@@ -41,11 +41,7 @@
           <div class="nav-stat-item"><div class="nav-stat-value" id="stat-duration">0s</div><div class="nav-stat-label">Duration</div></div>
         </div>
 
-        <div class="nav-actions">
-          <button class="btn btn-secondary btn-block" id="copyContextBtn">Copy Context for AI</button>
-          <button class="btn btn-primary btn-block" id="downloadContextBtn">Download Context Bundle</button>
-          <button class="btn btn-secondary btn-block" id="exportBtn">Export PDF</button>
-        </div>
+        <div class="nav-actions"><button class="btn btn-primary btn-block" id="exportBtn" title="Export your Storyboard Preview timeline to PDF">Export PDF</button></div>
 
         <div class="nav-divider"></div>
 
@@ -65,7 +61,7 @@
           <button class="nav-item" onclick="window.location.href='step3.html'"><span class="nav-icon">03</span><span class="nav-label">Step 3: Canon</span></button>
           <button class="nav-item" onclick="window.location.href='step4.html'"><span class="nav-icon">04</span><span class="nav-label">Step 4: References</span></button>
           <button class="nav-item" onclick="window.location.href='index.html'"><span class="nav-icon">05</span><span class="nav-label">Step 5: Shots</span><span class="nav-count" id="nav-count-all">0</span></button>
-          <button class="nav-item active" onclick="window.location.href='storyboard.html'"><span class="nav-icon">06</span><span class="nav-label">Step 6: Storyboard</span></button>
+          <button class="nav-item active" onclick="window.location.href='storyboard.html'"><span class="nav-icon">06</span><span class="nav-label">Step 6: Storyboard Preview</span></button>
         </div>
         <div class="nav-divider"></div>
         <div class="nav-header"><div class="nav-title">Resources</div></div>
@@ -75,29 +71,16 @@
 
       <div class="storyboard-content">
         <div class="page-toolbar compact">
-          <div class="page-toolbar-title"><h1>Storyboard Builder</h1><p>Review renders and finalize shot choices quickly.</p></div>
+          <div class="page-toolbar-title"><h1>Storyboard Preview</h1><p>Arrange selected shots in order and verify references before export.</p></div>
           <div class="page-toolbar-actions"><button class="btn btn-secondary" id="storyboardFocusBtn">Focus Mode</button></div>
         </div>
 
         <div class="view-controls">
-          <div class="view-controls-left">
-            <div class="view-mode-tabs">
-              <button class="view-tab active" data-view="grid"><span>Grid View</span></button>
-              <button class="view-tab" data-view="timeline"><span>Timeline View</span></button>
-            </div>
-            <div class="review-filter-chips" id="reviewFilterChips"></div>
+          <div class="view-mode-tabs">
+            <button class="view-tab active" data-view="grid"><span>Grid View</span></button>
+            <button class="view-tab" data-view="timeline"><span>Storyboard Preview</span></button>
           </div>
-          <div class="view-actions">
-            <label class="review-filter-label" for="reviewFilter">Review</label>
-            <select id="reviewFilter" class="review-filter-select">
-              <option value="all">All statuses</option>
-              <option value="draft">Draft</option>
-              <option value="ready_for_review">Ready for review</option>
-              <option value="changes_requested">Changes requested</option>
-              <option value="approved">Approved</option>
-            </select>
-            <button class="btn btn-small" id="refreshBtn">Refresh</button>
-          </div>
+          <div class="view-actions"><button class="btn btn-small" id="refreshBtn" title="Reload shot videos and references from disk">Refresh</button></div>
         </div>
 
         <div class="readiness-panel" id="readinessPanel" style="display: none;">
@@ -161,14 +144,14 @@
         </section>
 
         <div class="empty-state" id="emptyState">
-          <h2>No Rendered Assets Found</h2>
-          <p>Place rendered videos and images in the <code>rendered/shots/</code> directory.</p>
+          <h2>No Shot Assets Found</h2>
+          <p>Add rendered shot videos and reference images to <code>rendered/shots/</code>, then click Refresh.</p>
           <div class="empty-instructions">
             <h3>Quick Start:</h3>
             <ol>
-              <li>Render shots in Kling 3.0 and Nano Banana Pro 3</li>
+              <li>Render at least one shot in Kling 3.0 or Nano Banana Pro 3</li>
               <li>Create folder: <code>rendered/shots/SHOT_01/</code></li>
-              <li>Add files: <code>kling_option_A.mp4</code>, <code>nano_first_frame.png</code>, etc.</li>
+              <li>Add files such as <code>kling_option_A.mp4</code> and <code>nano_first_frame.png</code> as references</li>
               <li>Click "Refresh" to load assets</li>
             </ol>
           </div>
@@ -179,12 +162,7 @@
         <div class="timeline-view" id="timelineView" style="display: none;">
           <div class="timeline-filmstrip" id="timelineFilmstrip"></div>
           <div class="timeline-container">
-            <div class="timeline-header"><div class="timeline-title">Music Timeline</div><div class="timeline-duration" id="timelineDuration">0:00</div></div>
-            <audio id="storyboardAudio" controls preload="metadata" style="width: 100%; margin-bottom: 1rem;"></audio>
-            <div class="timeline-ruler" id="timelineRuler" role="slider" aria-label="Timeline scrubber" tabindex="0">
-              <div class="timeline-ruler-track"></div>
-              <div class="timeline-current-indicator" id="timelineCurrentIndicator"></div>
-            </div>
+            <div class="timeline-header"><div class="timeline-title">Storyboard Preview Timeline</div><div class="timeline-duration" id="timelineDuration">0:00</div></div>
             <div class="timeline-track" id="timelineTrack"></div>
           </div>
         </div>
@@ -194,7 +172,7 @@
           <div class="modal-content">
             <div class="modal-header"><h2 id="modalTitle">SHOT_01</h2><button class="modal-close" id="modalClose">×</button></div>
             <div class="modal-body"><div class="variation-grid" id="variationGrid"></div><div class="shot-details" id="shotDetails"></div></div>
-            <div class="modal-footer"><button class="btn btn-secondary" id="modal-cancel">Cancel</button><button class="btn btn-primary" id="modal-save">Save Selection</button></div>
+            <div class="modal-footer"><button class="btn btn-secondary" id="modal-cancel">Cancel</button><button class="btn btn-primary" id="modal-save" title="Save this shot choice into the Storyboard Preview order">Save Shot Selection</button></div>
           </div>
         </div>
 
