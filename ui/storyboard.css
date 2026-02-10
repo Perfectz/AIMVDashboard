@@ -812,3 +812,29 @@
   font-size: 14px;
   margin-top: 0.5rem;
 }
+/* --- 2026 Modernization overrides --- */
+.page-toolbar.compact {
+  margin: 0;
+  padding: 1rem 1.25rem;
+}
+
+.storyboard-content {
+  background:
+    radial-gradient(900px 400px at 100% -10%, rgba(26, 115, 232, 0.15), transparent 60%),
+    var(--bg-app);
+}
+
+.drop-zone-icon {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+body.focus-mode .left-nav {
+  display: none;
+}
+
+body.focus-mode .main-layout {
+  grid-template-columns: 1fr;
+}

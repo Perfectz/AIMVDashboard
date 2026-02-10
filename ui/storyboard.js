@@ -1,4 +1,4 @@
-// Storyboard Viewer - Application Logic
+﻿// Storyboard Viewer - Application Logic
 // Version: 2026-02-07 (Multi-Project Support)
 
 let sequenceData = null;
@@ -21,29 +21,51 @@ let toastIdCounter = 0;
 function showToast(title, message = '', type = 'info', duration = 3000) {
   const toastId = `toast-${toastIdCounter++}`;
 
+  const icons = {
+    success: '\u2713',
+    error: '\u2717',
+    warning: '\u26A0',
+    info: 'i'
+  };
+
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
   toast.id = toastId;
 
-  const icons = {
-    success: '✓',
-    error: '✗',
-    warning: '⚠',
-    info: 'ℹ'
-  };
+  const iconEl = document.createElement('div');
+  iconEl.className = 'toast-icon';
+  iconEl.textContent = icons[type] || icons.info;
 
-  toast.innerHTML = `
-    <div class="toast-icon">${icons[type] || icons.info}</div>
-    <div class="toast-content">
-      <div class="toast-title">${title}</div>
-      ${message ? `<div class="toast-message">${message}</div>` : ''}
-    </div>
-    <button class="toast-close" aria-label="Close">×</button>
-    ${duration > 0 ? '<div class="toast-progress"></div>' : ''}
-  `;
+  const contentEl = document.createElement('div');
+  contentEl.className = 'toast-content';
 
-  const closeBtn = toast.querySelector('.toast-close');
+  const titleEl = document.createElement('div');
+  titleEl.className = 'toast-title';
+  titleEl.textContent = title;
+  contentEl.appendChild(titleEl);
+
+  if (message) {
+    const msgEl = document.createElement('div');
+    msgEl.className = 'toast-message';
+    msgEl.textContent = message;
+    contentEl.appendChild(msgEl);
+  }
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'toast-close';
+  closeBtn.setAttribute('aria-label', 'Close');
+  closeBtn.textContent = '\u00d7';
   closeBtn.addEventListener('click', () => dismissToast(toastId));
+
+  toast.appendChild(iconEl);
+  toast.appendChild(contentEl);
+  toast.appendChild(closeBtn);
+
+  if (duration > 0) {
+    const progress = document.createElement('div');
+    progress.className = 'toast-progress';
+    toast.appendChild(progress);
+  }
 
   toastContainer.appendChild(toast);
 
@@ -68,31 +90,30 @@ function dismissToast(toastId) {
   }, 200);
 }
 
-// DOM Elements
-const emptyState = document.getElementById('emptyState');
-const gridView = document.getElementById('gridView');
-const timelineView = document.getElementById('timelineView');
-const shotGrid = document.getElementById('shotGrid');
-const timelineTrack = document.getElementById('timelineTrack');
-const shotModal = document.getElementById('shotModal');
-const modalOverlay = document.getElementById('modalOverlay');
-const modalClose = document.getElementById('modalClose');
-const modalTitle = document.getElementById('modalTitle');
-const variationGrid = document.getElementById('variationGrid');
-const shotDetails = document.getElementById('shotDetails');
+// DOM Elements (will be accessed via document.getElementById when needed)
+// These are kept as variables for functions that use them repeatedly
+let emptyState, gridView, timelineView, shotGrid, timelineTrack;
+let shotModal, modalTitle, variationGrid, shotDetails;
+let statTotalShots, statRendered, statSelected, statDuration;
 
-// Stats
-const statTotalShots = document.getElementById('stat-total-shots');
-const statRendered = document.getElementById('stat-rendered');
-const statSelected = document.getElementById('stat-selected');
-const statDuration = document.getElementById('stat-duration');
-
-// Buttons
-const exportBtn = document.getElementById('exportBtn');
-const refreshBtn = document.getElementById('refreshBtn');
-const viewTabs = document.querySelectorAll('.view-tab');
-const modalCancel = document.getElementById('modal-cancel');
-const modalSave = document.getElementById('modal-save');
+/**
+ * Initialize DOM element references
+ */
+function initializeDOMElements() {
+  emptyState = document.getElementById('emptyState');
+  gridView = document.getElementById('gridView');
+  timelineView = document.getElementById('timelineView');
+  shotGrid = document.getElementById('shotGrid');
+  timelineTrack = document.getElementById('timelineTrack');
+  shotModal = document.getElementById('shotModal');
+  modalTitle = document.getElementById('modalTitle');
+  variationGrid = document.getElementById('variationGrid');
+  shotDetails = document.getElementById('shotDetails');
+  statTotalShots = document.getElementById('stat-total-shots');
+  statRendered = document.getElementById('stat-rendered');
+  statSelected = document.getElementById('stat-selected');
+  statDuration = document.getElementById('stat-duration');
+}
 
 /**
  * Show loading state
@@ -102,10 +123,13 @@ const modalSave = document.getElementById('modal-save');
 function showLoading(container, message = 'Loading...') {
   const overlay = document.createElement('div');
   overlay.className = 'loading-overlay';
-  overlay.innerHTML = `
-    <div class="loading-spinner"></div>
-    <div class="loading-text">${message}</div>
-  `;
+  const spinner = document.createElement('div');
+  spinner.className = 'loading-spinner';
+  const text = document.createElement('div');
+  text.className = 'loading-text';
+  text.textContent = message;
+  overlay.appendChild(spinner);
+  overlay.appendChild(text);
   container.style.position = 'relative';
   container.appendChild(overlay);
   return overlay;
@@ -293,11 +317,14 @@ async function loadProjects() {
 
     const selector = document.getElementById('projectSelector');
     if (selector) {
-      selector.innerHTML = data.projects.map(p =>
-        `<option value="${p.id}" ${p.id === currentProject.id ? 'selected' : ''}>
-          ${p.name}
-        </option>`
-      ).join('');
+      selector.innerHTML = '';
+      data.projects.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name;
+        opt.selected = p.id === currentProject.id;
+        selector.appendChild(opt);
+      });
     }
 
     return true;
@@ -476,7 +503,7 @@ function createShotCard(shot) {
   } else {
     const placeholder = document.createElement('div');
     placeholder.className = 'placeholder';
-    placeholder.textContent = '🎬';
+    placeholder.textContent = 'VIDEO';
     thumbnail.appendChild(placeholder);
   }
 
@@ -513,13 +540,13 @@ function createShotCard(shot) {
   if (shot.timing) {
     const duration = document.createElement('div');
     duration.className = 'shot-meta-item';
-    duration.textContent = `⏱ ${shot.timing.duration || 8}s`;
+    duration.textContent = `Duration: ${shot.timing.duration || 8}s`;
     meta.appendChild(duration);
 
     if (shot.timing.musicSection) {
       const section = document.createElement('div');
       section.className = 'shot-meta-item';
-      section.textContent = `🎵 ${shot.timing.musicSection}`;
+      section.textContent = `Section: ${shot.timing.musicSection}`;
       meta.appendChild(section);
     }
   }
@@ -679,7 +706,7 @@ function createVariationCard(variation) {
 
   const check = document.createElement('div');
   check.className = 'variation-check';
-  check.textContent = '✓';
+  check.textContent = '\u2713';
   header.appendChild(check);
 
   card.appendChild(header);
@@ -701,7 +728,7 @@ function createVariationCard(variation) {
     dropZone.className = 'variation-drop-zone';
     dropZone.innerHTML = `
       <div class="drop-zone-content">
-        <span class="drop-zone-icon">🎬</span>
+        <span class="drop-zone-icon">MP4</span>
         <span class="drop-zone-label">Drop MP4 here</span>
       </div>
     `;
@@ -827,14 +854,27 @@ async function uploadShotFile(file, shotId, variation) {
  * Render shot details
  */
 function renderShotDetails() {
-  shotDetails.innerHTML = `
-    <h3>Shot Details</h3>
-    <p><strong>Shot ID:</strong> ${selectedShot.shotId}</p>
-    <p><strong>Duration:</strong> ${selectedShot.timing?.duration || 8}s</p>
-    <p><strong>Music Section:</strong> ${selectedShot.timing?.musicSection || 'N/A'}</p>
-    <p><strong>Status:</strong> ${selectedShot.status || 'not_rendered'}</p>
-    ${selectedShot.notes ? `<p><strong>Notes:</strong> ${selectedShot.notes}</p>` : ''}
-  `;
+  shotDetails.innerHTML = '';
+  const h3 = document.createElement('h3');
+  h3.textContent = 'Shot Details';
+  shotDetails.appendChild(h3);
+
+  const fields = [
+    ['Shot ID', selectedShot.shotId],
+    ['Duration', (selectedShot.timing?.duration || 8) + 's'],
+    ['Music Section', selectedShot.timing?.musicSection || 'N/A'],
+    ['Status', selectedShot.status || 'not_rendered']
+  ];
+  if (selectedShot.notes) fields.push(['Notes', selectedShot.notes]);
+
+  fields.forEach(([label, value]) => {
+    const p = document.createElement('p');
+    const strong = document.createElement('strong');
+    strong.textContent = label + ': ';
+    p.appendChild(strong);
+    p.appendChild(document.createTextNode(value));
+    shotDetails.appendChild(p);
+  });
 }
 
 /**
@@ -874,25 +914,48 @@ function exportPDF() {
 
 // Event Listeners
 
-// View tabs
-viewTabs.forEach(tab => {
-  tab.addEventListener('click', () => {
-    currentView = tab.dataset.view;
-    viewTabs.forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    renderView();
+/**
+ * Initialize view tabs
+ */
+function initializeViewTabs() {
+  const viewTabs = document.querySelectorAll('.view-tab');
+  if (!viewTabs || viewTabs.length === 0) return;
+
+  viewTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      currentView = tab.dataset.view;
+      viewTabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      renderView();
+    });
   });
-});
+}
 
-// Buttons
-exportBtn.addEventListener('click', exportPDF);
-refreshBtn.addEventListener('click', loadSequence);
+/**
+ * Initialize button event listeners
+ */
+function initializeButtons() {
+  const exportBtn = document.getElementById('exportBtn');
+  const refreshBtn = document.getElementById('refreshBtn');
+  const storyboardFocusBtn = document.getElementById('storyboardFocusBtn');
+  const modalClose = document.getElementById('modalClose');
+  const modalOverlay = document.getElementById('modalOverlay');
+  const modalCancel = document.getElementById('modal-cancel');
+  const modalSave = document.getElementById('modal-save');
 
-// Modal
-modalClose.addEventListener('click', closeModal);
-modalOverlay.addEventListener('click', closeModal);
-modalCancel.addEventListener('click', closeModal);
-modalSave.addEventListener('click', saveSelection);
+  if (exportBtn) exportBtn.addEventListener('click', exportPDF);
+  if (refreshBtn) refreshBtn.addEventListener('click', loadSequence);
+  if (storyboardFocusBtn) {
+    storyboardFocusBtn.addEventListener('click', () => {
+      document.body.classList.toggle('focus-mode');
+      storyboardFocusBtn.textContent = document.body.classList.contains('focus-mode') ? 'Exit Focus' : 'Focus Mode';
+    });
+  }
+  if (modalClose) modalClose.addEventListener('click', closeModal);
+  if (modalOverlay) modalOverlay.addEventListener('click', closeModal);
+  if (modalCancel) modalCancel.addEventListener('click', closeModal);
+  if (modalSave) modalSave.addEventListener('click', saveSelection);
+}
 
 // Project selector event listeners
 const projectSelector = document.getElementById('projectSelector');
@@ -917,13 +980,13 @@ if (newProjectBtn && newProjectModal) {
     document.getElementById('projectDescription').value = '';
   });
 
-  const closeModal = () => {
+  const closeNewProjectModal = () => {
     newProjectModal.style.display = 'none';
   };
 
-  newProjectModalClose?.addEventListener('click', closeModal);
-  newProjectModalOverlay?.addEventListener('click', closeModal);
-  cancelNewProjectBtn?.addEventListener('click', closeModal);
+  newProjectModalClose?.addEventListener('click', closeNewProjectModal);
+  newProjectModalOverlay?.addEventListener('click', closeNewProjectModal);
+  cancelNewProjectBtn?.addEventListener('click', closeNewProjectModal);
 
   createNewProjectBtn?.addEventListener('click', async () => {
     const name = document.getElementById('projectName').value.trim();
@@ -947,8 +1010,13 @@ if (newProjectBtn && newProjectModal) {
 
 // Initialize
 (async () => {
+  // Initialize DOM elements first
+  initializeDOMElements();
+
   const projectsLoaded = await loadProjects();
   if (projectsLoaded) {
+    initializeViewTabs();
+    initializeButtons();
     await loadSequence();
     initMusicUpload();
   } else {
@@ -956,3 +1024,5 @@ if (newProjectBtn && newProjectModal) {
     showToast('No projects found', 'Run npm run migrate to initialize multi-project support', 'info', 0);
   }
 })();
+
+
