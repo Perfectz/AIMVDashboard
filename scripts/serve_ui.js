@@ -53,14 +53,9 @@ const ALLOWED_IMAGE_TYPES = ['.png', '.jpg', '.jpeg'];
 const MAX_MUSIC_SIZE = 50 * 1024 * 1024;  // 50MB
 const MAX_VIDEO_SIZE = 500 * 1024 * 1024; // 500MB
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;  // 10MB
-const PREVIS_SOURCE_TYPES = new Set([
-  'rendered_thumbnail',
-  'rendered_video',
-  'rendered_first_frame',
-  'character_ref',
-  'location_ref',
-  'manual_upload'
-]);
+const REVIEW_STATUSES = new Set(['draft', 'in_review', 'approved', 'changes_requested']);
+const MAX_COMMENT_AUTHOR_LENGTH = 60;
+const MAX_COMMENT_TEXT_LENGTH = 1000;
 
 function isPathInside(basePath, targetPath) {
   const base = path.resolve(basePath);
@@ -345,222 +340,54 @@ function writeSequenceFile(data, projectId = 'default') {
   fs.writeFileSync(sequencePath, JSON.stringify(data, null, 2), 'utf8');
 }
 
-function readJsonIfExists(filePath, fallback = null) {
-  if (!fs.existsSync(filePath)) return fallback;
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  } catch (err) {
-    return fallback;
-  }
+function normalizeReviewStatus(value) {
+  return REVIEW_STATUSES.has(value) ? value : 'draft';
 }
 
-function readTextIfExists(filePath) {
-  if (!fs.existsSync(filePath)) return '';
-  return fs.readFileSync(filePath, 'utf8');
-}
+function normalizeComment(comment) {
+  if (!comment || typeof comment !== 'object') return null;
 
-function collectReferenceFiles(dirPath, projectRoot) {
-  if (!fs.existsSync(dirPath)) return [];
-  const files = fs.readdirSync(dirPath)
-    .filter(file => IMAGE_EXTENSIONS.has(path.extname(file).toLowerCase()))
-    .sort();
+  const author = typeof comment.author === 'string' ? comment.author.trim() : '';
+  const text = typeof comment.text === 'string' ? comment.text.trim() : '';
+  const timestamp = typeof comment.timestamp === 'string' && comment.timestamp.trim()
+    ? comment.timestamp
+    : new Date().toISOString();
 
-  return files.map(file => {
-    const absolutePath = path.join(dirPath, file);
-    return {
-      filename: file,
-      relativePath: path.relative(projectRoot, absolutePath),
-      resolvedPath: path.resolve(absolutePath)
-    };
-  });
-}
-
-function extractShotId(shot) {
-  return shot?.shotId || shot?.id || null;
-}
-
-function buildContextBundle(projectId, { includePromptTemplates = false } = {}) {
-  const projectRoot = projectManager.getProjectPath(projectId);
-  const projectMetadata = readJsonIfExists(path.join(projectRoot, 'project.json'), {});
-  const bibleProject = readJsonIfExists(path.join(projectRoot, 'bible', 'project.json'), {});
-  const shotList = readJsonIfExists(path.join(projectRoot, 'bible', 'shot_list.json'), {});
-  const sequence = readSequenceFile(projectId);
-  const analysis = readJsonIfExists(path.join(projectRoot, 'music', 'analysis.json'), {});
-
-  const sunoPrompt = readTextIfExists(path.join(projectRoot, 'music', 'suno_prompt.txt'));
-  const songInfo = readTextIfExists(path.join(projectRoot, 'music', 'song_info.txt'));
-  const youtubeScriptText = readTextIfExists(path.join(projectRoot, 'music', 'youtube_script.txt')) || songInfo;
-
-  const shots = Array.isArray(shotList?.shots) ? shotList.shots : [];
-  const shotById = new Map(shots.map(shot => [extractShotId(shot), shot]));
-  const sequenceOrder = Array.isArray(sequence?.selections) ? sequence.selections : [];
-
-  const orderedShotList = [];
-  const includedShotIds = new Set();
-
-  for (const selection of sequenceOrder) {
-    const shotId = selection?.shotId;
-    if (!shotId || includedShotIds.has(shotId)) continue;
-    const shotFromList = shotById.get(shotId);
-    if (!shotFromList) continue;
-
-    orderedShotList.push({
-      ...shotFromList,
-      storyboardSelection: {
-        selectedVariation: selection.selectedVariation || null,
-        timing: selection.timing || null,
-        status: selection.status || null
-      }
-    });
-    includedShotIds.add(shotId);
+  if (!author || !text) {
+    return null;
   }
 
-  for (const shot of shots) {
-    const shotId = extractShotId(shot);
-    if (!shotId || includedShotIds.has(shotId)) continue;
-    orderedShotList.push(shot);
-    includedShotIds.add(shotId);
+  if (author.length > MAX_COMMENT_AUTHOR_LENGTH || text.length > MAX_COMMENT_TEXT_LENGTH) {
+    return null;
   }
 
-  const usedCharacterIds = new Set();
-  const usedLocationIds = new Set();
+  return { author, text, timestamp };
+}
 
-  orderedShotList.forEach(shot => {
-    const characters = Array.isArray(shot.characters) ? shot.characters : [];
-    characters.forEach(character => {
-      if (character?.id) usedCharacterIds.add(character.id);
-    });
-
-    if (shot.location?.id) usedLocationIds.add(shot.location.id);
-  });
-
-  const selectedCharacterReferences = Array.from(usedCharacterIds).map(characterId => {
-    const charDir = path.join(projectRoot, 'reference', 'characters', characterId);
-    return {
-      id: characterId,
-      references: collectReferenceFiles(charDir, projectRoot),
-      guide: fs.existsSync(path.join(charDir, 'guide.json'))
-        ? {
-            relativePath: path.relative(projectRoot, path.join(charDir, 'guide.json')),
-            resolvedPath: path.resolve(path.join(charDir, 'guide.json'))
-          }
-        : null
-    };
-  });
-
-  const selectedLocationReferences = Array.from(usedLocationIds).map(locationId => {
-    const locDir = path.join(projectRoot, 'reference', 'locations', locationId);
-    return {
-      id: locationId,
-      references: collectReferenceFiles(locDir, projectRoot),
-      guide: fs.existsSync(path.join(locDir, 'guide.json'))
-        ? {
-            relativePath: path.relative(projectRoot, path.join(locDir, 'guide.json')),
-            resolvedPath: path.resolve(path.join(locDir, 'guide.json'))
-          }
-        : null
-    };
-  });
-
-  const missingCharacterReferences = selectedCharacterReferences
-    .filter(ref => ref.references.length < 3)
-    .map(ref => ({ id: ref.id, missingSlots: Math.max(3 - ref.references.length, 0) }));
-
-  const missingLocationReferences = selectedLocationReferences
-    .filter(ref => ref.references.length < 3)
-    .map(ref => ({ id: ref.id, missingSlots: Math.max(3 - ref.references.length, 0) }));
-
-  const renderGaps = sequenceOrder
-    .filter(selection => !selection?.selectedVariation)
-    .map(selection => ({ shotId: selection.shotId, reason: 'No selected variation in storyboard sequence' }));
-
-  const transcript = analysis?.transcript || analysis?.lyrics || analysis?.fullTranscript || '';
-
-  const styleCanon = readJsonIfExists(path.join(projectRoot, 'bible', 'visual_style.json'), {});
-  const cinematographyCanon = readJsonIfExists(path.join(projectRoot, 'bible', 'cinematography.json'), {});
-
-  const promptTemplates = includePromptTemplates
-    ? {
-        kling: readTextIfExists(path.join(projectRoot, 'prompts', 'kling', '_template.md')),
-        nanobanana: readTextIfExists(path.join(projectRoot, 'prompts', 'nanobanana', '_template.md')),
-        suno: readTextIfExists(path.join(projectRoot, 'prompts', 'suno', '_template.md'))
-      }
-    : null;
-
-  const bundle = {
-    generatedAt: new Date().toISOString(),
-    projectId,
-    projectMetadata: {
-      registry: projectMetadata,
-      bible: bibleProject
-    },
-    youtubeScript: youtubeScriptText,
-    shotList: {
-      totalShots: orderedShotList.length,
-      orderedShots: orderedShotList
-    },
-    transcript,
-    selectedReferences: {
-      characters: selectedCharacterReferences,
-      locations: selectedLocationReferences
-    },
-    assetManifestGaps: {
-      charactersMissingReferenceImages: missingCharacterReferences,
-      locationsMissingReferenceImages: missingLocationReferences,
-      storyboardSelectionGaps: renderGaps
-    },
-    styleCinematographyCanon: {
-      style: styleCanon,
-      cinematography: cinematographyCanon
-    },
-    promptTemplates
-  };
-
-  const markdown = [
-    `# Context Bundle: ${projectMetadata.name || projectId}`,
-    '',
-    `Generated: ${bundle.generatedAt}`,
-    '',
-    '## Project Metadata',
-    '```json',
-    JSON.stringify(bundle.projectMetadata, null, 2),
-    '```',
-    '',
-    '## YouTube Script',
-    bundle.youtubeScript || '_Not available_',
-    '',
-    '## Shot List (Storyboard Order)',
-    '```json',
-    JSON.stringify(bundle.shotList, null, 2),
-    '```',
-    '',
-    '## Transcript',
-    bundle.transcript || '_Not available_',
-    '',
-    '## Selected References (Resolved Paths)',
-    '```json',
-    JSON.stringify(bundle.selectedReferences, null, 2),
-    '```',
-    '',
-    '## Asset Manifest Gaps',
-    '```json',
-    JSON.stringify(bundle.assetManifestGaps, null, 2),
-    '```',
-    '',
-    '## Style + Cinematography Canon',
-    '```json',
-    JSON.stringify(bundle.styleCinematographyCanon, null, 2),
-    '```'
-  ];
-
-  if (promptTemplates) {
-    markdown.push('', '## Prompt Templates', '```json', JSON.stringify(promptTemplates, null, 2), '```');
-  }
-
+function sanitizeReviewMetadata(payload = {}) {
   return {
-    ...bundle,
-    markdown: markdown.join('\n')
+    reviewStatus: normalizeReviewStatus(payload.reviewStatus),
+    comments: Array.isArray(payload.comments)
+      ? payload.comments.map(normalizeComment).filter(Boolean)
+      : []
   };
+}
+
+function getReviewMetadataMap(sequence) {
+  const metadata = {};
+  if (!sequence || !Array.isArray(sequence.selections)) {
+    return metadata;
+  }
+
+  sequence.selections.forEach((shot) => {
+    if (!shot || !shot.shotId) return;
+    const normalized = sanitizeReviewMetadata(shot);
+    shot.reviewStatus = normalized.reviewStatus;
+    shot.comments = normalized.comments;
+    metadata[shot.shotId] = normalized;
+  });
+
+  return metadata;
 }
 
 /**
@@ -884,10 +711,9 @@ const server = http.createServer((req, res) => {
           shotId,
           selectedVariation: 'none',
           status: 'rendered',
-          renderFiles: { kling: {}, nano: {} },
           reviewStatus: 'draft',
-          assignee: '',
-          comments: []
+          comments: [],
+          renderFiles: { kling: {}, nano: {} }
         };
         sequence.selections.push(shot);
       }
@@ -912,6 +738,67 @@ const server = http.createServer((req, res) => {
         filePath: relativePath,
         message: 'Shot uploaded successfully'
       });
+    });
+    return;
+  }
+
+  // GET /api/load/review-metadata
+  if (req.method === 'GET' && req.url.startsWith('/api/load/review-metadata')) {
+    try {
+      const { projectId } = getProjectContext(req, { required: true });
+      const sequence = readSequenceFile(projectId);
+      const reviewMetadata = getReviewMetadataMap(sequence);
+      writeSequenceFile(sequence, projectId);
+      sendJSON(res, 200, { success: true, reviewMetadata });
+    } catch (err) {
+      sendJSON(res, 400, { success: false, error: err.message });
+    }
+    return;
+  }
+
+  // POST /api/save/review-metadata
+  if (req.method === 'POST' && req.url.startsWith('/api/save/review-metadata')) {
+    readBody(req, MAX_BODY_SIZE, (err, body) => {
+      if (err) {
+        sendJSON(res, 413, { success: false, error: 'Payload too large' });
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(body || '{}');
+        const { projectId } = getProjectContext(req, { required: true });
+        const shotId = sanitizePathSegment(parsed.shotId, SHOT_ID_REGEX, 'shotId');
+
+        const sequence = readSequenceFile(projectId);
+        if (!Array.isArray(sequence.selections)) {
+          sequence.selections = [];
+        }
+
+        const shot = sequence.selections.find(s => s.shotId === shotId);
+        if (!shot) {
+          sendJSON(res, 404, { success: false, error: `Shot '${shotId}' not found` });
+          return;
+        }
+
+        const current = sanitizeReviewMetadata(shot);
+        const updates = {
+          reviewStatus: parsed.reviewStatus !== undefined ? parsed.reviewStatus : current.reviewStatus,
+          comments: parsed.comments !== undefined ? parsed.comments : current.comments
+        };
+        const normalized = sanitizeReviewMetadata(updates);
+
+        shot.reviewStatus = normalized.reviewStatus;
+        shot.comments = normalized.comments;
+        writeSequenceFile(sequence, projectId);
+
+        sendJSON(res, 200, {
+          success: true,
+          shotId,
+          reviewMetadata: normalized
+        });
+      } catch (parseErr) {
+        sendJSON(res, 400, { success: false, error: parseErr.message || 'Invalid JSON' });
+      }
     });
     return;
   }

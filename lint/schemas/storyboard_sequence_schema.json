@@ -127,33 +127,27 @@
           },
           "reviewStatus": {
             "type": "string",
-            "enum": [
-              "draft",
-              "ready_for_review",
-              "changes_requested",
-              "approved"
-            ],
-            "description": "Editorial review status for this shot"
-          },
-          "assignee": {
-            "type": "string",
-            "description": "Person responsible for resolving feedback"
+            "enum": ["draft", "in_review", "approved", "changes_requested"],
+            "description": "Review workflow status"
           },
           "comments": {
             "type": "array",
-            "description": "Review comments on this shot",
+            "description": "Review comments attached to this shot",
             "items": {
               "type": "object",
-              "required": [
-                "text",
-                "timestamp"
-              ],
+              "required": ["timestamp", "author", "text"],
               "properties": {
-                "text": {
-                  "type": "string"
-                },
                 "timestamp": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "ISO timestamp when the comment was added"
+                },
+                "author": {
+                  "type": "string",
+                  "description": "Author label for the comment"
+                },
+                "text": {
+                  "type": "string",
+                  "description": "Comment content"
                 }
               }
             }
