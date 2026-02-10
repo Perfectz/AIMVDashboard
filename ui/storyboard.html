@@ -60,7 +60,7 @@
           <button class="nav-item" onclick="window.location.href='step2.html'"><span class="nav-icon">02</span><span class="nav-label">Step 2: Music</span></button>
           <button class="nav-item" onclick="window.location.href='step3.html'"><span class="nav-icon">03</span><span class="nav-label">Step 3: Canon</span></button>
           <button class="nav-item" onclick="window.location.href='step4.html'"><span class="nav-icon">04</span><span class="nav-label">Step 4: References</span></button>
-          <button class="nav-item" onclick="window.location.href='index.html'"><span class="nav-icon">05</span><span class="nav-label">Step 5: Prompts</span><span class="nav-count" id="nav-count-all">0</span></button>
+          <button class="nav-item" onclick="window.location.href='index.html'"><span class="nav-icon">05</span><span class="nav-label">Step 5: Shots</span><span class="nav-count" id="nav-count-all">0</span></button>
           <button class="nav-item active" onclick="window.location.href='storyboard.html'"><span class="nav-icon">06</span><span class="nav-label">Step 6: Storyboard</span></button>
         </div>
         <div class="nav-divider"></div>
@@ -101,7 +101,8 @@
 
         <div class="timeline-view" id="timelineView" style="display: none;">
           <div class="timeline-container">
-            <div class="timeline-header"><div class="timeline-title">Music Timeline</div><div class="timeline-duration" id="timelineDuration">0:00</div></div>
+            <div class="timeline-header"><div class="timeline-title">Music Timeline</div><div class="timeline-duration" id="timelineDuration">Ordered Shot Preview</div></div>
+            <audio id="storyboardAudio" controls style="width: 100%; margin: 8px 0 14px; display: none;"></audio>
             <div class="timeline-track" id="timelineTrack"></div>
           </div>
         </div>

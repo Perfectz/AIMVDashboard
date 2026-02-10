@@ -6,6 +6,10 @@ let currentView = 'grid';
 let selectedShot = null;
 let selectedVariation = null;
 let currentProject = null;
+let shotListData = null;
+let characterRefs = [];
+let locationRefs = [];
+let orderedStoryboardShots = [];
 
 // Toast notification system
 const toastContainer = document.getElementById('toastContainer');
@@ -115,6 +119,163 @@ function initializeDOMElements() {
   statDuration = document.getElementById('stat-duration');
 }
 
+
+function normalizeKey(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+}
+
+function makeProjectAssetPath(relativePath) {
+  if (!relativePath) return '';
+  if (relativePath.startsWith('/')) return relativePath;
+  return `/${relativePath}`;
+}
+
+function buildReferenceImagePath(kind, name, filename) {
+  if (!currentProject || !name || !filename) return '';
+  return `/projects/${currentProject.id}/reference/${kind}/${encodeURIComponent(name)}/${filename}`;
+}
+
+function findReferenceImageForShot(shot) {
+  if (!shot || !shot.shotIntent) return null;
+
+  const charCandidates = (shot.shotIntent.characters || []).map(c => c.id).filter(Boolean);
+  for (const charId of charCandidates) {
+    const key = normalizeKey(charId);
+    const ref = characterRefs.find(c => normalizeKey(c.name) === key || normalizeKey(c.name).includes(key) || key.includes(normalizeKey(c.name)));
+    const img = ref?.images?.slice().sort((a,b)=>a.slot-b.slot)[0];
+    if (ref && img) {
+      return {
+        type: 'image',
+        path: buildReferenceImagePath('characters', ref.name, img.filename),
+        source: `Character ref (${ref.name})`
+      };
+    }
+  }
+
+  const locId = shot.shotIntent.location?.id;
+  if (locId) {
+    const key = normalizeKey(locId);
+    const ref = locationRefs.find(l => normalizeKey(l.name) === key || normalizeKey(l.name).includes(key) || key.includes(normalizeKey(l.name)));
+    const img = ref?.images?.slice().sort((a,b)=>a.slot-b.slot)[0];
+    if (ref && img) {
+      return {
+        type: 'image',
+        path: buildReferenceImagePath('locations', ref.name, img.filename),
+        source: `Location ref (${ref.name})`
+      };
+    }
+  }
+
+  return null;
+}
+
+function resolveShotPreviewAsset(shot) {
+  if (!shot) return null;
+
+  const thumbnailPath = shot.renderFiles?.thumbnail;
+  if (thumbnailPath) {
+    return { type: 'image', path: makeProjectAssetPath(thumbnailPath), source: 'Rendered thumbnail' };
+  }
+
+  const selectedVar = shot.selectedVariation && shot.selectedVariation !== 'none' ? shot.selectedVariation : 'A';
+  const selectedVideo = shot.renderFiles?.kling?.[selectedVar];
+  if (selectedVideo) {
+    return { type: 'video', path: makeProjectAssetPath(selectedVideo), source: `Rendered shot ${selectedVar}` };
+  }
+
+  const firstNano = shot.renderFiles?.nanobanana?.firstFrame;
+  if (firstNano) {
+    return { type: 'image', path: makeProjectAssetPath(firstNano), source: 'Rendered first frame' };
+  }
+
+  return findReferenceImageForShot(shot);
+}
+
+async function loadShotList() {
+  if (!currentProject) return;
+  try {
+    const response = await fetch(`/api/load/canon/script?project=${currentProject.id}`);
+    if (!response.ok) {
+      shotListData = null;
+      return;
+    }
+    const data = await response.json();
+    shotListData = data?.content ? JSON.parse(data.content) : null;
+  } catch (err) {
+    console.error('Failed to load shot list:', err);
+    shotListData = null;
+  }
+}
+
+async function loadReferenceData() {
+  if (!currentProject) return;
+  try {
+    const [charsRes, locRes] = await Promise.all([
+      fetch(`/api/references/characters?project=${currentProject.id}`),
+      fetch(`/api/references/locations?project=${currentProject.id}`)
+    ]);
+
+    if (charsRes.ok) {
+      const charsData = await charsRes.json();
+      characterRefs = charsData.characters || [];
+    } else {
+      characterRefs = [];
+    }
+
+    if (locRes.ok) {
+      const locData = await locRes.json();
+      locationRefs = locData.locations || [];
+    } else {
+      locationRefs = [];
+    }
+  } catch (err) {
+    console.error('Failed to load reference data:', err);
+    characterRefs = [];
+    locationRefs = [];
+  }
+}
+
+function buildOrderedStoryboardShots() {
+  const byId = new Map((sequenceData?.selections || []).map(s => [s.shotId, s]));
+  const shotIntents = shotListData?.shots || [];
+
+  if (!shotIntents.length) {
+    orderedStoryboardShots = sequenceData?.selections || [];
+    return;
+  }
+
+  orderedStoryboardShots = shotIntents
+    .slice()
+    .sort((a, b) => (a.shotNumber || 0) - (b.shotNumber || 0))
+    .map(intent => {
+      const existing = byId.get(intent.id) || {};
+      return {
+        shotId: intent.id,
+        shotNumber: intent.shotNumber,
+        timing: intent.timing || existing.timing,
+        status: existing.status || 'reference_preview',
+        selectedVariation: existing.selectedVariation || 'none',
+        renderFiles: existing.renderFiles || {},
+        notes: existing.notes || intent.notes || '',
+        shotIntent: intent
+      };
+    });
+}
+
+function updateMusicPreview() {
+  const audio = document.getElementById('storyboardAudio');
+  if (!audio || !currentProject) return;
+
+  if (sequenceData?.musicFile) {
+    const path = sequenceData.musicFile.replace(/^\/+/, '');
+    audio.src = `/projects/${currentProject.id}/${path}`;
+    audio.style.display = 'block';
+  } else {
+    audio.removeAttribute('src');
+    audio.style.display = 'none';
+  }
+}
+
 /**
  * Show loading state
  * @param {HTMLElement} container - Container to show loading in
@@ -196,6 +357,7 @@ function initMusicUpload() {
   if (sequenceData?.musicFile) {
     currentMusicFile = sequenceData.musicFile;
     updateMusicDisplay(sequenceData.musicFile);
+    updateMusicPreview();
   }
 }
 
@@ -376,20 +538,35 @@ async function loadSequence() {
   try {
     const projectParam = currentProject ? `?project=${currentProject.id}` : '';
     const response = await fetch(`/rendered/storyboard/sequence.json${projectParam}`);
-    if (!response.ok) {
-      throw new Error('Sequence file not found');
+
+    if (response.ok) {
+      sequenceData = await response.json();
+    } else {
+      sequenceData = {
+        version: '2026-02-10',
+        selections: [],
+        totalDuration: 0,
+        musicFile: ''
+      };
     }
-    sequenceData = await response.json();
+
+    await loadShotList();
+    await loadReferenceData();
+    buildOrderedStoryboardShots();
+    updateMusicDisplay(sequenceData.musicFile);
+    updateMusicPreview();
     updateStats();
     renderView();
 
-    if (sequenceData.selections && sequenceData.selections.length > 0) {
-      showToast('Storyboard loaded', `${sequenceData.selections.length} shots`, 'success', 2000);
+    if (orderedStoryboardShots.length > 0) {
+      showToast('Storyboard loaded', `${orderedStoryboardShots.length} shots in order`, 'success', 2000);
+    } else {
+      showToast('No shots found', 'Add or save shot_list.json in Step 3', 'info', 4000);
     }
   } catch (err) {
-    console.error('Failed to load sequence:', err);
+    console.error('Failed to load storyboard context:', err);
     showEmptyState();
-    showToast('No storyboard data', 'Add rendered assets to get started', 'info', 0);
+    showToast('Load failed', 'Could not load shot list/reference context', 'error', 4000);
   } finally {
     hideLoading(loadingOverlay);
   }
@@ -399,7 +576,7 @@ async function loadSequence() {
  * Update header stats
  */
 function updateStats() {
-  if (!sequenceData || !sequenceData.selections) {
+  if (!orderedStoryboardShots || orderedStoryboardShots.length === 0) {
     statTotalShots.textContent = 0;
     statRendered.textContent = 0;
     statSelected.textContent = 0;
@@ -407,11 +584,11 @@ function updateStats() {
     return;
   }
 
-  const totalShots = sequenceData.selections.length;
-  const rendered = sequenceData.selections.filter(s =>
-    s.status && s.status !== 'not_rendered'
-  ).length;
-  const selected = sequenceData.selections.filter(s =>
+  const totalShots = orderedStoryboardShots.length;
+  const rendered = orderedStoryboardShots.filter(s => (
+    s.renderFiles?.thumbnail || s.renderFiles?.kling || s.renderFiles?.nanobanana
+  )).length;
+  const selected = orderedStoryboardShots.filter(s =>
     s.selectedVariation && s.selectedVariation !== 'none'
   ).length;
   const duration = sequenceData.totalDuration || 0;
@@ -442,7 +619,7 @@ function hideEmptyState() {
  * Render current view
  */
 function renderView() {
-  if (!sequenceData || !sequenceData.selections || sequenceData.selections.length === 0) {
+  if (!orderedStoryboardShots || orderedStoryboardShots.length === 0) {
     showEmptyState();
     return;
   }
@@ -466,7 +643,7 @@ function renderView() {
 function renderGridView() {
   shotGrid.innerHTML = '';
 
-  sequenceData.selections.forEach(shot => {
+  orderedStoryboardShots.forEach(shot => {
     const card = createShotCard(shot);
     shotGrid.appendChild(card);
   });
@@ -484,26 +661,23 @@ function createShotCard(shot) {
   const thumbnail = document.createElement('div');
   thumbnail.className = 'shot-thumbnail';
 
-  // Try to find thumbnail or video
-  const thumbnailPath = shot.renderFiles?.thumbnail;
-  const selectedVar = shot.selectedVariation || 'A';
-  const videoPath = shot.renderFiles?.kling?.[selectedVar];
+  const previewAsset = resolveShotPreviewAsset(shot);
 
-  if (thumbnailPath) {
+  if (previewAsset?.type === 'image') {
     const img = document.createElement('img');
-    img.src = `/${thumbnailPath}`;
+    img.src = previewAsset.path;
     img.alt = shot.shotId;
     thumbnail.appendChild(img);
-  } else if (videoPath) {
+  } else if (previewAsset?.type === 'video') {
     const video = document.createElement('video');
-    video.src = `/${videoPath}`;
+    video.src = previewAsset.path;
     video.muted = true;
     video.preload = 'metadata';
     thumbnail.appendChild(video);
   } else {
     const placeholder = document.createElement('div');
     placeholder.className = 'placeholder';
-    placeholder.textContent = 'VIDEO';
+    placeholder.textContent = 'SHOT';
     thumbnail.appendChild(placeholder);
   }
 
@@ -537,6 +711,14 @@ function createShotCard(shot) {
   const meta = document.createElement('div');
   meta.className = 'shot-meta';
 
+  const previewMetaAsset = resolveShotPreviewAsset(shot);
+  if (previewMetaAsset?.source) {
+    const source = document.createElement('div');
+    source.className = 'shot-meta-item';
+    source.textContent = `Preview: ${previewMetaAsset.source}`;
+    meta.appendChild(source);
+  }
+
   if (shot.timing) {
     const duration = document.createElement('div');
     duration.className = 'shot-meta-item';
@@ -562,22 +744,8 @@ function createShotCard(shot) {
  */
 function renderTimelineView() {
   timelineTrack.innerHTML = '';
-
-  // Group shots by music section
-  const sections = {};
-  sequenceData.selections.forEach(shot => {
-    const sectionName = shot.timing?.musicSection || 'Unknown';
-    if (!sections[sectionName]) {
-      sections[sectionName] = [];
-    }
-    sections[sectionName].push(shot);
-  });
-
-  // Render each section
-  Object.keys(sections).forEach(sectionName => {
-    const sectionEl = createTimelineSection(sectionName, sections[sectionName]);
-    timelineTrack.appendChild(sectionEl);
-  });
+  const sectionEl = createTimelineSection('Shot Order', orderedStoryboardShots);
+  timelineTrack.appendChild(sectionEl);
 }
 
 /**
@@ -595,14 +763,10 @@ function createTimelineSection(sectionName, shots) {
   name.textContent = sectionName;
   header.appendChild(name);
 
-  if (shots.length > 0 && shots[0].timing) {
-    const time = document.createElement('div');
-    time.className = 'section-time';
-    const firstShot = shots[0];
-    const lastShot = shots[shots.length - 1];
-    time.textContent = `${firstShot.timing.start}s - ${lastShot.timing.end}s`;
-    header.appendChild(time);
-  }
+  const count = document.createElement('div');
+  count.className = 'section-time';
+  count.textContent = `${shots.length} shots`;
+  header.appendChild(count);
 
   section.appendChild(header);
 
@@ -627,12 +791,18 @@ function createTimelineShot(shot) {
   shotEl.className = 'timeline-shot';
   shotEl.addEventListener('click', () => openShotModal(shot));
 
-  const thumbnailPath = shot.renderFiles?.thumbnail;
-  if (thumbnailPath) {
+  const previewAsset = resolveShotPreviewAsset(shot);
+  if (previewAsset?.type === 'image') {
     const img = document.createElement('img');
-    img.src = `/${thumbnailPath}`;
+    img.src = previewAsset.path;
     img.alt = shot.shotId;
     shotEl.appendChild(img);
+  } else if (previewAsset?.type === 'video') {
+    const video = document.createElement('video');
+    video.src = previewAsset.path;
+    video.muted = true;
+    video.preload = 'metadata';
+    shotEl.appendChild(video);
   }
 
   const label = document.createElement('div');
@@ -890,6 +1060,20 @@ async function saveSelection() {
   const shotIndex = sequenceData.selections.findIndex(s => s.shotId === selectedShot.shotId);
   if (shotIndex !== -1) {
     sequenceData.selections[shotIndex].selectedVariation = selectedVariation;
+  } else {
+    sequenceData.selections.push({
+      shotId: selectedShot.shotId,
+      shotNumber: selectedShot.shotNumber || null,
+      selectedVariation,
+      timing: selectedShot.timing || null,
+      renderFiles: selectedShot.renderFiles || {},
+      status: selectedShot.status || 'reference_preview'
+    });
+  }
+
+  const orderedIndex = orderedStoryboardShots.findIndex(s => s.shotId === selectedShot.shotId);
+  if (orderedIndex !== -1) {
+    orderedStoryboardShots[orderedIndex].selectedVariation = selectedVariation;
   }
 
   // In a real implementation, this would save to the server

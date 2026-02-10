@@ -77,7 +77,7 @@
           </button>
           <button class="nav-item" onclick="window.location.href='index.html'">
             <span class="nav-icon">05</span>
-            <span class="nav-label">Step 5: Prompts</span>
+            <span class="nav-label">Step 5: Shots</span>
             <span class="nav-count" id="nav-count-all">0</span>
           </button>
           <button class="nav-item" onclick="window.location.href='storyboard.html'">
@@ -108,13 +108,16 @@
         </nav>
 
         <div class="section-header">
-          <h2>Step 3: Define Canon (Bible)</h2>
-          <p class="section-subtitle">Create your visual identity: characters, locations, style, and cinematography rules</p>
+          <h2>Step 3: Content Blueprint</h2>
+          <p class="section-subtitle">Separate production script, YouTube content flow, transcript, assets, and visual canon</p>
         </div>
 
         <!-- Canon Editor Tabs -->
         <div class="canon-tabs">
           <button class="canon-tab active" data-tab="script">Shot List</button>
+          <button class="canon-tab" data-tab="youtubeScript">YouTube Script</button>
+          <button class="canon-tab" data-tab="transcript">Transcript</button>
+          <button class="canon-tab" data-tab="assets">Asset Plan</button>
           <button class="canon-tab" data-tab="characters">Characters</button>
           <button class="canon-tab" data-tab="locations">Locations</button>
           <button class="canon-tab" data-tab="style">Visual Style</button>
@@ -127,8 +130,8 @@
             <div class="collapsible-header">
               <div class="collapsible-title">
                 <span class="collapsible-icon">SL</span>
-                <span class="collapsible-label">Shot List</span>
-                <span class="collapsible-hint">34-shot script mapped to music timecodes with character, location, and camera intent</span>
+                <span class="collapsible-label">Production Script (Shot Plan)</span>
+                <span class="collapsible-hint">Plan scenes, beats, visuals, and camera intent (this is NOT the spoken transcript)</span>
               </div>
               <button class="collapse-toggle" type="button">
                 <span class="collapse-icon">-</span>
@@ -146,6 +149,96 @@
                   style="font-family: 'Monaco', 'Courier New', monospace; font-size: 12px;"
                 ></textarea>
                 <div class="text-input-status" id="scriptStatus"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- YouTube Script Tab -->
+        <div class="canon-tab-content" id="tab-youtubeScript">
+          <div class="collapsible-card" data-collapse-key="youtubeScriptCanon">
+            <div class="collapsible-header">
+              <div class="collapsible-title">
+                <span class="collapsible-icon">YT</span>
+                <span class="collapsible-label">YouTube Content Script</span>
+                <span class="collapsible-hint">Hook, segment goals, retention beats, CTA, title and thumbnail options</span>
+              </div>
+              <button class="collapse-toggle" type="button">
+                <span class="collapse-icon">-</span>
+              </button>
+            </div>
+            <div class="collapsible-body">
+              <div class="text-input-card-inner">
+                <div class="text-input-actions">
+                  <button class="btn btn-secondary btn-sm" id="saveYoutubeScriptBtn">Save YouTube Script</button>
+                </div>
+                <textarea
+                  id="youtubeScriptJson"
+                  placeholder='{"version":"2026-02-10","videoGoal":"...","targetAudience":"...","hook":"...","segments":[{"id":"SEG_01","goal":"...","keyPoints":["..."],"cta":null}],"cta":"Subscribe for part 2","titleOptions":["..."],"thumbnailConcepts":["..."]}'
+                  rows="16"
+                  style="font-family: 'Monaco', 'Courier New', monospace; font-size: 12px;"
+                ></textarea>
+                <div class="text-input-status" id="youtubeScriptStatus"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Transcript Tab -->
+        <div class="canon-tab-content" id="tab-transcript">
+          <div class="collapsible-card" data-collapse-key="transcriptCanon">
+            <div class="collapsible-header">
+              <div class="collapsible-title">
+                <span class="collapsible-icon">TR</span>
+                <span class="collapsible-label">Conversational Transcript</span>
+                <span class="collapsible-hint">What is actually said on-camera or voiceover (separate from shot plan)</span>
+              </div>
+              <button class="collapse-toggle" type="button">
+                <span class="collapse-icon">-</span>
+              </button>
+            </div>
+            <div class="collapsible-body">
+              <div class="text-input-card-inner">
+                <div class="text-input-actions">
+                  <button class="btn btn-secondary btn-sm" id="saveTranscriptBtn">Save Transcript</button>
+                </div>
+                <textarea
+                  id="transcriptJson"
+                  placeholder='{"version":"2026-02-10","segments":[{"start":0,"end":12,"speaker":"Host","line":"Welcome back to the channel..."}]}'
+                  rows="14"
+                  style="font-family: 'Monaco', 'Courier New', monospace; font-size: 12px;"
+                ></textarea>
+                <div class="text-input-status" id="transcriptStatus"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Assets Tab -->
+        <div class="canon-tab-content" id="tab-assets">
+          <div class="collapsible-card" data-collapse-key="assetCanon">
+            <div class="collapsible-header">
+              <div class="collapsible-title">
+                <span class="collapsible-icon">AM</span>
+                <span class="collapsible-label">Asset Manifest</span>
+                <span class="collapsible-hint">Track required and delivered assets for each segment</span>
+              </div>
+              <button class="collapse-toggle" type="button">
+                <span class="collapse-icon">-</span>
+              </button>
+            </div>
+            <div class="collapsible-body">
+              <div class="text-input-card-inner">
+                <div class="text-input-actions">
+                  <button class="btn btn-secondary btn-sm" id="saveAssetsBtn">Save Asset Plan</button>
+                </div>
+                <textarea
+                  id="assetsJson"
+                  placeholder='{"version":"2026-02-10","assets":[{"id":"ASSET_001","type":"broll","status":"needed","usedIn":["SHOT_03"]}]}'
+                  rows="14"
+                  style="font-family: 'Monaco', 'Courier New', monospace; font-size: 12px;"
+                ></textarea>
+                <div class="text-input-status" id="assetsStatus"></div>
               </div>
             </div>
           </div>
