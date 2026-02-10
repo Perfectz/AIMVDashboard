@@ -296,6 +296,38 @@
   letter-spacing: -0.01em;
 }
 
+
+.timeline-ruler {
+  position: relative;
+  height: 28px;
+  margin-bottom: 1.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: linear-gradient(90deg, var(--bg-elevated), var(--bg-card));
+  cursor: pointer;
+}
+
+.timeline-ruler:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.timeline-ruler-track {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.timeline-current-indicator {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--accent-primary);
+  box-shadow: 0 0 0 1px var(--accent-glow);
+  pointer-events: none;
+  transform: translateX(-1px);
+}
 .timeline-track {
   display: flex;
   flex-direction: column;
@@ -356,6 +388,11 @@
   transition: all var(--transition-base);
 }
 
+
+.timeline-shot.active {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-glow), var(--shadow-md);
+}
 .timeline-shot:hover {
   border-color: var(--accent-primary);
   transform: scale(1.05);

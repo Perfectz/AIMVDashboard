@@ -94,7 +94,7 @@ function dismissToast(toastId) {
 
 // DOM Elements (will be accessed via document.getElementById when needed)
 // These are kept as variables for functions that use them repeatedly
-let emptyState, gridView, timelineView, shotGrid, timelineTrack;
+let emptyState, gridView, timelineView, shotGrid, timelineTrack, timelineRuler, timelineCurrentIndicator, storyboardAudio;
 let shotModal, modalTitle, variationGrid, shotDetails;
 let statTotalShots, statRendered, statSelected, statDuration;
 
@@ -107,6 +107,9 @@ function initializeDOMElements() {
   timelineView = document.getElementById('timelineView');
   shotGrid = document.getElementById('shotGrid');
   timelineTrack = document.getElementById('timelineTrack');
+  timelineRuler = document.getElementById('timelineRuler');
+  timelineCurrentIndicator = document.getElementById('timelineCurrentIndicator');
+  storyboardAudio = document.getElementById('storyboardAudio');
   shotModal = document.getElementById('shotModal');
   modalTitle = document.getElementById('modalTitle');
   variationGrid = document.getElementById('variationGrid');
@@ -849,48 +852,211 @@ function createShotCard(shot) {
   return card;
 }
 
+
+function formatTimeLabel(totalSeconds) {
+  const safe = Number.isFinite(totalSeconds) ? Math.max(0, totalSeconds) : 0;
+  const mins = Math.floor(safe / 60);
+  const secs = Math.floor(safe % 60).toString().padStart(2, '0');
+  return `${mins}:${secs}`;
+}
+
+function getProjectQueryParam() {
+  return currentProject ? `?project=${encodeURIComponent(currentProject.id)}` : '';
+}
+
+async function loadShotListTiming() {
+  try {
+    const response = await fetch(`/api/load/canon/script${getProjectQueryParam()}`);
+    if (!response.ok) return null;
+    const payload = await response.json();
+    if (!payload || !payload.content) return null;
+
+    const parsed = JSON.parse(payload.content);
+    const shots = Array.isArray(parsed?.shots) ? parsed.shots : [];
+    const timingByShotId = {};
+
+    shots.forEach(shot => {
+      const shotId = shot?.id;
+      const timing = shot?.timing || {};
+      if (!shotId) return;
+      const start = Number(timing.start);
+      const duration = Number(timing.duration);
+      const end = Number(timing.end);
+      if (!Number.isFinite(start)) return;
+      const safeDuration = Number.isFinite(duration) && duration > 0
+        ? duration
+        : (Number.isFinite(end) && end > start ? end - start : 0);
+      timingByShotId[shotId] = {
+        start,
+        duration: safeDuration,
+        end: Number.isFinite(end) && end >= start ? end : start + safeDuration,
+        musicSection: timing.musicSection || null
+      };
+    });
+
+    return Object.keys(timingByShotId).length > 0 ? timingByShotId : null;
+  } catch (err) {
+    console.warn('Could not load shot_list timing:', err);
+    return null;
+  }
+}
+
+function deriveShotRanges(timingByShotId) {
+  const selections = Array.isArray(sequenceData?.selections) ? sequenceData.selections : [];
+  const totalDuration = Number(sequenceData?.totalDuration) || 0;
+
+  if (selections.length === 0) return [];
+
+  const hasCompleteTiming = Boolean(timingByShotId) && selections.every(shot => timingByShotId[shot.shotId]);
+  if (hasCompleteTiming) {
+    return selections
+      .map((shot, index) => {
+        const timing = timingByShotId[shot.shotId];
+        return {
+          shot,
+          index,
+          start: timing.start,
+          end: timing.end,
+          duration: Math.max(0.001, timing.duration || (timing.end - timing.start) || 0.001),
+          musicSection: timing.musicSection || shot.timing?.musicSection || 'Unknown'
+        };
+      })
+      .sort((a, b) => a.start - b.start || a.index - b.index);
+  }
+
+  const fallbackTotal = totalDuration > 0 ? totalDuration : selections.length * 8;
+  const slice = fallbackTotal / selections.length;
+  return selections.map((shot, index) => {
+    const start = index * slice;
+    const end = (index + 1) * slice;
+    return {
+      shot,
+      index,
+      start,
+      end,
+      duration: Math.max(0.001, end - start),
+      musicSection: shot.timing?.musicSection || 'Unknown'
+    };
+  });
+}
+
+function syncAudioSource() {
+  if (!storyboardAudio) return;
+  if (!sequenceData?.musicFile) {
+    storyboardAudio.removeAttribute('src');
+    storyboardAudio.load();
+    return;
+  }
+  const normalized = sequenceData.musicFile.startsWith('/') ? sequenceData.musicFile : `/${sequenceData.musicFile}`;
+  if (storyboardAudio.getAttribute('src') !== normalized) {
+    storyboardAudio.src = normalized;
+    storyboardAudio.load();
+  }
+}
+
+function updateCurrentTimeIndicator(currentTime, totalDuration) {
+  if (!timelineCurrentIndicator) return;
+  const safeTotal = totalDuration > 0 ? totalDuration : 1;
+  const ratio = Math.min(1, Math.max(0, currentTime / safeTotal));
+  timelineCurrentIndicator.style.left = `${ratio * 100}%`;
+}
+
+function highlightActiveShot(currentTime, shotRanges) {
+  const active = shotRanges.find(r => currentTime >= r.start && currentTime < r.end) || shotRanges[shotRanges.length - 1] || null;
+  document.querySelectorAll('.timeline-shot').forEach(el => {
+    if (active && el.dataset.shotId === active.shot.shotId) {
+      el.classList.add('active');
+    } else {
+      el.classList.remove('active');
+    }
+  });
+}
+
+function bindTimelinePlayback(shotRanges, totalDuration) {
+  if (!storyboardAudio || !timelineRuler) return;
+
+  const seekTo = (seconds) => {
+    const max = totalDuration > 0 ? totalDuration : (storyboardAudio.duration || 0);
+    const target = Math.max(0, Math.min(seconds, max || seconds));
+    storyboardAudio.currentTime = target;
+    updateCurrentTimeIndicator(target, totalDuration || storyboardAudio.duration || 1);
+    highlightActiveShot(target, shotRanges);
+  };
+
+  const seekFromPointerEvent = (event) => {
+    const rect = timelineRuler.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    const max = totalDuration > 0 ? totalDuration : (storyboardAudio.duration || 0);
+    seekTo(ratio * max);
+  };
+
+  timelineRuler.onclick = seekFromPointerEvent;
+  timelineRuler.onkeydown = (event) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const delta = event.key === 'ArrowRight' ? 1 : -1;
+    seekTo((storyboardAudio.currentTime || 0) + delta);
+  };
+
+  storyboardAudio.ontimeupdate = () => {
+    const current = storyboardAudio.currentTime || 0;
+    const safeTotal = totalDuration > 0 ? totalDuration : (storyboardAudio.duration || 1);
+    updateCurrentTimeIndicator(current, safeTotal);
+    highlightActiveShot(current, shotRanges);
+  };
+
+  storyboardAudio.onloadedmetadata = () => {
+    const effective = totalDuration > 0 ? totalDuration : (storyboardAudio.duration || 0);
+    const durationEl = document.getElementById('timelineDuration');
+    if (durationEl) durationEl.textContent = formatTimeLabel(effective);
+    updateCurrentTimeIndicator(storyboardAudio.currentTime || 0, effective || 1);
+  };
+
+  updateCurrentTimeIndicator(storyboardAudio.currentTime || 0, totalDuration || 1);
+  highlightActiveShot(storyboardAudio.currentTime || 0, shotRanges);
+}
+
 /**
  * Render timeline view
  */
-function renderTimelineView() {
+async function renderTimelineView() {
   timelineTrack.innerHTML = '';
+  syncAudioSource();
 
-  const orderedShots = getOrderedShots();
+  const timingByShotId = await loadShotListTiming();
+  const shotRanges = deriveShotRanges(timingByShotId);
+  const totalDuration = Math.max(
+    Number(sequenceData?.totalDuration) || 0,
+    ...shotRanges.map(range => range.end)
+  );
 
-  if (reorderModeEnabled) {
-    const reorderContainer = document.createElement('div');
-    reorderContainer.className = 'timeline-reorder-list';
-
-    orderedShots.forEach((shot, index) => {
-      const shotEl = createTimelineShot(shot, { reorderMode: true, index });
-      reorderContainer.appendChild(shotEl);
-    });
-
-    timelineTrack.appendChild(reorderContainer);
-    return;
+  const durationEl = document.getElementById('timelineDuration');
+  if (durationEl) {
+    durationEl.textContent = formatTimeLabel(totalDuration);
   }
 
-  // Group shots by music section
   const sections = {};
-  orderedShots.forEach(shot => {
-    const sectionName = shot.timing?.musicSection || 'Unknown';
+  shotRanges.forEach(range => {
+    const sectionName = range.musicSection || 'Unknown';
     if (!sections[sectionName]) {
       sections[sectionName] = [];
     }
-    sections[sectionName].push(shot);
+    sections[sectionName].push(range);
   });
 
-  // Render each section
   Object.keys(sections).forEach(sectionName => {
     const sectionEl = createTimelineSection(sectionName, sections[sectionName]);
     timelineTrack.appendChild(sectionEl);
   });
+
+  bindTimelinePlayback(shotRanges, totalDuration);
 }
 
 /**
  * Create timeline section element
  */
-function createTimelineSection(sectionName, shots) {
+function createTimelineSection(sectionName, ranges) {
   const section = document.createElement('div');
   section.className = 'timeline-section';
 
@@ -902,18 +1068,22 @@ function createTimelineSection(sectionName, shots) {
   name.textContent = sectionName;
   header.appendChild(name);
 
-  const count = document.createElement('div');
-  count.className = 'section-time';
-  count.textContent = `${shots.length} shots`;
-  header.appendChild(count);
+  if (ranges.length > 0) {
+    const time = document.createElement('div');
+    time.className = 'section-time';
+    const firstRange = ranges[0];
+    const lastRange = ranges[ranges.length - 1];
+    time.textContent = `${formatTimeLabel(firstRange.start)} - ${formatTimeLabel(lastRange.end)}`;
+    header.appendChild(time);
+  }
 
   section.appendChild(header);
 
   const shotsContainer = document.createElement('div');
   shotsContainer.className = 'section-shots';
 
-  shots.forEach(shot => {
-    const shotEl = createTimelineShot(shot);
+  ranges.forEach(range => {
+    const shotEl = createTimelineShot(range);
     shotsContainer.appendChild(shotEl);
   });
 
@@ -925,10 +1095,18 @@ function createTimelineSection(sectionName, shots) {
 /**
  * Create timeline shot element
  */
-function createTimelineShot(shot, options = {}) {
+function createTimelineShot(range) {
+  const shot = range.shot;
   const shotEl = document.createElement('div');
   shotEl.className = 'timeline-shot';
-  const { reorderMode = false, index = null } = options;
+  shotEl.dataset.shotId = shot.shotId;
+  shotEl.style.cursor = 'pointer';
+  shotEl.addEventListener('click', () => {
+    if (storyboardAudio) {
+      storyboardAudio.currentTime = range.start;
+      storyboardAudio.play().catch(() => {});
+    }
+  });
 
   if (!reorderMode) {
     shotEl.addEventListener('click', () => openShotModal(shot));

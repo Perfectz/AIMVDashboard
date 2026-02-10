@@ -105,8 +105,12 @@
 
         <div class="timeline-view" id="timelineView" style="display: none;">
           <div class="timeline-container">
-            <div class="timeline-header"><div class="timeline-title">Music Timeline</div><div class="timeline-duration" id="timelineDuration">Ordered Shot Preview</div></div>
-            <audio id="storyboardAudio" controls style="width: 100%; margin: 8px 0 14px; display: none;"></audio>
+            <div class="timeline-header"><div class="timeline-title">Music Timeline</div><div class="timeline-duration" id="timelineDuration">0:00</div></div>
+            <audio id="storyboardAudio" controls preload="metadata" style="width: 100%; margin-bottom: 1rem;"></audio>
+            <div class="timeline-ruler" id="timelineRuler" role="slider" aria-label="Timeline scrubber" tabindex="0">
+              <div class="timeline-ruler-track"></div>
+              <div class="timeline-current-indicator" id="timelineCurrentIndicator"></div>
+            </div>
             <div class="timeline-track" id="timelineTrack"></div>
           </div>
         </div>
