@@ -80,7 +80,11 @@
             <button class="view-tab active" data-view="grid"><span>Grid View</span></button>
             <button class="view-tab" data-view="timeline"><span>Timeline View</span></button>
           </div>
-          <div class="view-actions"><button class="btn btn-small" id="refreshBtn">Refresh</button></div>
+          <div class="view-actions">
+            <button class="btn btn-small btn-secondary" id="reorderModeBtn" style="display: none;">Reorder Mode: Off</button>
+            <button class="btn btn-small btn-secondary" id="resetOrderBtn" style="display: none;">Reset to Shot List Order</button>
+            <button class="btn btn-small" id="refreshBtn">Refresh</button>
+          </div>
         </div>
 
         <div class="empty-state" id="emptyState">

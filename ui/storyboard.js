@@ -6,8 +6,8 @@ let currentView = 'grid';
 let selectedShot = null;
 let selectedVariation = null;
 let currentProject = null;
-let previsMap = {};
-const PREVIS_REF_SLOT = 'ref_01';
+let reorderModeEnabled = false;
+let shotListOrderMap = new Map();
 
 // Toast notification system
 const toastContainer = document.getElementById('toastContainer');
@@ -118,160 +118,117 @@ function initializeDOMElements() {
 }
 
 
-function normalizeKey(value) {
-  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
-}
+function getDefaultShotOrder(shots) {
+  const sortedShots = [...shots];
+  sortedShots.sort((a, b) => {
+    const aFromShotList = shotListOrderMap.get(a.shotId);
+    const bFromShotList = shotListOrderMap.get(b.shotId);
 
-function makeProjectAssetPath(relativePath) {
-  if (!relativePath) return '';
-  if (relativePath.startsWith('/')) return relativePath;
-  return `/${relativePath}`;
-}
-
-function buildReferenceImagePath(kind, name, filename) {
-  if (!currentProject || !name || !filename) return '';
-  return `/projects/${currentProject.id}/reference/${kind}/${encodeURIComponent(name)}/${filename}`;
-}
-
-function findReferenceImageForShot(shot) {
-  if (!shot || !shot.shotIntent) return null;
-
-  const charCandidates = (shot.shotIntent.characters || []).map(c => c.id).filter(Boolean);
-  for (const charId of charCandidates) {
-    const key = normalizeKey(charId);
-    const ref = characterRefs.find(c => normalizeKey(c.name) === key || normalizeKey(c.name).includes(key) || key.includes(normalizeKey(c.name)));
-    const img = ref?.images?.slice().sort((a,b)=>a.slot-b.slot)[0];
-    if (ref && img) {
-      return {
-        type: 'image',
-        path: buildReferenceImagePath('characters', ref.name, img.filename),
-        source: `Character ref (${ref.name})`
-      };
+    if (Number.isFinite(aFromShotList) && Number.isFinite(bFromShotList)) {
+      return aFromShotList - bFromShotList;
     }
-  }
+    if (Number.isFinite(aFromShotList)) return -1;
+    if (Number.isFinite(bFromShotList)) return 1;
 
-  const locId = shot.shotIntent.location?.id;
-  if (locId) {
-    const key = normalizeKey(locId);
-    const ref = locationRefs.find(l => normalizeKey(l.name) === key || normalizeKey(l.name).includes(key) || key.includes(normalizeKey(l.name)));
-    const img = ref?.images?.slice().sort((a,b)=>a.slot-b.slot)[0];
-    if (ref && img) {
-      return {
-        type: 'image',
-        path: buildReferenceImagePath('locations', ref.name, img.filename),
-        source: `Location ref (${ref.name})`
-      };
+    const aNum = Number(a.shotNumber);
+    const bNum = Number(b.shotNumber);
+    if (Number.isFinite(aNum) && Number.isFinite(bNum)) return aNum - bNum;
+    if (Number.isFinite(aNum)) return -1;
+    if (Number.isFinite(bNum)) return 1;
+    return String(a.shotId || '').localeCompare(String(b.shotId || ''));
+  });
+  return sortedShots.map(shot => shot.shotId).filter(Boolean);
+}
+
+function getOrderedShots() {
+  if (!sequenceData || !Array.isArray(sequenceData.selections)) return [];
+
+  const shotsById = new Map();
+  sequenceData.selections.forEach(shot => {
+    if (shot?.shotId) shotsById.set(shot.shotId, shot);
+  });
+
+  const order = [];
+  const seen = new Set();
+  const editorialOrder = Array.isArray(sequenceData.editorialOrder) ? sequenceData.editorialOrder : [];
+
+  editorialOrder.forEach(shotId => {
+    if (shotsById.has(shotId) && !seen.has(shotId)) {
+      order.push(shotId);
+      seen.add(shotId);
     }
-  }
+  });
 
-  return null;
+  const fallbackOrder = getDefaultShotOrder(sequenceData.selections);
+  fallbackOrder.forEach(shotId => {
+    if (!seen.has(shotId) && shotsById.has(shotId)) {
+      order.push(shotId);
+      seen.add(shotId);
+    }
+  });
+
+  return order.map(shotId => shotsById.get(shotId));
 }
 
-function resolveShotPreviewAsset(shot) {
-  if (!shot) return null;
+function updateTimelineControlsVisibility() {
+  const reorderModeBtn = document.getElementById('reorderModeBtn');
+  const resetOrderBtn = document.getElementById('resetOrderBtn');
+  const isTimeline = currentView === 'timeline' && sequenceData?.selections?.length > 0;
 
-  const thumbnailPath = shot.renderFiles?.thumbnail;
-  if (thumbnailPath) {
-    return { type: 'image', path: makeProjectAssetPath(thumbnailPath), source: 'Rendered thumbnail' };
-  }
-
-  const selectedVar = shot.selectedVariation && shot.selectedVariation !== 'none' ? shot.selectedVariation : 'A';
-  const selectedVideo = shot.renderFiles?.kling?.[selectedVar];
-  if (selectedVideo) {
-    return { type: 'video', path: makeProjectAssetPath(selectedVideo), source: `Rendered shot ${selectedVar}` };
-  }
-
-  const firstNano = shot.renderFiles?.nanobanana?.firstFrame;
-  if (firstNano) {
-    return { type: 'image', path: makeProjectAssetPath(firstNano), source: 'Rendered first frame' };
-  }
-
-  return findReferenceImageForShot(shot);
+  if (reorderModeBtn) reorderModeBtn.style.display = isTimeline ? 'inline-flex' : 'none';
+  if (resetOrderBtn) resetOrderBtn.style.display = isTimeline ? 'inline-flex' : 'none';
 }
 
-async function loadShotList() {
-  if (!currentProject) return;
+function updateReorderModeButtonLabel() {
+  const reorderModeBtn = document.getElementById('reorderModeBtn');
+  if (!reorderModeBtn) return;
+  reorderModeBtn.textContent = `Reorder Mode: ${reorderModeEnabled ? 'On' : 'Off'}`;
+  reorderModeBtn.classList.toggle('is-active', reorderModeEnabled);
+}
+
+function setReorderMode(enabled) {
+  reorderModeEnabled = Boolean(enabled);
+  updateReorderModeButtonLabel();
+  renderView();
+}
+
+async function saveEditorialOrder(editorialOrder, { successMessage = 'Editorial order saved' } = {}) {
+  if (!Array.isArray(editorialOrder)) return;
+
+  const loadingToast = showToast('Saving order...', '', 'info', 0);
+
   try {
-    const response = await fetch(`/api/load/canon/script?project=${currentProject.id}`);
-    if (!response.ok) {
-      shotListData = null;
-      return;
-    }
-    const data = await response.json();
-    shotListData = data?.content ? JSON.parse(data.content) : null;
-  } catch (err) {
-    console.error('Failed to load shot list:', err);
-    shotListData = null;
-  }
-}
+    const payload = {
+      project: currentProject?.id || null,
+      editorialOrder
+    };
 
-async function loadReferenceData() {
-  if (!currentProject) return;
-  try {
-    const [charsRes, locRes] = await Promise.all([
-      fetch(`/api/references/characters?project=${currentProject.id}`),
-      fetch(`/api/references/locations?project=${currentProject.id}`)
-    ]);
-
-    if (charsRes.ok) {
-      const charsData = await charsRes.json();
-      characterRefs = charsData.characters || [];
-    } else {
-      characterRefs = [];
-    }
-
-    if (locRes.ok) {
-      const locData = await locRes.json();
-      locationRefs = locData.locations || [];
-    } else {
-      locationRefs = [];
-    }
-  } catch (err) {
-    console.error('Failed to load reference data:', err);
-    characterRefs = [];
-    locationRefs = [];
-  }
-}
-
-function buildOrderedStoryboardShots() {
-  const byId = new Map((sequenceData?.selections || []).map(s => [s.shotId, s]));
-  const shotIntents = shotListData?.shots || [];
-
-  if (!shotIntents.length) {
-    orderedStoryboardShots = sequenceData?.selections || [];
-    return;
-  }
-
-  orderedStoryboardShots = shotIntents
-    .slice()
-    .sort((a, b) => (a.shotNumber || 0) - (b.shotNumber || 0))
-    .map(intent => {
-      const existing = byId.get(intent.id) || {};
-      return {
-        shotId: intent.id,
-        shotNumber: intent.shotNumber,
-        timing: intent.timing || existing.timing,
-        status: existing.status || 'reference_preview',
-        selectedVariation: existing.selectedVariation || 'none',
-        renderFiles: existing.renderFiles || {},
-        notes: existing.notes || intent.notes || '',
-        shotIntent: intent
-      };
+    const response = await fetch('/api/storyboard/order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
+
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Failed to save order');
+    }
+
+    sequenceData.editorialOrder = editorialOrder;
+    dismissToast(loadingToast);
+    showToast('Success', successMessage, 'success', 2000);
+    renderView();
+  } catch (err) {
+    dismissToast(loadingToast);
+    showToast('Save failed', err.message, 'error', 4000);
+  }
 }
 
-function updateMusicPreview() {
-  const audio = document.getElementById('storyboardAudio');
-  if (!audio || !currentProject) return;
+async function resetToShotListOrder() {
+  if (!sequenceData?.selections?.length) return;
 
-  if (sequenceData?.musicFile) {
-    const path = sequenceData.musicFile.replace(/^\/+/, '');
-    audio.src = `/projects/${currentProject.id}/${path}`;
-    audio.style.display = 'block';
-  } else {
-    audio.removeAttribute('src');
-    audio.style.display = 'none';
-  }
+  const fallbackOrder = getDefaultShotOrder(sequenceData.selections);
+  await saveEditorialOrder(fallbackOrder, { successMessage: 'Reset to shot list order' });
 }
 
 /**
@@ -695,7 +652,28 @@ async function loadSequence() {
       };
     }
     sequenceData = await response.json();
-    await loadPrevisMap();
+    if (!Array.isArray(sequenceData.editorialOrder)) sequenceData.editorialOrder = [];
+
+    shotListOrderMap = new Map();
+    try {
+      const projectParam = currentProject ? `?project=${currentProject.id}` : '';
+      const shotListResp = await fetch(`/api/load/canon/script${projectParam}`);
+      if (shotListResp.ok) {
+        const shotListPayload = await shotListResp.json();
+        const shotListData = shotListPayload?.content ? JSON.parse(shotListPayload.content) : null;
+        if (Array.isArray(shotListData?.shots)) {
+          shotListData.shots.forEach((shot, index) => {
+            if (shot?.id) {
+              const num = Number(shot.shotNumber);
+              shotListOrderMap.set(shot.id, Number.isFinite(num) ? num : index + 1);
+            }
+          });
+        }
+      }
+    } catch (shotListErr) {
+      console.warn('Could not load shot_list.json order:', shotListErr);
+    }
+
     updateStats();
     renderView();
 
@@ -767,6 +745,8 @@ function renderView() {
 
   hideEmptyState();
 
+  updateTimelineControlsVisibility();
+
   if (currentView === 'grid') {
     gridView.style.display = 'block';
     timelineView.style.display = 'none';
@@ -784,7 +764,7 @@ function renderView() {
 function renderGridView() {
   shotGrid.innerHTML = '';
 
-  orderedStoryboardShots.forEach(shot => {
+  getOrderedShots().forEach(shot => {
     const card = createShotCard(shot);
     shotGrid.appendChild(card);
   });
@@ -874,8 +854,37 @@ function createShotCard(shot) {
  */
 function renderTimelineView() {
   timelineTrack.innerHTML = '';
-  const sectionEl = createTimelineSection('Shot Order', orderedStoryboardShots);
-  timelineTrack.appendChild(sectionEl);
+
+  const orderedShots = getOrderedShots();
+
+  if (reorderModeEnabled) {
+    const reorderContainer = document.createElement('div');
+    reorderContainer.className = 'timeline-reorder-list';
+
+    orderedShots.forEach((shot, index) => {
+      const shotEl = createTimelineShot(shot, { reorderMode: true, index });
+      reorderContainer.appendChild(shotEl);
+    });
+
+    timelineTrack.appendChild(reorderContainer);
+    return;
+  }
+
+  // Group shots by music section
+  const sections = {};
+  orderedShots.forEach(shot => {
+    const sectionName = shot.timing?.musicSection || 'Unknown';
+    if (!sections[sectionName]) {
+      sections[sectionName] = [];
+    }
+    sections[sectionName].push(shot);
+  });
+
+  // Render each section
+  Object.keys(sections).forEach(sectionName => {
+    const sectionEl = createTimelineSection(sectionName, sections[sectionName]);
+    timelineTrack.appendChild(sectionEl);
+  });
 }
 
 /**
@@ -916,10 +925,14 @@ function createTimelineSection(sectionName, shots) {
 /**
  * Create timeline shot element
  */
-function createTimelineShot(shot) {
+function createTimelineShot(shot, options = {}) {
   const shotEl = document.createElement('div');
   shotEl.className = 'timeline-shot';
-  shotEl.addEventListener('click', () => openShotModal(shot));
+  const { reorderMode = false, index = null } = options;
+
+  if (!reorderMode) {
+    shotEl.addEventListener('click', () => openShotModal(shot));
+  }
 
   applyPreviewNode(shotEl, shot);
 
@@ -927,6 +940,56 @@ function createTimelineShot(shot) {
   label.className = 'timeline-shot-label';
   label.textContent = shot.shotId;
   shotEl.appendChild(label);
+
+  if (reorderMode) {
+    shotEl.classList.add('reorderable');
+    shotEl.draggable = true;
+    shotEl.dataset.shotId = shot.shotId;
+
+    const dragHandle = document.createElement('div');
+    dragHandle.className = 'timeline-shot-drag-handle';
+    dragHandle.textContent = index !== null ? `#${index + 1}` : '\u2630';
+    shotEl.appendChild(dragHandle);
+
+    shotEl.addEventListener('dragstart', (e) => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', shot.shotId);
+      shotEl.classList.add('dragging');
+    });
+
+    shotEl.addEventListener('dragend', () => {
+      shotEl.classList.remove('dragging');
+      document.querySelectorAll('.timeline-shot.drag-over').forEach(el => el.classList.remove('drag-over'));
+    });
+
+    shotEl.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      shotEl.classList.add('drag-over');
+    });
+
+    shotEl.addEventListener('dragleave', () => {
+      shotEl.classList.remove('drag-over');
+    });
+
+    shotEl.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      shotEl.classList.remove('drag-over');
+
+      const sourceShotId = e.dataTransfer.getData('text/plain');
+      const targetShotId = shot.shotId;
+      if (!sourceShotId || sourceShotId === targetShotId) return;
+
+      const currentOrder = getOrderedShots().map(s => s.shotId);
+      const sourceIndex = currentOrder.indexOf(sourceShotId);
+      const targetIndex = currentOrder.indexOf(targetShotId);
+      if (sourceIndex < 0 || targetIndex < 0) return;
+
+      currentOrder.splice(sourceIndex, 1);
+      currentOrder.splice(targetIndex, 0, sourceShotId);
+
+      await saveEditorialOrder(currentOrder);
+    });
+  }
 
   return shotEl;
 }
@@ -1358,6 +1421,10 @@ function initializeViewTabs() {
       currentView = tab.dataset.view;
       viewTabs.forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
+      if (currentView !== 'timeline' && reorderModeEnabled) {
+        reorderModeEnabled = false;
+        updateReorderModeButtonLabel();
+      }
       renderView();
     });
   });
@@ -1369,6 +1436,8 @@ function initializeViewTabs() {
 function initializeButtons() {
   const exportBtn = document.getElementById('exportBtn');
   const refreshBtn = document.getElementById('refreshBtn');
+  const reorderModeBtn = document.getElementById('reorderModeBtn');
+  const resetOrderBtn = document.getElementById('resetOrderBtn');
   const storyboardFocusBtn = document.getElementById('storyboardFocusBtn');
   const modalClose = document.getElementById('modalClose');
   const modalOverlay = document.getElementById('modalOverlay');
@@ -1377,6 +1446,17 @@ function initializeButtons() {
 
   if (exportBtn) exportBtn.addEventListener('click', exportPDF);
   if (refreshBtn) refreshBtn.addEventListener('click', loadSequence);
+  if (reorderModeBtn) {
+    reorderModeBtn.addEventListener('click', () => {
+      setReorderMode(!reorderModeEnabled);
+    });
+  }
+  if (resetOrderBtn) {
+    resetOrderBtn.addEventListener('click', async () => {
+      await resetToShotListOrder();
+      setReorderMode(false);
+    });
+  }
   if (storyboardFocusBtn) {
     storyboardFocusBtn.addEventListener('click', () => {
       document.body.classList.toggle('focus-mode');
@@ -1449,6 +1529,7 @@ if (newProjectBtn && newProjectModal) {
   if (projectsLoaded) {
     initializeViewTabs();
     initializeButtons();
+    updateReorderModeButtonLabel();
     await loadSequence();
     initMusicUpload();
   } else {
