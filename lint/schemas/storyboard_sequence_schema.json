@@ -31,7 +31,10 @@
       "description": "Shot selections and rendered asset tracking",
       "items": {
         "type": "object",
-        "required": ["shotId", "shotNumber"],
+        "required": [
+          "shotId",
+          "shotNumber"
+        ],
         "properties": {
           "shotId": {
             "type": "string",
@@ -44,7 +47,13 @@
           },
           "selectedVariation": {
             "type": "string",
-            "enum": ["A", "B", "C", "D", "none"],
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "D",
+              "none"
+            ],
             "description": "Which Kling variation selected (or 'none' if not chosen yet)"
           },
           "renderFiles": {
@@ -54,29 +63,51 @@
               "kling": {
                 "type": "object",
                 "properties": {
-                  "A": {"type": "string"},
-                  "B": {"type": "string"},
-                  "C": {"type": "string"},
-                  "D": {"type": "string"}
+                  "A": {
+                    "type": "string"
+                  },
+                  "B": {
+                    "type": "string"
+                  },
+                  "C": {
+                    "type": "string"
+                  },
+                  "D": {
+                    "type": "string"
+                  }
                 }
               },
               "nanobanana": {
                 "type": "object",
                 "properties": {
-                  "firstFrame": {"type": "string"},
-                  "lastFrame": {"type": "string"}
+                  "firstFrame": {
+                    "type": "string"
+                  },
+                  "lastFrame": {
+                    "type": "string"
+                  }
                 }
               },
-              "thumbnail": {"type": "string"}
+              "thumbnail": {
+                "type": "string"
+              }
             }
           },
           "timing": {
             "type": "object",
             "properties": {
-              "start": {"type": "number"},
-              "duration": {"type": "number"},
-              "end": {"type": "number"},
-              "musicSection": {"type": "string"}
+              "start": {
+                "type": "number"
+              },
+              "duration": {
+                "type": "number"
+              },
+              "end": {
+                "type": "number"
+              },
+              "musicSection": {
+                "type": "string"
+              }
             }
           },
           "notes": {
@@ -85,8 +116,47 @@
           },
           "status": {
             "type": "string",
-            "enum": ["not_rendered", "rendering", "rendered", "approved", "needs_revision"],
+            "enum": [
+              "not_rendered",
+              "rendering",
+              "rendered",
+              "approved",
+              "needs_revision"
+            ],
             "description": "Production status"
+          },
+          "reviewStatus": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "ready_for_review",
+              "changes_requested",
+              "approved"
+            ],
+            "description": "Editorial review status for this shot"
+          },
+          "assignee": {
+            "type": "string",
+            "description": "Person responsible for resolving feedback"
+          },
+          "comments": {
+            "type": "array",
+            "description": "Review comments on this shot",
+            "items": {
+              "type": "object",
+              "required": [
+                "text",
+                "timestamp"
+              ],
+              "properties": {
+                "text": {
+                  "type": "string"
+                },
+                "timestamp": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -96,5 +166,8 @@
       "description": "ISO timestamp of last update"
     }
   },
-  "required": ["version", "selections"]
+  "required": [
+    "version",
+    "selections"
+  ]
 }

@@ -6,6 +6,10 @@ let currentView = 'grid';
 let selectedShot = null;
 let selectedVariation = null;
 let currentProject = null;
+let currentReviewFilter = 'all';
+let commentsModalShot = null;
+
+const REVIEW_STATUS_OPTIONS = ['draft', 'ready_for_review', 'changes_requested', 'approved'];
 
 // Toast notification system
 const toastContainer = document.getElementById('toastContainer');
@@ -143,6 +147,46 @@ function hideLoading(overlay) {
   if (overlay && overlay.parentNode) {
     overlay.remove();
   }
+}
+
+
+function normalizeShotReviewData(shot) {
+  if (!shot || typeof shot !== 'object') return;
+  if (!REVIEW_STATUS_OPTIONS.includes(shot.reviewStatus)) shot.reviewStatus = 'draft';
+  if (typeof shot.assignee !== 'string') shot.assignee = '';
+  if (!Array.isArray(shot.comments)) shot.comments = [];
+}
+
+function formatReviewStatus(status) {
+  return (status || 'draft').replace(/_/g, ' ');
+}
+
+function getFilteredShots() {
+  if (!sequenceData || !Array.isArray(sequenceData.selections)) return [];
+  return sequenceData.selections.filter(shot => {
+    normalizeShotReviewData(shot);
+    return currentReviewFilter === 'all' || shot.reviewStatus === currentReviewFilter;
+  });
+}
+
+async function saveReviewUpdate(shotId, updates) {
+  const payload = {
+    project: currentProject?.id,
+    shotId,
+    ...updates
+  };
+
+  const response = await fetch('/api/review/shot', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  const result = await response.json();
+  if (!response.ok || !result.success) {
+    throw new Error(result.error || 'Failed to save review update');
+  }
+  return result.shot;
 }
 
 // ===== MUSIC UPLOAD =====
@@ -375,11 +419,16 @@ async function loadSequence() {
 
   try {
     const projectParam = currentProject ? `?project=${currentProject.id}` : '';
-    const response = await fetch(`/rendered/storyboard/sequence.json${projectParam}`);
+    const response = await fetch(`/api/review/sequence${projectParam}`);
     if (!response.ok) {
       throw new Error('Sequence file not found');
     }
-    sequenceData = await response.json();
+    const payload = await response.json();
+    if (!payload.success) {
+      throw new Error(payload.error || 'Failed to load sequence');
+    }
+    sequenceData = payload.sequence;
+    sequenceData.selections?.forEach(normalizeShotReviewData);
     updateStats();
     renderView();
 
@@ -466,7 +515,9 @@ function renderView() {
 function renderGridView() {
   shotGrid.innerHTML = '';
 
-  sequenceData.selections.forEach(shot => {
+  const shots = getFilteredShots();
+
+  shots.forEach(shot => {
     const card = createShotCard(shot);
     shotGrid.appendChild(card);
   });
@@ -515,13 +566,43 @@ function createShotCard(shot) {
     thumbnail.appendChild(badge);
   }
 
-  // Status badge
-  if (shot.status) {
-    const statusBadge = document.createElement('div');
-    statusBadge.className = 'shot-status-badge';
-    statusBadge.textContent = shot.status.replace('_', ' ');
-    thumbnail.appendChild(statusBadge);
-  }
+  // Review status dropdown
+  const reviewStatus = document.createElement('select');
+  reviewStatus.className = 'shot-status-select';
+  REVIEW_STATUS_OPTIONS.forEach(status => {
+    const option = document.createElement('option');
+    option.value = status;
+    option.textContent = formatReviewStatus(status);
+    reviewStatus.appendChild(option);
+  });
+  reviewStatus.value = shot.reviewStatus || 'draft';
+  reviewStatus.addEventListener('click', (e) => e.stopPropagation());
+  reviewStatus.addEventListener('change', async (e) => {
+    e.stopPropagation();
+    try {
+      const updatedShot = await saveReviewUpdate(shot.shotId, { reviewStatus: e.target.value });
+      Object.assign(shot, updatedShot);
+      normalizeShotReviewData(shot);
+      showToast('Review status updated', `${shot.shotId} → ${formatReviewStatus(shot.reviewStatus)}`, 'success', 2000);
+      if (selectedShot?.shotId === shot.shotId) {
+        selectedShot = shot;
+        renderShotDetails();
+      }
+      renderView();
+    } catch (err) {
+      showToast('Failed to update status', err.message, 'error', 3500);
+    }
+  });
+  thumbnail.appendChild(reviewStatus);
+
+  const commentsBtn = document.createElement('button');
+  commentsBtn.className = 'shot-comments-btn';
+  commentsBtn.textContent = `Comments (${shot.comments?.length || 0})`;
+  commentsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openCommentsModal(shot);
+  });
+  thumbnail.appendChild(commentsBtn);
 
   card.appendChild(thumbnail);
 
@@ -565,7 +646,9 @@ function renderTimelineView() {
 
   // Group shots by music section
   const sections = {};
-  sequenceData.selections.forEach(shot => {
+  const shots = getFilteredShots();
+
+  shots.forEach(shot => {
     const sectionName = shot.timing?.musicSection || 'Unknown';
     if (!sections[sectionName]) {
       sections[sectionName] = [];
@@ -863,7 +946,9 @@ function renderShotDetails() {
     ['Shot ID', selectedShot.shotId],
     ['Duration', (selectedShot.timing?.duration || 8) + 's'],
     ['Music Section', selectedShot.timing?.musicSection || 'N/A'],
-    ['Status', selectedShot.status || 'not_rendered']
+    ['Status', selectedShot.status || 'not_rendered'],
+    ['Review', formatReviewStatus(selectedShot.reviewStatus || 'draft')],
+    ['Assignee', selectedShot.assignee || 'Unassigned']
   ];
   if (selectedShot.notes) fields.push(['Notes', selectedShot.notes]);
 
@@ -875,6 +960,33 @@ function renderShotDetails() {
     p.appendChild(document.createTextNode(value));
     shotDetails.appendChild(p);
   });
+
+
+  const assigneeWrap = document.createElement('div');
+  assigneeWrap.className = 'assignee-editor';
+  assigneeWrap.innerHTML = `
+    <label for="shotAssigneeInput"><strong>Assignee:</strong></label>
+    <input id="shotAssigneeInput" type="text" value="${selectedShot.assignee || ''}" placeholder="Name or @handle" />
+    <button class="btn btn-small btn-secondary" id="saveAssigneeBtn">Save Assignee</button>
+  `;
+  shotDetails.appendChild(assigneeWrap);
+
+  const saveAssigneeBtn = document.getElementById('saveAssigneeBtn');
+  const shotAssigneeInput = document.getElementById('shotAssigneeInput');
+  if (saveAssigneeBtn && shotAssigneeInput) {
+    saveAssigneeBtn.addEventListener('click', async () => {
+      try {
+        const updatedShot = await saveReviewUpdate(selectedShot.shotId, { assignee: shotAssigneeInput.value });
+        Object.assign(selectedShot, updatedShot);
+        normalizeShotReviewData(selectedShot);
+        showToast('Assignee updated', `${selectedShot.shotId} assigned`, 'success', 2000);
+        renderView();
+        renderShotDetails();
+      } catch (err) {
+        showToast('Failed to save assignee', err.message, 'error', 3500);
+      }
+    });
+  }
 }
 
 /**
@@ -900,6 +1012,77 @@ async function saveSelection() {
   closeModal();
   renderView();
   updateStats();
+}
+
+function openCommentsModal(shot) {
+  commentsModalShot = shot;
+  const commentsModal = document.getElementById('commentsModal');
+  const commentsTitle = document.getElementById('commentsModalTitle');
+  const newCommentText = document.getElementById('newCommentText');
+  commentsTitle.textContent = `${shot.shotId} Comments`;
+  newCommentText.value = '';
+  renderCommentsList();
+  commentsModal.style.display = 'flex';
+}
+
+function closeCommentsModal() {
+  const commentsModal = document.getElementById('commentsModal');
+  commentsModal.style.display = 'none';
+  commentsModalShot = null;
+}
+
+function renderCommentsList() {
+  const commentsList = document.getElementById('commentsList');
+  commentsList.innerHTML = '';
+
+  const comments = commentsModalShot?.comments || [];
+  if (comments.length === 0) {
+    commentsList.innerHTML = '<p class="comments-empty">No comments yet.</p>';
+    return;
+  }
+
+  comments.forEach(comment => {
+    const item = document.createElement('div');
+    item.className = 'comment-item';
+
+    const text = document.createElement('div');
+    text.className = 'comment-text';
+    text.textContent = comment.text;
+
+    const timestamp = document.createElement('div');
+    timestamp.className = 'comment-time';
+    timestamp.textContent = new Date(comment.timestamp).toLocaleString();
+
+    item.appendChild(text);
+    item.appendChild(timestamp);
+    commentsList.appendChild(item);
+  });
+}
+
+async function addCommentToCurrentShot() {
+  if (!commentsModalShot) return;
+  const newCommentText = document.getElementById('newCommentText');
+  const text = newCommentText.value.trim();
+  if (!text) {
+    showToast('Comment required', 'Please type feedback before saving', 'warning', 2500);
+    return;
+  }
+
+  try {
+    const updatedShot = await saveReviewUpdate(commentsModalShot.shotId, { appendComment: text });
+    Object.assign(commentsModalShot, updatedShot);
+    normalizeShotReviewData(commentsModalShot);
+    newCommentText.value = '';
+    renderCommentsList();
+    showToast('Comment added', commentsModalShot.shotId, 'success', 2000);
+    if (selectedShot?.shotId === commentsModalShot.shotId) {
+      selectedShot = commentsModalShot;
+      renderShotDetails();
+    }
+    renderView();
+  } catch (err) {
+    showToast('Failed to add comment', err.message, 'error', 3500);
+  }
 }
 
 /**
@@ -942,9 +1125,19 @@ function initializeButtons() {
   const modalOverlay = document.getElementById('modalOverlay');
   const modalCancel = document.getElementById('modal-cancel');
   const modalSave = document.getElementById('modal-save');
+  const reviewFilter = document.getElementById('reviewFilter');
+  const commentsModalClose = document.getElementById('commentsModalClose');
+  const commentsModalOverlay = document.getElementById('commentsModalOverlay');
+  const addCommentBtn = document.getElementById('addCommentBtn');
 
   if (exportBtn) exportBtn.addEventListener('click', exportPDF);
   if (refreshBtn) refreshBtn.addEventListener('click', loadSequence);
+  if (reviewFilter) {
+    reviewFilter.addEventListener('change', (e) => {
+      currentReviewFilter = e.target.value;
+      renderView();
+    });
+  }
   if (storyboardFocusBtn) {
     storyboardFocusBtn.addEventListener('click', () => {
       document.body.classList.toggle('focus-mode');
@@ -955,6 +1148,9 @@ function initializeButtons() {
   if (modalOverlay) modalOverlay.addEventListener('click', closeModal);
   if (modalCancel) modalCancel.addEventListener('click', closeModal);
   if (modalSave) modalSave.addEventListener('click', saveSelection);
+  if (commentsModalClose) commentsModalClose.addEventListener('click', closeCommentsModal);
+  if (commentsModalOverlay) commentsModalOverlay.addEventListener('click', closeCommentsModal);
+  if (addCommentBtn) addCommentBtn.addEventListener('click', addCommentToCurrentShot);
 }
 
 // Project selector event listeners
