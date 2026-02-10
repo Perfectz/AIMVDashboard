@@ -125,6 +125,126 @@ function canonFilename(type) {
   return map[type] || `${type}.json`;
 }
 
+function safeReadJson(filePath, fallback = null) {
+  try {
+    if (!fs.existsSync(filePath)) return fallback;
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return fallback;
+  }
+}
+
+function safeReadText(filePath, fallback = '') {
+  try {
+    if (!fs.existsSync(filePath)) return fallback;
+    return fs.readFileSync(filePath, 'utf8');
+  } catch {
+    return fallback;
+  }
+}
+
+function buildContextBundle(projectId) {
+  const projectPath = projectManager.getProjectPath(projectId);
+  const sequence = safeReadJson(path.join(projectPath, 'rendered', 'storyboard', 'sequence.json'), { selections: [] }) || { selections: [] };
+  const shotList = safeReadJson(path.join(projectPath, 'bible', 'shot_list.json'), {});
+  const characters = safeReadJson(path.join(projectPath, 'bible', 'characters.json'), {});
+  const locations = safeReadJson(path.join(projectPath, 'bible', 'locations.json'), {});
+  const analysis = safeReadJson(path.join(projectPath, 'music', 'analysis.json'), {});
+  const songInfo = safeReadText(path.join(projectPath, 'music', 'song_info.txt'), '');
+
+  const selectionOrder = (sequence.selections || [])
+    .slice()
+    .sort((a, b) => (a.shotNumber || 0) - (b.shotNumber || 0))
+    .map((shot, index) => ({
+      order: index + 1,
+      shotId: shot.shotId,
+      selectedVariation: shot.selectedVariation || 'none',
+      shotNumber: shot.shotNumber,
+      timing: shot.timing || {}
+    }));
+
+  const scriptShots = Array.isArray(shotList.shots) ? shotList.shots : [];
+  const scriptByShotId = new Map(scriptShots.map((shot) => [shot.id || shot.shotId, shot]));
+  const charById = new Map((characters.characters || []).map((c) => [c.id || c.name, c]));
+  const locById = new Map((locations.locations || []).map((l) => [l.id || l.name, l]));
+
+  const transcriptLines = [];
+  (analysis.sections || []).forEach((section) => {
+    if (section?.lyrics) transcriptLines.push(section.lyrics);
+    if (section?.transcript) transcriptLines.push(section.transcript);
+  });
+  if (transcriptLines.length === 0 && songInfo) transcriptLines.push(songInfo);
+
+  const shots = selectionOrder.map((selection) => {
+    const scriptShot = scriptByShotId.get(selection.shotId) || {};
+    const references = [];
+
+    (scriptShot.characters || []).forEach((charRef) => {
+      const charData = charById.get(charRef.id) || {};
+      const refDir = safeResolve(projectPath, 'reference', 'characters', charRef.id || '');
+      let images = [];
+      if (charRef.id && fs.existsSync(refDir)) {
+        images = fs.readdirSync(refDir).filter((name) => /^ref_\d+\.(png|jpg|jpeg|webp)$/i.test(name));
+      }
+      references.push({
+        type: 'character',
+        id: charRef.id || 'unknown',
+        name: charData.name || charRef.id || 'Unknown character',
+        assets: images
+      });
+    });
+
+    if (scriptShot.location?.id) {
+      const locData = locById.get(scriptShot.location.id) || {};
+      references.push({
+        type: 'location',
+        id: scriptShot.location.id,
+        name: locData.name || scriptShot.location.id,
+        assets: []
+      });
+    }
+
+    return {
+      shotId: selection.shotId,
+      selectedVariation: selection.selectedVariation,
+      scriptSnippet: {
+        what: scriptShot.intent?.what || '',
+        why: scriptShot.intent?.why || '',
+        notes: scriptShot.notes || ''
+      },
+      transcriptSnippet: transcriptLines.find(Boolean) || '',
+      references
+    };
+  });
+
+  const warnings = [];
+  if (selectionOrder.length === 0) warnings.push('No selected shots found in storyboard sequence.');
+  if (scriptShots.length === 0) warnings.push('No script shot list found (bible/shot_list.json).');
+  if (transcriptLines.length === 0) warnings.push('No transcript/song snippets found (music/analysis.json or music/song_info.txt).');
+
+  shots.forEach((shot) => {
+    if (!shot.scriptSnippet.what && !shot.scriptSnippet.why) {
+      warnings.push(`${shot.shotId}: Missing script intent context.`);
+    }
+    if (!shot.references.length) {
+      warnings.push(`${shot.shotId}: No active references mapped.`);
+    }
+    shot.references.forEach((ref) => {
+      if (ref.type === 'character' && ref.assets.length === 0) {
+        warnings.push(`${shot.shotId}: Character ${ref.id} has no reference images.`);
+      }
+    });
+  });
+
+  return {
+    generatedAt: new Date().toISOString(),
+    projectId,
+    selectedShotOrder: selectionOrder,
+    shots,
+    warnings
+  };
+}
+
 function serveFile(res, filePath) {
   fs.stat(filePath, (err, stats) => {
     if (err) {
@@ -2161,53 +2281,16 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-
-  // POST /api/storyboard/sequence - Persist storyboard order and lock state
-  if (req.method === 'POST' && req.url.startsWith('/api/storyboard/sequence')) {
-    readBody(req, MAX_BODY_SIZE, (err, body) => {
-      if (err) {
-        sendJSON(res, 413, { success: false, error: 'Payload too large' });
-        return;
-      }
-
-      try {
-        const { projectId } = getProjectContext(req, { required: true });
-        const payload = JSON.parse(body);
-        const updates = Array.isArray(payload?.selections) ? payload.selections : null;
-
-        if (!updates) {
-          sendJSON(res, 400, { success: false, error: 'selections array is required' });
-          return;
-        }
-
-        const sequence = readSequenceFile(projectId);
-        const currentSelections = Array.isArray(sequence.selections) ? sequence.selections : [];
-        const byId = new Map(currentSelections.map(shot => [shot.shotId, shot]));
-
-        const reordered = [];
-        updates.forEach(item => {
-          const shotId = item?.shotId;
-          if (!shotId || !byId.has(shotId)) return;
-          const shot = byId.get(shotId);
-          shot.locked = !!item.locked;
-          if (typeof item.sourceType === 'string' && item.sourceType.trim()) {
-            shot.sourceType = item.sourceType.trim();
-          }
-          reordered.push(shot);
-          byId.delete(shotId);
-        });
-
-        // Keep any unknown/unlisted shots at the end
-        byId.forEach(shot => reordered.push(shot));
-        sequence.selections = reordered;
-        sequence.totalShots = reordered.length;
-
-        writeSequenceFile(sequence, projectId);
-        sendJSON(res, 200, { success: true, totalShots: sequence.totalShots });
-      } catch (parseErr) {
-        sendJSON(res, 400, { success: false, error: parseErr.message });
-      }
-    });
+  // GET /api/export/context-bundle - Build AI context bundle from existing project files
+  if (req.method === 'GET' && req.url.startsWith('/api/export/context-bundle')) {
+    try {
+      const url = parseRequestUrl(req);
+      const projectId = resolveProjectId(url.searchParams.get('project') || projectManager.getActiveProject(), { required: true });
+      const bundle = buildContextBundle(projectId);
+      sendJSON(res, 200, { success: true, bundle });
+    } catch (err) {
+      sendJSON(res, 400, { success: false, error: err.message });
+    }
     return;
   }
 

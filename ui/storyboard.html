@@ -71,8 +71,11 @@
 
       <div class="storyboard-content">
         <div class="page-toolbar compact">
-          <div class="page-toolbar-title"><h1>Storyboard Preview</h1><p>Arrange selected shots in order and verify references before export.</p></div>
-          <div class="page-toolbar-actions"><button class="btn btn-secondary" id="storyboardFocusBtn">Focus Mode</button></div>
+          <div class="page-toolbar-title"><h1>Storyboard Builder</h1><p>Review renders and finalize shot choices quickly.</p></div>
+          <div class="page-toolbar-actions">
+            <button class="btn btn-secondary" id="previewContextBtn">Preview AI Context</button>
+            <button class="btn btn-secondary" id="storyboardFocusBtn">Focus Mode</button>
+          </div>
         </div>
 
         <div class="view-controls">
@@ -225,6 +228,18 @@
   </div>
 
   <div class="toast-container" id="toastContainer"></div>
+  <div class="context-drawer-overlay" id="contextDrawerOverlay" style="display:none;"></div>
+  <aside class="context-drawer" id="contextDrawer" aria-hidden="true">
+    <div class="context-drawer-header">
+      <h2>AI Context Preview</h2>
+      <button class="btn btn-secondary btn-sm" id="closeContextDrawerBtn">Close</button>
+    </div>
+    <div class="context-drawer-actions">
+      <button class="btn btn-secondary btn-sm" id="copyContextMarkdownBtn">Copy as Markdown</button>
+      <button class="btn btn-secondary btn-sm" id="downloadContextJsonBtn">Download JSON Bundle</button>
+    </div>
+    <div class="context-drawer-content" id="contextDrawerContent"></div>
+  </aside>
 
   <script src="storyboard.js"></script>
 </body>

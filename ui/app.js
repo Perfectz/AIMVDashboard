@@ -144,6 +144,13 @@ const breadcrumbs = document.getElementById('breadcrumbs');
 const generateShotBtn = document.getElementById('generateShotBtn');
 const shotRenders = document.getElementById('shotRenders');
 const shotRendersGrid = document.getElementById('shotRendersGrid');
+const previewContextBtn = document.getElementById('previewContextBtn');
+const contextDrawer = document.getElementById('contextDrawer');
+const contextDrawerOverlay = document.getElementById('contextDrawerOverlay');
+const closeContextDrawerBtn = document.getElementById('closeContextDrawerBtn');
+const contextDrawerContent = document.getElementById('contextDrawerContent');
+const copyContextMarkdownBtn = document.getElementById('copyContextMarkdownBtn');
+const downloadContextJsonBtn = document.getElementById('downloadContextJsonBtn');
 
 // Stats
 const statShots = document.getElementById('stat-shots');
@@ -3443,189 +3450,120 @@ function createRenderCard(imagePath, label, variation, projectParam) {
   return card;
 }
 
+let latestContextBundle = null;
 
-async function safeFetchJson(url, fallback = null) {
+function renderContextDrawer(bundle) {
+  if (!contextDrawerContent) return;
+  const orderList = (bundle.selectedShotOrder || [])
+    .map((s) => `<li>${escapeHtml(s.shotId)} - Variation ${escapeHtml(s.selectedVariation || 'none')}</li>`)
+    .join('');
+
+  const shotsHtml = (bundle.shots || []).map((shot) => {
+    const refs = (shot.references || []).map((ref) => {
+      const assets = ref.assets?.length ? ` (${ref.assets.length} asset${ref.assets.length > 1 ? 's' : ''})` : '';
+      return `<li>${escapeHtml(ref.type)}: ${escapeHtml(ref.name || ref.id || 'Unknown')}${escapeHtml(assets)}</li>`;
+    }).join('');
+    return `
+      <div class="context-block">
+        <h3>${escapeHtml(shot.shotId)}</h3>
+        <p><strong>Script:</strong> ${escapeHtml(shot.scriptSnippet?.what || shot.scriptSnippet?.why || 'N/A')}</p>
+        <p><strong>Transcript:</strong> ${escapeHtml(shot.transcriptSnippet || 'N/A')}</p>
+        <ul>${refs || '<li>No references</li>'}</ul>
+      </div>`;
+  }).join('');
+
+  const warnings = (bundle.warnings || []).map((w) => `<div class="context-warning">⚠ ${escapeHtml(w)}</div>`).join('');
+
+  contextDrawerContent.innerHTML = `
+    <div class="context-block">
+      <h3>Selected Shot Order</h3>
+      <ul>${orderList || '<li>No selected shots</li>'}</ul>
+    </div>
+    <div class="context-block">
+      <h3>Missing Context Warnings</h3>
+      ${warnings || '<div>No warnings</div>'}
+    </div>
+    ${shotsHtml}
+  `;
+}
+
+function bundleToMarkdown(bundle) {
+  const order = (bundle.selectedShotOrder || []).map((s) => `- ${s.shotId}: Variation ${s.selectedVariation || 'none'}`).join('\n');
+  const warnings = (bundle.warnings || []).map((w) => `- ⚠️ ${w}`).join('\n');
+  const shots = (bundle.shots || []).map((shot) => {
+    const refs = (shot.references || []).map((ref) => `- ${ref.type}: ${ref.name || ref.id}`).join('\n') || '- none';
+    return `### ${shot.shotId}\n- Script: ${shot.scriptSnippet?.what || shot.scriptSnippet?.why || 'N/A'}\n- Transcript: ${shot.transcriptSnippet || 'N/A'}\n- Active references:\n${refs}`;
+  }).join('\n\n');
+
+  return `## AI Context Preview\n\n### Selected shot order\n${order || '- none'}\n\n### Missing context warnings\n${warnings || '- none'}\n\n${shots}`;
+}
+
+function downloadJson(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function openContextDrawer() {
+  if (!currentProject) return;
   try {
-    const response = await fetch(url);
-    if (!response.ok) return fallback;
-    return await response.json();
-  } catch {
-    return fallback;
+    const response = await fetch(`/api/export/context-bundle?project=${currentProject.id}`);
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || 'Failed to generate context bundle');
+    latestContextBundle = data.bundle;
+    renderContextDrawer(latestContextBundle);
+    contextDrawerOverlay.style.display = 'block';
+    contextDrawer.classList.add('open');
+    contextDrawer.setAttribute('aria-hidden', 'false');
+  } catch (err) {
+    showToast('Preview failed', err.message, 'error', 3500);
   }
 }
 
-function normalizeShots(shotListData) {
-  if (!shotListData) return [];
-  if (Array.isArray(shotListData)) return shotListData;
-  if (Array.isArray(shotListData.shots)) return shotListData.shots;
-  return [];
+function closeContextDrawer() {
+  if (!contextDrawer || !contextDrawerOverlay) return;
+  contextDrawer.classList.remove('open');
+  contextDrawerOverlay.style.display = 'none';
+  contextDrawer.setAttribute('aria-hidden', 'true');
 }
-
-function hasPreviewAsset(entry) {
-  if (!entry || typeof entry !== 'object') return false;
-  const previewKeys = [
-    'previewImage', 'previewVideo', 'image', 'video', 'selectedVideo', 'selectedPreview',
-    'thumbnail', 'framePath', 'videoPath', 'assetPath'
-  ];
-  return previewKeys.some((key) => !!entry[key]);
-}
-
-async function hasLocationReference(projectId, locationId) {
-  const guide = await safeFetchJson(`/projects/${projectId}/reference/locations/${encodeURIComponent(locationId)}/guide.json`, null);
-  return !!guide;
-}
-
-async function aggregateHomeData(projectId = 'default') {
-  const [shotListData, transcriptData, manifestData, storyboardData, referencesData] = await Promise.all([
-    safeFetchJson(`/projects/${projectId}/bible/shot_list.json`, {}),
-    safeFetchJson(`/projects/${projectId}/bible/transcript.json`, {}),
-    safeFetchJson(`/projects/${projectId}/bible/asset_manifest.json`, {}),
-    safeFetchJson(`/projects/${projectId}/rendered/storyboard/sequence.json`, {}),
-    safeFetchJson(`/api/references/characters?project=${projectId}`, { characters: [] })
-  ]);
-
-  const shots = normalizeShots(shotListData);
-  const transcriptSegments = Array.isArray(transcriptData?.segments) ? transcriptData.segments : [];
-  const manifestAssets = Array.isArray(manifestData?.assets) ? manifestData.assets : [];
-  const storyboardSelections = Array.isArray(storyboardData?.selections) ? storyboardData.selections : [];
-
-  const readyShots = shots.filter((shot) => shot?.status === 'ready' || shot?.ready === true);
-  const blockedShots = shots.filter((shot) => {
-    if (shot?.status === 'blocked' || shot?.blocked === true) return true;
-    return Array.isArray(shot?.blockers) && shot.blockers.length > 0;
-  });
-
-  const transcriptSegmentIds = new Set(transcriptSegments.map((segment) => segment.id || segment.segmentId).filter(Boolean));
-  const shotsWithTranscript = shots.filter((shot) => shot?.transcriptSegmentId || shot?.segmentId);
-  const missingTranscriptShots = shotsWithTranscript.filter((shot) => {
-    const segmentId = shot.transcriptSegmentId || shot.segmentId;
-    return segmentId && !transcriptSegmentIds.has(segmentId);
-  });
-
-  const manifestAssetMap = new Map(manifestAssets.map((asset) => [asset.id || asset.assetId, asset]));
-  const missingAssetsByShot = [];
-  shots.forEach((shot) => {
-    const requiredAssets = Array.isArray(shot?.requiredAssets) ? shot.requiredAssets : [];
-    requiredAssets.forEach((assetId) => {
-      const asset = manifestAssetMap.get(assetId);
-      const missing = !asset || asset.status === 'missing' || asset.exists === false || asset.available === false;
-      if (missing) {
-        missingAssetsByShot.push({ shotId: shot.shotId || shot.id || 'UNKNOWN_SHOT', assetId });
-      }
-    });
-  });
-
-  const characterRefs = Array.isArray(referencesData?.characters) ? referencesData.characters : [];
-  const characterIdsWithRefs = new Set(characterRefs
-    .filter((character) => (character.images?.length || 0) + (character.generatedImages?.length || 0) > 0)
-    .map((character) => character.name));
-
-  const requiredCharacterIds = new Set();
-  const requiredLocationIds = new Set();
-  const shotReferenceGaps = [];
-
-  for (const shot of shots) {
-    const shotId = shot.shotId || shot.id || 'UNKNOWN_SHOT';
-    const missing = [];
-
-    const characters = Array.isArray(shot?.characters) ? shot.characters : [];
-    characters.forEach((character) => {
-      const charId = character?.id || character;
-      if (!charId) return;
-      requiredCharacterIds.add(charId);
-      if (!characterIdsWithRefs.has(charId)) {
-        missing.push(`character ${charId}`);
-      }
-    });
-
-    const locations = Array.isArray(shot?.locations) ? shot.locations : [];
-    for (const location of locations) {
-      const locationId = location?.id || location;
-      if (!locationId) continue;
-      requiredLocationIds.add(locationId);
-      const hasRef = await hasLocationReference(projectId, locationId);
-      if (!hasRef) {
-        missing.push(`location ${locationId}`);
-      }
-    }
-
-    if (missing.length > 0) {
-      shotReferenceGaps.push({ shotId, missing });
-    }
-  }
-
-  let missingCharacterRefs = 0;
-  requiredCharacterIds.forEach((charId) => {
-    if (!characterIdsWithRefs.has(charId)) missingCharacterRefs += 1;
-  });
-
-  let missingLocationRefs = 0;
-  for (const locationId of requiredLocationIds) {
-    const hasRef = await hasLocationReference(projectId, locationId);
-    if (!hasRef) missingLocationRefs += 1;
-  }
-
-  const coveredShotIds = new Set();
-  storyboardSelections.forEach((selection) => {
-    if (hasPreviewAsset(selection)) {
-      coveredShotIds.add(selection.shotId || selection.id);
-    }
-  });
-
-  const coveredShots = [...coveredShotIds].filter(Boolean).length;
-  const totalShots = shots.length;
-  const coveragePercent = totalShots > 0 ? Math.round((coveredShots / totalShots) * 100) : 0;
-
-  const nextBestActions = [];
-  if (missingLocationRefs > 0) {
-    const gap = shotReferenceGaps.find((item) => item.missing.some((entry) => entry.startsWith('location')));
-    if (gap) nextBestActions.push({ text: `Add location refs for ${gap.shotId}`, href: `step4.html?shot=${gap.shotId}&focus=locations` });
-  }
-  if (missingCharacterRefs > 0) {
-    const gap = shotReferenceGaps.find((item) => item.missing.some((entry) => entry.startsWith('character')));
-    if (gap) nextBestActions.push({ text: `Add character refs for ${gap.shotId}`, href: `step4.html?shot=${gap.shotId}&focus=characters` });
-  }
-  if (missingTranscriptShots.length > 0) {
-    nextBestActions.push({ text: `Fill transcript segments for ${missingTranscriptShots[0].shotId || missingTranscriptShots[0].id}`, href: `step2.html?focus=transcript` });
-  }
-  if (missingAssetsByShot.length > 0) {
-    nextBestActions.push({ text: `Update asset manifest for ${missingAssetsByShot[0].shotId}`, href: `step3.html?focus=assets` });
-  }
-  if (coveragePercent < 100 && totalShots > 0) {
-    nextBestActions.push({ text: 'Publish storyboard preview image/video for uncovered shots', href: 'storyboard.html' });
-  }
-
-  return {
-    projectId,
-    shots: {
-      total: totalShots,
-      ready: readyShots.length,
-      blocked: blockedShots.length
-    },
-    missingReferences: {
-      total: missingCharacterRefs + missingLocationRefs,
-      characters: missingCharacterRefs,
-      locations: missingLocationRefs
-    },
-    missingTranscriptSegments: missingTranscriptShots.length,
-    missingAssets: missingAssetsByShot.length,
-    storyboard: {
-      coveragePercent,
-      coveredShots
-    },
-    shotReferenceGaps,
-    nextBestActions
-  };
-}
-
-window.AIMVDashboardData = {
-  safeFetchJson,
-  aggregateHomeData
-};
 
 // Wire up generate shot button
 if (generateShotBtn) {
   generateShotBtn.addEventListener('click', generateShot);
+}
+
+if (previewContextBtn) {
+  previewContextBtn.addEventListener('click', openContextDrawer);
+}
+
+if (closeContextDrawerBtn) {
+  closeContextDrawerBtn.addEventListener('click', closeContextDrawer);
+}
+
+if (contextDrawerOverlay) {
+  contextDrawerOverlay.addEventListener('click', closeContextDrawer);
+}
+
+if (copyContextMarkdownBtn) {
+  copyContextMarkdownBtn.addEventListener('click', async () => {
+    if (!latestContextBundle) return;
+    await copyText(bundleToMarkdown(latestContextBundle));
+    showToast('Copied', 'AI context copied as markdown', 'success', 2000);
+  });
+}
+
+if (downloadContextJsonBtn) {
+  downloadContextJsonBtn.addEventListener('click', () => {
+    if (!latestContextBundle) return;
+    downloadJson(`context-bundle-${currentProject?.id || 'project'}.json`, latestContextBundle);
+    showToast('Downloaded', 'Context bundle JSON saved', 'success', 2000);
+  });
 }
 
 // Initialize character references
@@ -3665,6 +3603,5 @@ async function initializeReferences() {
     showToast('No projects found', 'Run npm run migrate to initialize multi-project support', 'info', 0);
   }
 })();
-
 
 
