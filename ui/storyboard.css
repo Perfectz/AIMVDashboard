@@ -838,3 +838,139 @@ body.focus-mode .left-nav {
 body.focus-mode .main-layout {
   grid-template-columns: 1fr;
 }
+
+/* ===== READINESS PANEL ===== */
+.readiness-panel {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1rem 1.25rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.readiness-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.readiness-title-wrap h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.readiness-title-wrap p {
+  margin: 0.25rem 0 0;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.readiness-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.readiness-counts {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.readiness-count {
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.readiness-ready {
+  background: rgba(52, 168, 83, 0.16);
+  color: #7ee0a3;
+}
+
+.readiness-blocked {
+  background: rgba(234, 67, 53, 0.16);
+  color: #ff9f95;
+}
+
+.readiness-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.readiness-group {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.65rem;
+}
+
+.readiness-filter-link {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.readiness-filter-link.active,
+.readiness-filter-link:hover {
+  color: var(--accent-primary);
+}
+
+.readiness-shot-list {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.readiness-shot-chip {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.readiness-shot-chip:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.readiness-clear,
+.readiness-extra {
+  font-size: 11px;
+  color: var(--text-quaternary);
+}
+
+.readiness-recommendations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.readiness-recommendation {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  border-left: 2px solid var(--border-hover);
+  padding-left: 0.45rem;
+}
+
+.readiness-filter-empty {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}

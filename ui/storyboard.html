@@ -83,6 +83,22 @@
           <div class="view-actions"><button class="btn btn-small" id="refreshBtn">Refresh</button></div>
         </div>
 
+        <div class="readiness-panel" id="readinessPanel" style="display: none;">
+          <div class="readiness-header">
+            <div class="readiness-title-wrap">
+              <h3>Shot Readiness</h3>
+              <p>Quick dependency lint before final selection.</p>
+            </div>
+            <div class="readiness-actions">
+              <button class="btn btn-small btn-secondary" id="clearReadinessFilterBtn" style="display: none;">Clear Filter</button>
+              <button class="btn btn-small" id="saveReadinessReportBtn" title="Write summary to projects/&lt;id&gt;/lint/readiness_report.json">Save Report</button>
+            </div>
+          </div>
+          <div class="readiness-counts" id="readinessCounts"></div>
+          <div class="readiness-lists" id="readinessLists"></div>
+          <div class="readiness-recommendations" id="readinessRecommendations"></div>
+        </div>
+
         <div class="empty-state" id="emptyState">
           <h2>No Rendered Assets Found</h2>
           <p>Place rendered videos and images in the <code>rendered/shots/</code> directory.</p>

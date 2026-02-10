@@ -95,6 +95,10 @@ function dismissToast(toastId) {
 let emptyState, gridView, timelineView, shotGrid, timelineTrack;
 let shotModal, modalTitle, variationGrid, shotDetails;
 let statTotalShots, statRendered, statSelected, statDuration;
+let readinessPanel, readinessCounts, readinessLists, readinessRecommendations;
+let clearReadinessFilterBtn, saveReadinessReportBtn;
+let currentReadinessFilter = 'all';
+let currentReadinessData = null;
 
 /**
  * Initialize DOM element references
@@ -113,6 +117,12 @@ function initializeDOMElements() {
   statRendered = document.getElementById('stat-rendered');
   statSelected = document.getElementById('stat-selected');
   statDuration = document.getElementById('stat-duration');
+  readinessPanel = document.getElementById('readinessPanel');
+  readinessCounts = document.getElementById('readinessCounts');
+  readinessLists = document.getElementById('readinessLists');
+  readinessRecommendations = document.getElementById('readinessRecommendations');
+  clearReadinessFilterBtn = document.getElementById('clearReadinessFilterBtn');
+  saveReadinessReportBtn = document.getElementById('saveReadinessReportBtn');
 }
 
 /**
@@ -422,6 +432,225 @@ function updateStats() {
   statDuration.textContent = `${duration}s`;
 }
 
+
+function shotHasPreviewSource(shot) {
+  return Boolean(
+    shot?.renderFiles?.thumbnail ||
+    shot?.renderFiles?.kling?.A ||
+    shot?.renderFiles?.kling?.B ||
+    shot?.renderFiles?.kling?.C ||
+    shot?.renderFiles?.kling?.D ||
+    shot?.renderFiles?.nano?.firstFrame ||
+    shot?.renderFiles?.nano?.lastFrame
+  );
+}
+
+function shotHasCharacterRefs(shot) {
+  const refs = shot?.characterRefs || shot?.characters;
+  if (!Array.isArray(refs)) return false;
+  return refs.some(ref => typeof ref === 'string' ? ref.trim() : ref?.id);
+}
+
+function shotHasLocationRefs(shot) {
+  const refs = shot?.locationRefs || shot?.locations;
+  if (Array.isArray(refs)) {
+    return refs.some(ref => typeof ref === 'string' ? ref.trim() : ref?.id);
+  }
+  if (refs && typeof refs === 'object') {
+    return Boolean(refs.id || refs.name);
+  }
+  return false;
+}
+
+function shotHasSelectedVariation(shot) {
+  return Boolean(shot?.selectedVariation && shot.selectedVariation !== 'none');
+}
+
+function computeReadinessData() {
+  const shots = sequenceData?.selections || [];
+  const categories = {
+    missingPreview: [],
+    missingCharacterRefs: [],
+    missingLocationRefs: [],
+    missingSelection: []
+  };
+
+  shots.forEach(shot => {
+    if (!shotHasPreviewSource(shot)) categories.missingPreview.push(shot);
+    if (!shotHasCharacterRefs(shot)) categories.missingCharacterRefs.push(shot);
+    if (!shotHasLocationRefs(shot)) categories.missingLocationRefs.push(shot);
+    if (!shotHasSelectedVariation(shot)) categories.missingSelection.push(shot);
+  });
+
+  const blockedSet = new Set();
+  Object.values(categories).forEach(list => list.forEach(shot => blockedSet.add(shot.shotId)));
+
+  return {
+    total: shots.length,
+    ready: shots.length - blockedSet.size,
+    blocked: blockedSet.size,
+    categories,
+    blockedShotIds: Array.from(blockedSet)
+  };
+}
+
+function createReadinessFilterLink(filterKey, count, label) {
+  const button = document.createElement('button');
+  button.className = 'readiness-filter-link';
+  if (currentReadinessFilter === filterKey) button.classList.add('active');
+  button.textContent = `${label}: ${count}`;
+  button.addEventListener('click', () => {
+    currentReadinessFilter = filterKey;
+    renderView();
+  });
+  return button;
+}
+
+function renderReadinessPanel() {
+  if (!readinessPanel) return;
+
+  if (!sequenceData?.selections?.length) {
+    readinessPanel.style.display = 'none';
+    return;
+  }
+
+  const data = computeReadinessData();
+  currentReadinessData = data;
+  readinessPanel.style.display = 'block';
+
+  readinessCounts.innerHTML = '';
+  readinessLists.innerHTML = '';
+  readinessRecommendations.innerHTML = '';
+
+  const readyBadge = document.createElement('div');
+  readyBadge.className = 'readiness-count readiness-ready';
+  readyBadge.textContent = `Ready: ${data.ready}`;
+  readinessCounts.appendChild(readyBadge);
+
+  const blockedBadge = document.createElement('div');
+  blockedBadge.className = 'readiness-count readiness-blocked';
+  blockedBadge.textContent = `Blocked: ${data.blocked}`;
+  readinessCounts.appendChild(blockedBadge);
+
+  const listItems = [
+    ['missingPreview', 'No preview source', 'Add thumbnail or render output for each shot.'],
+    ['missingCharacterRefs', 'Missing character refs', 'Attach characterRefs/characters IDs so tools can preserve identity continuity.'],
+    ['missingLocationRefs', 'Missing location refs', 'Attach locationRefs/locations IDs so environment consistency is enforced.'],
+    ['missingSelection', 'No selected variation/render', 'Set selectedVariation to A/B/C/D after review in the modal.']
+  ];
+
+  listItems.forEach(([key, label, recommendation]) => {
+    const list = data.categories[key];
+
+    const group = document.createElement('div');
+    group.className = 'readiness-group';
+
+    const title = document.createElement('div');
+    title.className = 'readiness-group-title';
+    title.appendChild(createReadinessFilterLink(key, list.length, label));
+    group.appendChild(title);
+
+    const shotsWrap = document.createElement('div');
+    shotsWrap.className = 'readiness-shot-list';
+    if (list.length === 0) {
+      const clear = document.createElement('span');
+      clear.className = 'readiness-clear';
+      clear.textContent = 'None';
+      shotsWrap.appendChild(clear);
+    } else {
+      list.slice(0, 8).forEach(shot => {
+        const chip = document.createElement('button');
+        chip.className = 'readiness-shot-chip';
+        chip.textContent = shot.shotId;
+        chip.addEventListener('click', () => openShotModal(shot));
+        shotsWrap.appendChild(chip);
+      });
+      if (list.length > 8) {
+        const extra = document.createElement('span');
+        extra.className = 'readiness-extra';
+        extra.textContent = `+${list.length - 8} more`;
+        shotsWrap.appendChild(extra);
+      }
+    }
+    group.appendChild(shotsWrap);
+    readinessLists.appendChild(group);
+
+    if (list.length > 0) {
+      const rec = document.createElement('div');
+      rec.className = 'readiness-recommendation';
+      rec.textContent = `${label}: ${recommendation}`;
+      readinessRecommendations.appendChild(rec);
+    }
+  });
+
+  clearReadinessFilterBtn.style.display = currentReadinessFilter === 'all' ? 'none' : 'inline-flex';
+}
+
+function getFilteredShotsForCurrentReadinessFilter(shots) {
+  if (!currentReadinessData || currentReadinessFilter === 'all') {
+    return shots;
+  }
+
+  const validFilters = {
+    missingPreview: 'missingPreview',
+    missingCharacterRefs: 'missingCharacterRefs',
+    missingLocationRefs: 'missingLocationRefs',
+    missingSelection: 'missingSelection',
+    blocked: 'blocked'
+  };
+
+  if (currentReadinessFilter === 'blocked') {
+    const blockedIds = new Set(currentReadinessData.blockedShotIds);
+    return shots.filter(shot => blockedIds.has(shot.shotId));
+  }
+
+  const categoryKey = validFilters[currentReadinessFilter];
+  if (!categoryKey) return shots;
+
+  const allowedIds = new Set(currentReadinessData.categories[categoryKey].map(shot => shot.shotId));
+  return shots.filter(shot => allowedIds.has(shot.shotId));
+}
+
+async function saveReadinessReport() {
+  if (!currentProject?.id || !currentReadinessData) {
+    showToast('Report unavailable', 'Load a project first', 'warning', 3000);
+    return;
+  }
+
+  const report = {
+    generatedAt: new Date().toISOString(),
+    projectId: currentProject.id,
+    totalShots: currentReadinessData.total,
+    readyShots: currentReadinessData.ready,
+    blockedShots: currentReadinessData.blocked,
+    blockedShotIds: currentReadinessData.blockedShotIds,
+    categories: {
+      missingPreview: currentReadinessData.categories.missingPreview.map(s => s.shotId),
+      missingCharacterRefs: currentReadinessData.categories.missingCharacterRefs.map(s => s.shotId),
+      missingLocationRefs: currentReadinessData.categories.missingLocationRefs.map(s => s.shotId),
+      missingSelection: currentReadinessData.categories.missingSelection.map(s => s.shotId)
+    }
+  };
+
+  try {
+    const response = await fetch(`/projects/${currentProject.id}/lint/readiness_report.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(report, null, 2)
+    });
+
+    if (!response.ok) {
+      throw new Error('Direct save route not available in this environment');
+    }
+
+    showToast('Readiness report saved', `projects/${currentProject.id}/lint/readiness_report.json`, 'success', 3000);
+  } catch (err) {
+    const fallbackText = JSON.stringify(report, null, 2);
+    await copyText(fallbackText);
+    showToast('Save unavailable', 'Copied readiness_report.json content to clipboard', 'warning', 4500);
+  }
+}
+
 /**
  * Show empty state
  */
@@ -448,6 +677,7 @@ function renderView() {
   }
 
   hideEmptyState();
+  renderReadinessPanel();
 
   if (currentView === 'grid') {
     gridView.style.display = 'block';
@@ -466,10 +696,19 @@ function renderView() {
 function renderGridView() {
   shotGrid.innerHTML = '';
 
-  sequenceData.selections.forEach(shot => {
+  const filteredShots = getFilteredShotsForCurrentReadinessFilter(sequenceData.selections);
+
+  filteredShots.forEach(shot => {
     const card = createShotCard(shot);
     shotGrid.appendChild(card);
   });
+
+  if (filteredShots.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'readiness-filter-empty';
+    empty.textContent = 'No shots match this readiness filter.';
+    shotGrid.appendChild(empty);
+  }
 }
 
 /**
@@ -565,7 +804,9 @@ function renderTimelineView() {
 
   // Group shots by music section
   const sections = {};
-  sequenceData.selections.forEach(shot => {
+  const filteredShots = getFilteredShotsForCurrentReadinessFilter(sequenceData.selections);
+
+  filteredShots.forEach(shot => {
     const sectionName = shot.timing?.musicSection || 'Unknown';
     if (!sections[sectionName]) {
       sections[sectionName] = [];
@@ -955,6 +1196,13 @@ function initializeButtons() {
   if (modalOverlay) modalOverlay.addEventListener('click', closeModal);
   if (modalCancel) modalCancel.addEventListener('click', closeModal);
   if (modalSave) modalSave.addEventListener('click', saveSelection);
+  if (clearReadinessFilterBtn) {
+    clearReadinessFilterBtn.addEventListener('click', () => {
+      currentReadinessFilter = 'all';
+      renderView();
+    });
+  }
+  if (saveReadinessReportBtn) saveReadinessReportBtn.addEventListener('click', saveReadinessReport);
 }
 
 // Project selector event listeners

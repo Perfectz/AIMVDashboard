@@ -1774,6 +1774,34 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+
+  // PUT /projects/:id/lint/readiness_report.json - Save readiness report
+  if (req.method === 'PUT' && req.url.match(/^\/projects\/([^\/]+)\/lint\/readiness_report\.json$/)) {
+    const projectId = req.url.match(/^\/projects\/([^\/]+)\/lint\/readiness_report\.json$/)[1];
+
+    readBody(req, MAX_BODY_SIZE, (err, body) => {
+      if (err) {
+        sendJSON(res, 413, { success: false, error: 'Payload too large' });
+        return;
+      }
+
+      try {
+        sanitizePathSegment(projectId, PROJECT_ID_REGEX, 'project');
+        const parsed = JSON.parse(body || '{}');
+        const lintDir = path.join(projectManager.getProjectPath(projectId), 'lint');
+        fs.mkdirSync(lintDir, { recursive: true });
+
+        const filePath = path.join(lintDir, 'readiness_report.json');
+        fs.writeFileSync(filePath, JSON.stringify(parsed, null, 2), 'utf8');
+
+        sendJSON(res, 200, { success: true, path: `projects/${projectId}/lint/readiness_report.json` });
+      } catch (saveErr) {
+        sendJSON(res, 400, { success: false, error: saveErr.message });
+      }
+    });
+    return;
+  }
+
   // ===== GET FILE ROUTES =====
 
   let filePath;
