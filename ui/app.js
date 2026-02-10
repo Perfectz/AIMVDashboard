@@ -1889,6 +1889,234 @@ function setupCanonTabs() {
   });
 }
 
+function normalizeShotLinks(shot) {
+  if (!shot || typeof shot !== 'object') return shot;
+  if (!shot.intent || typeof shot.intent !== 'object') shot.intent = {};
+  if (!shot.intent.links || typeof shot.intent.links !== 'object') shot.intent.links = {};
+
+  const links = shot.intent.links;
+  if (!Array.isArray(links.transcriptSegments)) links.transcriptSegments = [];
+  if (!Array.isArray(links.assets)) links.assets = [];
+  if (!Array.isArray(links.references)) links.references = [];
+
+  return shot;
+}
+
+function normalizeScriptData(scriptData) {
+  if (!scriptData || typeof scriptData !== 'object') {
+    return { version: '2026-02-08', shots: [], youtubeContentScript: '', transcriptBlocks: [] };
+  }
+
+  if (!Array.isArray(scriptData.shots)) scriptData.shots = [];
+  scriptData.shots = scriptData.shots.map(normalizeShotLinks);
+
+  if (typeof scriptData.youtubeContentScript !== 'string') scriptData.youtubeContentScript = '';
+  if (!Array.isArray(scriptData.transcriptBlocks)) scriptData.transcriptBlocks = [];
+
+  scriptData.transcriptBlocks = scriptData.transcriptBlocks
+    .map((block, idx) => {
+      if (typeof block === 'string') {
+        return { id: `SEG_${String(idx + 1).padStart(2, '0')}`, text: block };
+      }
+      const id = typeof block.id === 'string' && block.id.trim() ? block.id.trim() : `SEG_${String(idx + 1).padStart(2, '0')}`;
+      const text = typeof block.text === 'string' ? block.text : '';
+      const timecode = typeof block.timecode === 'string' ? block.timecode : '';
+      return { id, text, timecode };
+    })
+    .filter(block => block.text || block.id);
+
+  return scriptData;
+}
+
+function parseScriptJsonFromEditor() {
+  const scriptTextarea = document.getElementById('scriptJson');
+  if (!scriptTextarea) return null;
+  const raw = scriptTextarea.value.trim();
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+    return normalizeScriptData(parsed);
+  } catch (err) {
+    return null;
+  }
+}
+
+function getTranscriptBlocksFromScriptData(scriptData) {
+  if (Array.isArray(scriptData.transcriptBlocks) && scriptData.transcriptBlocks.length > 0) {
+    return scriptData.transcriptBlocks;
+  }
+
+  const fallback = [];
+  if (typeof scriptData.youtubeContentScript === 'string' && scriptData.youtubeContentScript.trim()) {
+    scriptData.youtubeContentScript
+      .split(/\n{2,}/)
+      .map(part => part.trim())
+      .filter(Boolean)
+      .forEach((text, idx) => {
+        fallback.push({ id: `SEG_${String(idx + 1).padStart(2, '0')}`, text, timecode: '' });
+      });
+  }
+
+  return fallback;
+}
+
+function jumpToTranscriptSegment(segmentId) {
+  const el = document.querySelector(`[data-transcript-segment-id="${segmentId}"]`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.add('quick-jump-highlight');
+  setTimeout(() => el.classList.remove('quick-jump-highlight'), 1200);
+}
+
+function renderTranscriptBlocks(scriptData) {
+  const transcriptBlocksEl = document.getElementById('transcriptBlocks');
+  if (!transcriptBlocksEl) return;
+
+  const transcriptBlocks = getTranscriptBlocksFromScriptData(scriptData);
+  transcriptBlocksEl.innerHTML = '';
+
+  if (transcriptBlocks.length === 0) {
+    transcriptBlocksEl.innerHTML = '<div class="transcript-empty">No transcript blocks yet.</div>';
+    return;
+  }
+
+  transcriptBlocks.forEach(block => {
+    const card = document.createElement('article');
+    card.className = 'transcript-block-card';
+    card.dataset.transcriptSegmentId = block.id;
+
+    const header = document.createElement('div');
+    header.className = 'transcript-block-header';
+
+    const idEl = document.createElement('span');
+    idEl.className = 'transcript-segment-id';
+    idEl.textContent = block.id;
+
+    header.appendChild(idEl);
+
+    if (block.timecode) {
+      const timecodeEl = document.createElement('span');
+      timecodeEl.className = 'transcript-timecode';
+      timecodeEl.textContent = block.timecode;
+      header.appendChild(timecodeEl);
+    }
+
+    const textEl = document.createElement('p');
+    textEl.className = 'transcript-block-text';
+    textEl.textContent = block.text || '(empty segment)';
+
+    card.appendChild(header);
+    card.appendChild(textEl);
+    transcriptBlocksEl.appendChild(card);
+  });
+}
+
+function renderShotCards(scriptData) {
+  const shotCardsEl = document.getElementById('shotCards');
+  if (!shotCardsEl) return;
+
+  shotCardsEl.innerHTML = '';
+  const shots = Array.isArray(scriptData.shots) ? scriptData.shots : [];
+
+  if (shots.length === 0) {
+    shotCardsEl.innerHTML = '<div class="transcript-empty">No shots found in script JSON.</div>';
+    return;
+  }
+
+  shots.forEach((shot, idx) => {
+    normalizeShotLinks(shot);
+
+    const card = document.createElement('article');
+    card.className = 'shot-list-card';
+
+    const title = document.createElement('h4');
+    title.className = 'shot-list-card-title';
+    const shotId = shot.id || shot.shotId || `SHOT_${String(idx + 1).padStart(2, '0')}`;
+    title.textContent = `${shotId} · Shot ${shot.shotNumber || idx + 1}`;
+
+    const intent = document.createElement('p');
+    intent.className = 'shot-list-card-intent';
+    intent.textContent = shot.intent?.what || shot.intent?.why || 'No intent summary yet.';
+
+    const chipGroup = document.createElement('div');
+    chipGroup.className = 'shot-link-chip-group';
+
+    const addChip = (label, values, jumpable = false) => {
+      const chip = document.createElement('div');
+      chip.className = 'shot-link-chip';
+
+      const badge = document.createElement('span');
+      badge.className = 'shot-link-chip-badge';
+      badge.textContent = `${label}: ${values.length}`;
+      chip.appendChild(badge);
+
+      if (values.length) {
+        const list = document.createElement('div');
+        list.className = 'shot-link-chip-items';
+        values.forEach(val => {
+          const item = document.createElement(jumpable ? 'button' : 'span');
+          item.className = jumpable ? 'quick-jump-chip' : 'shot-link-value';
+          item.textContent = val;
+          if (jumpable) {
+            item.type = 'button';
+            item.addEventListener('click', () => jumpToTranscriptSegment(val));
+          }
+          list.appendChild(item);
+        });
+        chip.appendChild(list);
+      }
+
+      chipGroup.appendChild(chip);
+    };
+
+    const transcriptSegments = shot.intent.links.transcriptSegments.map(String);
+    const assets = shot.intent.links.assets.map(String);
+    const references = shot.intent.links.references.map(String);
+
+    addChip('Transcript', transcriptSegments, true);
+    addChip('Assets', assets, false);
+    addChip('Refs', references, false);
+
+    card.appendChild(title);
+    card.appendChild(intent);
+    card.appendChild(chipGroup);
+    shotCardsEl.appendChild(card);
+  });
+}
+
+function syncScriptEditorViews() {
+  const scriptTextarea = document.getElementById('scriptJson');
+  if (!scriptTextarea) return;
+
+  const parsed = parseScriptJsonFromEditor();
+  if (!parsed) return;
+
+  const youtubeScriptEl = document.getElementById('youtubeContentScript');
+  if (youtubeScriptEl && document.activeElement !== youtubeScriptEl) {
+    youtubeScriptEl.value = parsed.youtubeContentScript || '';
+  }
+
+  renderTranscriptBlocks(parsed);
+  renderShotCards(parsed);
+}
+
+function buildScriptJsonFromViews() {
+  const scriptTextarea = document.getElementById('scriptJson');
+  if (!scriptTextarea) return '';
+
+  const base = parseScriptJsonFromEditor() || normalizeScriptData({});
+  const youtubeScriptEl = document.getElementById('youtubeContentScript');
+  base.youtubeContentScript = youtubeScriptEl ? youtubeScriptEl.value : base.youtubeContentScript;
+
+  if (!Array.isArray(base.transcriptBlocks) || base.transcriptBlocks.length === 0) {
+    base.transcriptBlocks = getTranscriptBlocksFromScriptData(base);
+  }
+
+  base.shots = (base.shots || []).map(normalizeShotLinks);
+  return JSON.stringify(base, null, 2);
+}
+
 // Save canon data
 async function saveCanonData(type, content, statusElementId, label) {
   if (!currentProject) {
@@ -1938,6 +2166,9 @@ async function loadCanonData() {
           const textarea = document.getElementById(`${type}Json`);
           if (textarea) {
             textarea.value = data.content;
+            if (type === 'script') {
+              syncScriptEditorViews();
+            }
           }
           const statusEl = document.getElementById(`${type}Status`);
           if (statusEl) {
@@ -2044,12 +2275,14 @@ if (saveCinematographyBtn) {
 const saveScriptBtn = document.getElementById('saveScriptBtn');
 if (saveScriptBtn) {
   saveScriptBtn.addEventListener('click', async () => {
-    const content = document.getElementById('scriptJson').value.trim();
+    const content = buildScriptJsonFromViews();
     if (!content) {
       showToast('Error', 'Please enter script JSON', 'warning', 3000);
       return;
     }
+    document.getElementById('scriptJson').value = content;
     await saveCanonData('script', content, 'scriptStatus', 'Script');
+    syncScriptEditorViews();
   });
 }
 
@@ -2058,6 +2291,23 @@ function initializeCanon() {
   if (document.querySelector('.canon-tab')) {
     setupCanonTabs();
     loadCanonData();
+
+    const scriptTextarea = document.getElementById('scriptJson');
+    if (scriptTextarea) {
+      scriptTextarea.addEventListener('input', syncScriptEditorViews);
+    }
+
+    const youtubeScriptEl = document.getElementById('youtubeContentScript');
+    if (youtubeScriptEl) {
+      youtubeScriptEl.addEventListener('input', () => {
+        const scriptTextareaEl = document.getElementById('scriptJson');
+        if (!scriptTextareaEl) return;
+        const merged = buildScriptJsonFromViews();
+        if (!merged) return;
+        scriptTextareaEl.value = merged;
+        syncScriptEditorViews();
+      });
+    }
   }
 }
 
