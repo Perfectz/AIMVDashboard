@@ -3,6 +3,8 @@
 
 let sequenceData = null;
 let currentView = 'grid';
+let dragShotId = null;
+let saveStoryboardTimer = null;
 let selectedShot = null;
 let selectedVariation = null;
 let currentProject = null;
@@ -92,7 +94,7 @@ function dismissToast(toastId) {
 
 // DOM Elements (will be accessed via document.getElementById when needed)
 // These are kept as variables for functions that use them repeatedly
-let emptyState, gridView, timelineView, shotGrid, timelineTrack;
+let emptyState, gridView, timelineView, shotGrid, timelineTrack, timelineFilmstrip;
 let shotModal, modalTitle, variationGrid, shotDetails;
 let statTotalShots, statRendered, statSelected, statDuration;
 
@@ -105,6 +107,7 @@ function initializeDOMElements() {
   timelineView = document.getElementById('timelineView');
   shotGrid = document.getElementById('shotGrid');
   timelineTrack = document.getElementById('timelineTrack');
+  timelineFilmstrip = document.getElementById('timelineFilmstrip');
   shotModal = document.getElementById('shotModal');
   modalTitle = document.getElementById('modalTitle');
   variationGrid = document.getElementById('variationGrid');
@@ -380,6 +383,9 @@ async function loadSequence() {
       throw new Error('Sequence file not found');
     }
     sequenceData = await response.json();
+    if (Array.isArray(sequenceData.selections)) {
+      sequenceData.selections.forEach(ensureStoryboardMetadata);
+    }
     updateStats();
     renderView();
 
@@ -436,6 +442,85 @@ function showEmptyState() {
  */
 function hideEmptyState() {
   emptyState.style.display = 'none';
+}
+
+
+function ensureStoryboardMetadata(shot) {
+  if (!shot) return;
+  if (typeof shot.locked !== 'boolean') {
+    shot.locked = false;
+  }
+  if (!shot.sourceType) {
+    shot.sourceType = inferShotSource(shot);
+  }
+}
+
+function inferShotSource(shot) {
+  if (shot.status && shot.status !== 'not_rendered') return 'Rendered';
+  const noteBlob = `${shot.notes || ''} ${(shot.description || '')}`.toLowerCase();
+  if (noteBlob.includes('character')) return 'Character Ref';
+  if (noteBlob.includes('location')) return 'Location Ref';
+  return 'Manual';
+}
+
+function getSourceBadgeClass(sourceType) {
+  switch (sourceType) {
+    case 'Rendered': return 'source-rendered';
+    case 'Character Ref': return 'source-character';
+    case 'Location Ref': return 'source-location';
+    default: return 'source-manual';
+  }
+}
+
+function queueStoryboardSave() {
+  if (saveStoryboardTimer) {
+    clearTimeout(saveStoryboardTimer);
+  }
+  saveStoryboardTimer = setTimeout(() => {
+    saveStoryboardSequence();
+  }, 150);
+}
+
+async function saveStoryboardSequence() {
+  if (!sequenceData || !Array.isArray(sequenceData.selections)) return;
+
+  const projectParam = currentProject ? `?project=${currentProject.id}` : '';
+  const payload = {
+    selections: sequenceData.selections.map(shot => ({
+      shotId: shot.shotId,
+      locked: !!shot.locked,
+      sourceType: shot.sourceType || inferShotSource(shot)
+    }))
+  };
+
+  try {
+    const response = await fetch(`/api/storyboard/sequence${projectParam}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Failed to save storyboard sequence');
+    }
+  } catch (err) {
+    console.error('Failed to persist storyboard sequence:', err);
+    showToast('Save failed', err.message, 'error', 4000);
+  }
+}
+
+function moveShotInSequence(fromShotId, toShotId) {
+  if (!fromShotId || !toShotId || fromShotId === toShotId || !sequenceData?.selections) return false;
+
+  const fromIndex = sequenceData.selections.findIndex(s => s.shotId === fromShotId);
+  const toIndex = sequenceData.selections.findIndex(s => s.shotId === toShotId);
+
+  if (fromIndex < 0 || toIndex < 0) return false;
+
+  const [moved] = sequenceData.selections.splice(fromIndex, 1);
+  sequenceData.selections.splice(toIndex, 0, moved);
+  return true;
 }
 
 /**
@@ -529,10 +614,32 @@ function createShotCard(shot) {
   const info = document.createElement('div');
   info.className = 'shot-info';
 
+  const header = document.createElement('div');
+  header.className = 'shot-card-header';
+
   const shotId = document.createElement('div');
   shotId.className = 'shot-id';
   shotId.textContent = shot.shotId;
-  info.appendChild(shotId);
+  header.appendChild(shotId);
+
+  const lockBtn = document.createElement('button');
+  lockBtn.className = `shot-lock-btn ${shot.locked ? 'locked' : ''}`;
+  lockBtn.type = 'button';
+  lockBtn.textContent = shot.locked ? '\ud83d\udccc Pinned' : 'Pin';
+  lockBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    shot.locked = !shot.locked;
+    renderView();
+    queueStoryboardSave();
+  });
+  header.appendChild(lockBtn);
+
+  info.appendChild(header);
+
+  const sourceBadge = document.createElement('div');
+  sourceBadge.className = `shot-source-badge ${getSourceBadgeClass(shot.sourceType)}`;
+  sourceBadge.textContent = shot.sourceType;
+  info.appendChild(sourceBadge);
 
   const meta = document.createElement('div');
   meta.className = 'shot-meta';
@@ -562,6 +669,7 @@ function createShotCard(shot) {
  */
 function renderTimelineView() {
   timelineTrack.innerHTML = '';
+  renderTimelineFilmstrip();
 
   // Group shots by music section
   const sections = {};
@@ -577,6 +685,99 @@ function renderTimelineView() {
   Object.keys(sections).forEach(sectionName => {
     const sectionEl = createTimelineSection(sectionName, sections[sectionName]);
     timelineTrack.appendChild(sectionEl);
+  });
+}
+
+
+function renderTimelineFilmstrip() {
+  if (!timelineFilmstrip) return;
+  timelineFilmstrip.innerHTML = '';
+
+  sequenceData.selections.forEach(shot => {
+    const item = document.createElement('div');
+    item.className = `filmstrip-item ${shot.locked ? 'locked' : ''}`;
+    item.draggable = !shot.locked;
+    item.dataset.shotId = shot.shotId;
+
+    item.addEventListener('dragstart', (e) => {
+      if (shot.locked) {
+        e.preventDefault();
+        return;
+      }
+      dragShotId = shot.shotId;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', shot.shotId);
+    });
+
+    item.addEventListener('dragend', () => {
+      dragShotId = null;
+      document.querySelectorAll('.filmstrip-item').forEach(el => el.classList.remove('dragging', 'drop-target'));
+    });
+
+    item.addEventListener('dragover', (e) => {
+      if (!dragShotId || dragShotId === shot.shotId || shot.locked) return;
+      e.preventDefault();
+      item.classList.add('drop-target');
+    });
+
+    item.addEventListener('dragleave', () => item.classList.remove('drop-target'));
+
+    item.addEventListener('drop', (e) => {
+      e.preventDefault();
+      item.classList.remove('drop-target');
+      const fromShotId = e.dataTransfer.getData('text/plain') || dragShotId;
+      if (!fromShotId) return;
+      const moved = moveShotInSequence(fromShotId, shot.shotId);
+      if (moved) {
+        renderView();
+        queueStoryboardSave();
+      }
+    });
+
+    const thumb = document.createElement('div');
+    thumb.className = 'filmstrip-thumb';
+    const thumbnailPath = shot.renderFiles?.thumbnail;
+    if (thumbnailPath) {
+      const img = document.createElement('img');
+      img.src = `/${thumbnailPath}`;
+      img.alt = shot.shotId;
+      thumb.appendChild(img);
+    } else {
+      const placeholder = document.createElement('div');
+      placeholder.className = 'filmstrip-placeholder';
+      placeholder.textContent = shot.shotId;
+      thumb.appendChild(placeholder);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'filmstrip-meta';
+
+    const label = document.createElement('div');
+    label.className = 'filmstrip-label';
+    label.textContent = shot.shotId;
+    meta.appendChild(label);
+
+    const source = document.createElement('div');
+    source.className = `shot-source-badge ${getSourceBadgeClass(shot.sourceType)}`;
+    source.textContent = shot.sourceType;
+    meta.appendChild(source);
+
+    const lock = document.createElement('button');
+    lock.type = 'button';
+    lock.className = `filmstrip-lock ${shot.locked ? 'locked' : ''}`;
+    lock.textContent = shot.locked ? 'Unpin' : 'Pin';
+    lock.addEventListener('click', (e) => {
+      e.stopPropagation();
+      shot.locked = !shot.locked;
+      renderView();
+      queueStoryboardSave();
+    });
+
+    item.appendChild(thumb);
+    item.appendChild(meta);
+    item.appendChild(lock);
+    timelineFilmstrip.appendChild(item);
   });
 }
 
@@ -896,6 +1097,7 @@ async function saveSelection() {
   // For now, just update local state and re-render
   console.log(`Selected variation ${selectedVariation} for ${selectedShot.shotId}`);
 
+  queueStoryboardSave();
   showToast('Selection saved', `${selectedShot.shotId}: Option ${selectedVariation}`, 'success', 2000);
   closeModal();
   renderView();

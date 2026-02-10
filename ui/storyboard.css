@@ -265,6 +265,142 @@
   gap: 2.5rem;
 }
 
+
+.timeline-filmstrip {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+}
+
+.filmstrip-item {
+  min-width: 180px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: grab;
+  display: flex;
+  flex-direction: column;
+}
+
+.filmstrip-item.dragging {
+  opacity: 0.5;
+}
+
+.filmstrip-item.drop-target {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.filmstrip-item.locked {
+  cursor: default;
+}
+
+.filmstrip-thumb {
+  aspect-ratio: 16 / 9;
+  background: var(--bg-primary);
+}
+
+.filmstrip-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.filmstrip-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--text-quaternary);
+}
+
+.filmstrip-meta {
+  padding: 0.5rem 0.625rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.filmstrip-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.filmstrip-lock,
+.shot-lock-btn {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-tertiary);
+  border-radius: 8px;
+  font-size: 11px;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+}
+
+.filmstrip-lock.locked,
+.shot-lock-btn.locked {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.filmstrip-lock {
+  margin: 0 0.625rem 0.625rem;
+}
+
+.shot-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.shot-source-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  border: 1px solid transparent;
+}
+
+.source-rendered {
+  color: #65d27e;
+  border-color: rgba(101, 210, 126, 0.35);
+  background: rgba(101, 210, 126, 0.12);
+}
+
+.source-character {
+  color: #ffcf66;
+  border-color: rgba(255, 207, 102, 0.35);
+  background: rgba(255, 207, 102, 0.12);
+}
+
+.source-location {
+  color: #74b6ff;
+  border-color: rgba(116, 182, 255, 0.35);
+  background: rgba(116, 182, 255, 0.12);
+}
+
+.source-manual {
+  color: var(--text-tertiary);
+  border-color: var(--border);
+  background: rgba(255,255,255,0.04);
+}
+
 /* Timeline Sections */
 .timeline-section {
   background: var(--bg-card);
