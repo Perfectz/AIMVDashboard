@@ -6,8 +6,10 @@
   <title>Step 1: Theme - AI Music Video</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/themes/dark.css">
+  <link rel="stylesheet" href="ui-layer.css">
 </head>
 <body>
   <div class="container">
@@ -15,89 +17,28 @@
       <!-- Left Navigation -->
       <nav class="left-nav">
         <!-- Brand Header -->
-        <div class="nav-brand">
-          <h1>Prompt Compiler</h1>
-          <p class="nav-subtitle">AI Music Video Project</p>
-        </div>
+        <div class="nav-brand" data-ui-nav-brand data-ui-mode="standard"></div>
 
         <!-- Project Selector -->
-        <div class="project-selector-section">
-          <div class="nav-header">
-            <div class="nav-title">Current Project</div>
-            <button class="btn-icon" id="newProjectBtn" title="New Project">+</button>
-          </div>
-          <select class="project-dropdown" id="projectSelector">
-            <option value="default">Loading...</option>
-          </select>
-        </div>
+        <div class="project-selector-section" data-ui-project-selector data-ui-mode="standard"></div>
 
         <div class="nav-divider"></div>
 
         <!-- Stats -->
-        <div class="nav-stats">
-          <div class="nav-stat-item">
-            <div class="nav-stat-value" id="stat-shots">0</div>
-            <div class="nav-stat-label">Shots</div>
-          </div>
-          <div class="nav-stat-item">
-            <div class="nav-stat-value" id="stat-prompts">0</div>
-            <div class="nav-stat-label">Shot Files</div>
-          </div>
-          <div class="nav-stat-item nav-stat-success">
-            <div class="nav-stat-value" id="stat-passed">0</div>
-            <div class="nav-stat-label">Passed</div>
-          </div>
-          <div class="nav-stat-item nav-stat-error">
-            <div class="nav-stat-value" id="stat-failed">0</div>
-            <div class="nav-stat-label">Failed</div>
-          </div>
-        </div>
+        <div class="nav-stats" data-ui-nav-stats data-ui-mode="standard"></div>
 
         <div class="nav-divider"></div>
 
         <div class="nav-header">
           <div class="nav-title">Workflow Steps</div>
         </div>
-        <div class="nav-items">
-          <button class="nav-item active" onclick="window.location.href='step1.html'">
-            <span class="nav-icon">01</span>
-            <span class="nav-label">Step 1: Theme</span>
-          </button>
-          <button class="nav-item" onclick="window.location.href='step2.html'">
-            <span class="nav-icon">02</span>
-            <span class="nav-label">Step 2: Music</span>
-          </button>
-          <button class="nav-item" onclick="window.location.href='step3.html'">
-            <span class="nav-icon">03</span>
-            <span class="nav-label">Step 3: Canon</span>
-          </button>
-          <button class="nav-item" onclick="window.location.href='step4.html'">
-            <span class="nav-icon">04</span>
-            <span class="nav-label">Step 4: References</span>
-          </button>
-          <button class="nav-item" onclick="window.location.href='index.html'">
-            <span class="nav-icon">05</span>
-            <span class="nav-label">Step 5: Shots</span>
-            <span class="nav-count" id="nav-count-all">0</span>
-          </button>
-          <button class="nav-item" onclick="window.location.href='storyboard.html'">
-            <span class="nav-icon">06</span>
-            <span class="nav-label">Step 6: Storyboard Preview</span>
-          </button>
-        </div>
+        <div class="nav-items" data-ui-workflow-nav data-ui-current="step1" data-ui-mode="standard"></div>
         <div class="nav-divider"></div>
         <div class="nav-header">
           <div class="nav-title">Resources</div>
         </div>
-        <div class="nav-items">
-          <button class="nav-item" onclick="window.location.href='guide.html'">
-            <span class="nav-icon">?</span>
-            <span class="nav-label">User Guide</span>
-          </button>
-        </div>
-        <div class="nav-footer">
-          <div class="nav-version">v2026-02-07</div>
-        </div>
+        <div class="nav-items" data-ui-resource-nav data-ui-current="step1" data-ui-mode="standard"></div>
+        <div class="nav-footer" data-ui-nav-footer data-ui-mode="standard"></div>
       </nav>
 
       <!-- Main Content -->
@@ -275,6 +216,20 @@
   <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
 
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/shoelace-autoloader.js"></script>
+  <script src="ui-layer.js"></script>
+  <script>window.UILayer && window.UILayer.init();</script>
   <script src="app.js"></script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+

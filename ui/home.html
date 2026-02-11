@@ -3,106 +3,425 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AIMV Dashboard Home</title>
+  <title>Project Home - AI Music Video</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/themes/dark.css">
+  <link rel="stylesheet" href="ui-layer.css">
   <style>
-    :root {
-      --bg:#0b1220;--panel:#121a2b;--panel2:#17223a;--text:#e7edf8;--muted:#9fb0cd;--line:#26324d;
-      --accent:#4da3ff;--good:#31c26b;--warn:#f6c24b;--bad:#ff7070;
+    .home-main-layout {
+      display: grid;
+      grid-template-columns: minmax(182px, 236px) minmax(0, 1fr);
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--bg-primary);
     }
-    * { box-sizing:border-box; }
-    body { margin:0; font-family:Inter,system-ui,sans-serif; background:linear-gradient(180deg,#09101d,#0b1220); color:var(--text); }
-    .wrap { max-width:1200px; margin:0 auto; padding:2rem 1.25rem 3rem; }
-    .top { display:flex; justify-content:space-between; align-items:end; gap:1rem; margin-bottom:1.5rem; }
-    h1 { margin:0; font-size:2rem; }
-    .sub { color:var(--muted); margin-top:.35rem; }
-    .links { display:flex; gap:.6rem; flex-wrap:wrap; }
-    .btn { border:1px solid var(--line); background:var(--panel); color:var(--text); padding:.55rem .8rem; border-radius:.55rem; text-decoration:none; font-size:.92rem; }
-    .btn:hover { border-color:var(--accent); }
-    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:1rem; }
-    .card { background:var(--panel); border:1px solid var(--line); border-radius:.8rem; padding:1rem; }
-    .label { font-size:.82rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
-    .value { font-size:1.8rem; font-weight:700; margin:.35rem 0 .2rem; }
-    .split { display:grid; grid-template-columns:2fr 1fr; gap:1rem; margin-top:1rem; }
-    .list { display:grid; gap:.55rem; margin-top:.75rem; }
-    .item { display:flex; justify-content:space-between; gap:.8rem; align-items:flex-start; padding:.65rem .7rem; border:1px solid var(--line); border-radius:.55rem; background:var(--panel2); }
-    .item a { color:#9fd0ff; text-decoration:none; font-size:.9rem; white-space:nowrap; }
-    .ok { color:var(--good); }
-    .warn { color:var(--warn); }
-    .bad { color:var(--bad); }
-    .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
-    @media (max-width:980px){ .split{grid-template-columns:1fr;} }
+
+    .home-content {
+      padding: 1.25rem;
+      overflow: auto;
+    }
+
+    .home-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: flex-start;
+      margin-bottom: 1rem;
+    }
+
+    .home-header h1 {
+      margin: 0;
+      font-size: 1.85rem;
+    }
+
+    .home-subtitle {
+      color: var(--text-secondary);
+      margin-top: 0.35rem;
+    }
+
+    .home-grid {
+      display: grid;
+      gap: 0.9rem;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    }
+
+    .home-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+    }
+
+    .home-label {
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+    }
+
+    .home-value {
+      margin-top: 0.4rem;
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .home-value.good { color: var(--success); }
+    .home-value.warn { color: var(--warning); }
+    .home-value.bad { color: var(--error); }
+
+    .home-meta {
+      margin-top: 0.35rem;
+      color: var(--text-secondary);
+    }
+
+    .home-sections {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 0.9rem;
+      margin-top: 0.9rem;
+    }
+
+    .home-list {
+      display: grid;
+      gap: 0.55rem;
+      margin-top: 0.7rem;
+    }
+
+    .home-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.65rem;
+      align-items: flex-start;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg-secondary);
+      padding: 0.65rem 0.7rem;
+    }
+
+    .home-item a {
+      color: var(--accent-light);
+      text-decoration: none;
+      white-space: nowrap;
+      font-size: 0.9rem;
+    }
+
+    .home-item code {
+      color: var(--text-primary);
+    }
+
+    @media (max-width: 980px) {
+      .home-main-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .home-sections {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="top">
-      <div>
-        <h1>Project Home</h1>
-        <div class="sub" id="projectSummary">Loading project health…</div>
-      </div>
-      <div class="links">
-        <a class="btn" href="index.html">Step 5: Prompts</a>
-        <a class="btn" href="storyboard.html">Step 6: Storyboard</a>
-        <a class="btn" href="step4.html">Step 4: References</a>
-      </div>
-    </div>
+  <div class="container">
+    <div class="home-main-layout">
+      <nav class="left-nav">
+        <div class="nav-brand" data-ui-nav-brand data-ui-mode="basic"></div>
 
-    <div class="grid">
-      <div class="card"><div class="label">Shots total</div><div class="value" id="shotsTotal">0</div></div>
-      <div class="card"><div class="label">Shots ready</div><div class="value ok" id="shotsReady">0</div></div>
-      <div class="card"><div class="label">Shots blocked</div><div class="value bad" id="shotsBlocked">0</div></div>
-      <div class="card"><div class="label">Missing references</div><div class="value warn" id="missingRefs">0</div><div class="sub" id="missingRefsBreakdown"></div></div>
-      <div class="card"><div class="label">Missing transcript segments</div><div class="value warn" id="missingTranscript">0</div></div>
-      <div class="card"><div class="label">Missing assets (manifest)</div><div class="value warn" id="missingAssets">0</div></div>
-      <div class="card"><div class="label">Storyboard coverage</div><div class="value" id="coverage">0%</div><div class="sub" id="coverageMeta">0 / 0 shots with preview image/video</div></div>
-    </div>
+        <div class="project-selector-section" data-ui-project-selector data-ui-mode="basic"></div>
 
-    <div class="split">
-      <section class="card">
-        <div class="label">Next Best Actions</div>
-        <div id="actions" class="list"></div>
-      </section>
-      <section class="card">
-        <div class="label">Reference gaps by shot</div>
-        <div id="shotGaps" class="list"></div>
-      </section>
+        <div class="nav-divider"></div>
+
+        <div class="nav-header"><div class="nav-title">Workflow Steps</div></div>
+        <div class="nav-items" data-ui-workflow-nav data-ui-current="home" data-ui-mode="basic"></div>
+
+        <div class="nav-divider"></div>
+        <div class="nav-header"><div class="nav-title">Resources</div></div>
+        <div class="nav-items" data-ui-resource-nav data-ui-current="home" data-ui-mode="basic"></div>
+
+        <div class="nav-footer" data-ui-nav-footer data-ui-mode="basic"></div>
+      </nav>
+
+      <main class="home-content">
+        <div class="home-header">
+          <div>
+            <h1>Project Home</h1>
+            <div class="home-subtitle" id="projectSummary">Loading project health...</div>
+          </div>
+        </div>
+
+        <section class="home-grid ui-stat-grid" id="homeStatsGrid"></section>
+
+        <section class="home-sections">
+          <div class="home-card">
+            <div class="home-label">Next Best Actions</div>
+            <div id="actions" class="home-list"></div>
+          </div>
+          <div class="home-card">
+            <div class="home-label">Reference Gaps by Shot</div>
+            <div id="shotGaps" class="home-list"></div>
+          </div>
+        </section>
+      </main>
     </div>
   </div>
 
-  <script src="app.js"></script>
   <script>
-    async function initHome() {
-      const projectId = (localStorage.getItem('activeProject') || 'default');
-      const report = await window.AIMVDashboardData.aggregateHomeData(projectId);
-
-      document.getElementById('shotsTotal').textContent = report.shots.total;
-      document.getElementById('shotsReady').textContent = report.shots.ready;
-      document.getElementById('shotsBlocked').textContent = report.shots.blocked;
-      document.getElementById('missingRefs').textContent = report.missingReferences.total;
-      document.getElementById('missingRefsBreakdown').textContent = `${report.missingReferences.characters} character · ${report.missingReferences.locations} location`;
-      document.getElementById('missingTranscript').textContent = report.missingTranscriptSegments;
-      document.getElementById('missingAssets').textContent = report.missingAssets;
-      document.getElementById('coverage').textContent = `${report.storyboard.coveragePercent}%`;
-      document.getElementById('coverageMeta').textContent = `${report.storyboard.coveredShots} / ${report.shots.total} shots with preview image/video`;
-      document.getElementById('projectSummary').textContent = `${report.projectId} · ${report.nextBestActions.length} prioritized action${report.nextBestActions.length === 1 ? '' : 's'}`;
-
-      const actionsRoot = document.getElementById('actions');
-      actionsRoot.innerHTML = report.nextBestActions.length
-        ? report.nextBestActions.map(action => `<div class="item"><span>${action.text}</span><a href="${action.href}">Open</a></div>`).join('')
-        : '<div class="item"><span class="ok">No urgent actions detected.</span></div>';
-
-      const shotGapsRoot = document.getElementById('shotGaps');
-      shotGapsRoot.innerHTML = report.shotReferenceGaps.length
-        ? report.shotReferenceGaps.slice(0, 8).map(gap => `<div class="item"><span><span class="mono">${gap.shotId}</span>: ${gap.missing.join(', ')}</span><a href="step4.html?shot=${gap.shotId}">Step 4</a></div>`).join('')
-        : '<div class="item"><span class="ok">No missing per-shot references.</span></div>';
+    function safeCount(value) {
+      return Number.isFinite(value) ? value : 0;
     }
 
-    initHome().catch((err) => {
-      document.getElementById('projectSummary').textContent = `Unable to load dashboard: ${err.message}`;
-    });
+    async function fetchJson(url) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) return null;
+        return await response.json();
+      } catch {
+        return null;
+      }
+    }
+
+    function getShotId(shot, idx) {
+      return shot.shotId || shot.id || `SHOT_${String(idx + 1).padStart(2, '0')}`;
+    }
+
+    function getMissingReferences(shot) {
+      const refs = shot.references || {};
+      const missing = [];
+      if (!Array.isArray(refs.characters) || refs.characters.length === 0) missing.push('characters');
+      if (!Array.isArray(refs.locations) || refs.locations.length === 0) missing.push('locations');
+      return missing;
+    }
+
+    function hasStoryboardPreview(selection) {
+      if (!selection) return false;
+      if (selection.previewPath || selection.previewImage || selection.previewVideo) return true;
+      const renderFiles = selection.renderFiles || {};
+      return Object.keys(renderFiles).length > 0;
+    }
+
+    function buildActions(report) {
+      const actions = [];
+      if (report.missingReferences.total > 0) {
+        actions.push({ text: `Resolve ${report.missingReferences.total} missing references in shot plan`, href: 'step4.html' });
+      }
+      if (report.missingTranscriptSegments > 0) {
+        actions.push({ text: `Add transcript segments for ${report.missingTranscriptSegments} shot(s)`, href: 'step3.html' });
+      }
+      if (report.missingAssets > 0) {
+        actions.push({ text: `Update asset manifest (${report.missingAssets} gap${report.missingAssets === 1 ? '' : 's'})`, href: 'step4.html' });
+      }
+      if (report.storyboard.coveredShots < report.shots.total) {
+        actions.push({ text: `Create storyboard previews for remaining shots`, href: 'storyboard.html' });
+      }
+      if (actions.length === 0) {
+        actions.push({ text: 'No urgent actions detected.', href: 'index.html' });
+      }
+      return actions;
+    }
+
+    async function aggregateHomeData(projectId) {
+      const projectQuery = `?project=${encodeURIComponent(projectId)}`;
+      const [indexData, scriptPayload, transcriptPayload, assetsPayload, sequenceData] = await Promise.all([
+        fetchJson(`/prompts_index.json${projectQuery}`),
+        fetchJson(`/api/load/canon/script${projectQuery}`),
+        fetchJson(`/api/load/canon/transcript${projectQuery}`),
+        fetchJson(`/api/load/canon/assets${projectQuery}`),
+        fetchJson(`/projects/${encodeURIComponent(projectId)}/rendered/storyboard/sequence.json${projectQuery}`)
+      ]);
+
+      let scriptData = {};
+      if (scriptPayload?.content) {
+        try { scriptData = JSON.parse(scriptPayload.content); } catch { scriptData = {}; }
+      }
+
+      let transcriptData = {};
+      if (transcriptPayload?.content) {
+        try { transcriptData = JSON.parse(transcriptPayload.content); } catch { transcriptData = {}; }
+      }
+
+      let assetsData = {};
+      if (assetsPayload?.content) {
+        try { assetsData = JSON.parse(assetsPayload.content); } catch { assetsData = {}; }
+      }
+
+      const scriptShots = Array.isArray(scriptData.shots) ? scriptData.shots : [];
+      const transcriptShots = Array.isArray(transcriptData.shots) ? transcriptData.shots : [];
+      const selections = Array.isArray(sequenceData?.selections) ? sequenceData.selections : [];
+      const assets = Array.isArray(assetsData.assets) ? assetsData.assets : (Array.isArray(assetsData.items) ? assetsData.items : []);
+
+      const totalShots = scriptShots.length || safeCount(indexData?.totalShots) || selections.length;
+      const coveredShots = selections.filter(hasStoryboardPreview).length;
+      const coveragePercent = totalShots > 0 ? Math.round((coveredShots / totalShots) * 100) : 0;
+
+      const transcriptByShot = new Map();
+      transcriptShots.forEach((shot, idx) => {
+        const shotId = getShotId(shot, idx);
+        transcriptByShot.set(shotId, shot);
+      });
+
+      let missingCharacters = 0;
+      let missingLocations = 0;
+      let missingTranscriptSegments = 0;
+      const shotReferenceGaps = [];
+
+      scriptShots.forEach((shot, idx) => {
+        const shotId = getShotId(shot, idx);
+        const missing = getMissingReferences(shot);
+        if (missing.includes('characters')) missingCharacters += 1;
+        if (missing.includes('locations')) missingLocations += 1;
+        if (missing.length > 0) {
+          shotReferenceGaps.push({ shotId, missing });
+        }
+
+        const transcriptShot = transcriptByShot.get(shotId);
+        const hasTranscript = Boolean(transcriptShot && (transcriptShot.transcript || transcriptShot.text || transcriptShot.lyrics));
+        if (!hasTranscript) missingTranscriptSegments += 1;
+      });
+
+      const missingAssets = assets.filter((asset) => {
+        const status = String(asset.status || '').toLowerCase();
+        return status.includes('missing') || status.includes('todo');
+      }).length;
+
+      const readyShots = totalShots - Math.min(totalShots, missingCharacters + missingLocations + missingTranscriptSegments);
+      const blockedShots = Math.max(0, totalShots - Math.max(0, readyShots));
+
+      const report = {
+        projectId,
+        shots: {
+          total: totalShots,
+          ready: Math.max(0, readyShots),
+          blocked: blockedShots
+        },
+        missingReferences: {
+          total: missingCharacters + missingLocations,
+          characters: missingCharacters,
+          locations: missingLocations
+        },
+        missingTranscriptSegments,
+        missingAssets,
+        storyboard: {
+          coveredShots,
+          coveragePercent
+        },
+        shotReferenceGaps
+      };
+
+      report.nextBestActions = buildActions(report);
+      return report;
+    }
+
+    function renderReport(report) {
+      const statsGrid = document.getElementById('homeStatsGrid');
+      const stats = [
+        { label: 'Shots Total', value: String(report.shots.total) },
+        { label: 'Shots Ready', value: String(report.shots.ready), tone: 'good' },
+        { label: 'Shots Blocked', value: String(report.shots.blocked), tone: 'bad' },
+        {
+          label: 'Missing References',
+          value: String(report.missingReferences.total),
+          tone: 'warn',
+          meta: `${report.missingReferences.characters} character, ${report.missingReferences.locations} location`
+        },
+        { label: 'Missing Transcript Segments', value: String(report.missingTranscriptSegments), tone: 'warn' },
+        { label: 'Missing Assets (Manifest)', value: String(report.missingAssets), tone: 'warn' },
+        {
+          label: 'Storyboard Coverage',
+          value: `${report.storyboard.coveragePercent}%`,
+          meta: `${report.storyboard.coveredShots} / ${report.shots.total} shots with preview image/video`
+        }
+      ];
+
+      if (window.UILayer) {
+        window.UILayer.renderStatGrid(statsGrid, stats);
+      }
+      document.getElementById('projectSummary').textContent =
+        `${report.projectId} - ${report.nextBestActions.length} prioritized action${report.nextBestActions.length === 1 ? '' : 's'}`;
+
+      const actionsRoot = document.getElementById('actions');
+      const actionItems = report.nextBestActions.map((action) => ({ text: action.text, href: action.href, linkText: 'Open' }));
+      if (window.UILayer) {
+        window.UILayer.renderList(actionsRoot, actionItems, null);
+      }
+
+      const shotGapsRoot = document.getElementById('shotGaps');
+      const shotGapItems = report.shotReferenceGaps.slice(0, 8).map((gap) => ({
+        code: gap.shotId,
+        text: gap.missing.join(', '),
+        href: `step4.html?shot=${gap.shotId}`,
+        linkText: 'Step 4'
+      }));
+
+      if (window.UILayer) {
+        window.UILayer.renderList(
+          shotGapsRoot,
+          shotGapItems,
+          { text: 'No missing per-shot references.', href: 'step4.html', linkText: 'Step 4' }
+        );
+      }
+    }
+
+    async function initializeProjects() {
+      const response = await fetch('/api/projects');
+      const data = await response.json();
+      if (!data.success || !Array.isArray(data.projects) || data.projects.length === 0) {
+        throw new Error('No projects found');
+      }
+
+      let activeProject;
+      try { activeProject = localStorage.getItem('activeProject'); } catch { activeProject = null; }
+      activeProject = activeProject || data.projects[0].id;
+      const current = data.projects.find((p) => p.id === activeProject) || data.projects[0];
+
+      const selector = document.getElementById('projectSelector');
+      selector.innerHTML = '';
+      data.projects.forEach((p) => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name;
+        opt.selected = p.id === current.id;
+        selector.appendChild(opt);
+      });
+
+      selector.addEventListener('change', () => {
+        try { localStorage.setItem('activeProject', selector.value); } catch { /* ignore */ }
+        window.location.reload();
+      });
+
+      return current.id;
+    }
+
+    async function initHome() {
+      window.UILayer && window.UILayer.wireDataNav(document);
+      const projectId = await initializeProjects();
+      const report = await aggregateHomeData(projectId);
+      renderReport(report);
+    }
+
+    function runHomeInit() {
+      initHome().catch((err) => {
+        const summary = document.getElementById('projectSummary');
+        summary.textContent = `Unable to load dashboard: ${err.message}`;
+      });
+    }
   </script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/shoelace-autoloader.js"></script>
+  <script src="ui-layer.js"></script>
+  <script>window.UILayer && window.UILayer.init();</script>
+  <script>if (typeof runHomeInit === 'function') { runHomeInit(); }</script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+

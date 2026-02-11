@@ -1,4 +1,4 @@
-ï»¿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -8,51 +8,30 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/themes/dark.css">
+  <link rel="stylesheet" href="ui-layer.css">
 </head>
 <body>
   <div class="container">
     <div class="main-layout">
       <nav class="left-nav">
-        <div class="nav-brand">
-          <h1>Prompt Compiler</h1>
-          <p class="nav-subtitle">AI Music Video Project</p>
-        </div>
+        <div class="nav-brand" data-ui-nav-brand data-ui-mode="standard"></div>
 
-        <div class="project-selector-section">
-          <div class="nav-header">
-            <div class="nav-title">Current Project</div>
-            <button class="btn-icon" id="newProjectBtn" title="New Project">+</button>
-          </div>
-          <select class="project-dropdown" id="projectSelector">
-            <option value="default">Loading...</option>
-          </select>
-        </div>
+        <div class="project-selector-section" data-ui-project-selector data-ui-mode="standard"></div>
 
         <div class="nav-divider"></div>
 
-        <div class="nav-stats">
-          <div class="nav-stat-item"><div class="nav-stat-value" id="stat-shots">0</div><div class="nav-stat-label">Shots</div></div>
-          <div class="nav-stat-item"><div class="nav-stat-value" id="stat-prompts">0</div><div class="nav-stat-label">Shot Files</div></div>
-          <div class="nav-stat-item nav-stat-success"><div class="nav-stat-value" id="stat-passed">0</div><div class="nav-stat-label">Passed</div></div>
-          <div class="nav-stat-item nav-stat-error"><div class="nav-stat-value" id="stat-failed">0</div><div class="nav-stat-label">Failed</div></div>
-        </div>
+        <div class="nav-stats" data-ui-nav-stats data-ui-mode="standard"></div>
 
         <div class="nav-divider"></div>
 
         <div class="nav-header"><div class="nav-title">Workflow Steps</div></div>
-        <div class="nav-items">
-          <button class="nav-item" data-workspace-url="step1.html" data-workspace-title="Step 1: Theme"><span class="nav-icon">01</span><span class="nav-label">Step 1: Theme</span></button>
-          <button class="nav-item" data-workspace-url="step2.html" data-workspace-title="Step 2: Music"><span class="nav-icon">02</span><span class="nav-label">Step 2: Music</span></button>
-          <button class="nav-item" data-workspace-url="step3.html" data-workspace-title="Step 3: Canon"><span class="nav-icon">03</span><span class="nav-label">Step 3: Canon</span></button>
-          <button class="nav-item" data-workspace-url="step4.html" data-workspace-title="Step 4: References"><span class="nav-icon">04</span><span class="nav-label">Step 4: References</span></button>
-          <button class="nav-item active" id="promptsNavBtn"><span class="nav-icon">05</span><span class="nav-label">Step 5: Shots</span><span class="nav-count" id="nav-count-all">0</span></button>
-          <button class="nav-item" data-workspace-url="storyboard.html" data-workspace-title="Step 6: Storyboard Preview" id="openStoryboardNavBtn"><span class="nav-icon">06</span><span class="nav-label">Step 6: Storyboard Preview</span></button>
-        </div>
+        <div class="nav-items" data-ui-workflow-nav data-ui-current="index" data-ui-mode="prompts"></div>
 
         <div class="nav-divider"></div>
         <div class="nav-header"><div class="nav-title">Resources</div></div>
-        <div class="nav-items"><button class="nav-item" data-workspace-url="guide.html" data-workspace-title="User Guide" id="openGuideNavBtn"><span class="nav-icon">?</span><span class="nav-label">User Guide</span></button></div>
-        <div class="nav-footer"><div class="nav-version">v2026-02-07</div></div>
+        <div class="nav-items" data-ui-resource-nav data-ui-current="index" data-ui-mode="prompts"></div>
+        <div class="nav-footer" data-ui-nav-footer data-ui-mode="standard"></div>
       </nav>
 
       <aside class="sidebar" id="shotsSidebar">
@@ -181,7 +160,7 @@
   <div class="modal" id="newProjectModal" style="display: none;">
     <div class="modal-overlay" id="newProjectModalOverlay"></div>
     <div class="modal-content">
-      <div class="modal-header"><h2>Create New Project</h2><button class="modal-close" id="newProjectModalClose">Ã—</button></div>
+      <div class="modal-header"><h2>Create New Project</h2><button class="modal-close" id="newProjectModalClose">×</button></div>
       <div class="modal-body">
         <form id="newProjectForm">
           <div class="form-group"><label for="projectName">Project Name *</label><input type="text" id="projectName" required maxlength="100" placeholder="My Music Video" /></div>
@@ -195,7 +174,7 @@
   <div class="modal" id="analysisPromptModal" style="display: none;">
     <div class="modal-overlay" id="analysisPromptModalOverlay"></div>
     <div class="modal-content modal-large">
-      <div class="modal-header"><h2>AI Music Analysis Prompt</h2><button class="modal-close" id="analysisPromptModalClose">Ã—</button></div>
+      <div class="modal-header"><h2>AI Music Analysis Prompt</h2><button class="modal-close" id="analysisPromptModalClose">×</button></div>
       <div class="modal-body">
         <p class="modal-description">Copy this prompt and paste it into another AI (Claude, ChatGPT, etc.) along with your music file. The AI will analyze your music and return a JSON file that you can upload here.</p>
         <div class="prompt-box"><button class="btn btn-primary btn-sm copy-prompt-btn" id="copyAnalysisPromptBtn">Copy Prompt</button><pre id="analysisPromptText">Loading prompt...</pre></div>
@@ -227,6 +206,18 @@
     </div>
   </div>
 
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/shoelace-autoloader.js"></script>
+  <script src="ui-layer.js"></script>
+  <script>window.UILayer && window.UILayer.init();</script>
   <script src="app.js"></script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+

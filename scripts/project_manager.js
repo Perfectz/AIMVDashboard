@@ -15,6 +15,23 @@ const PROJECTS_DIR = path.join(ROOT_DIR, 'projects');
 const INDEX_FILE = path.join(PROJECTS_DIR, 'projects_index.json');
 const PROJECT_ID_REGEX = /^[a-z0-9-]{1,50}$/;
 
+function detectEol(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return '\n';
+    const content = fs.readFileSync(filePath, 'utf8');
+    return content.includes('\r\n') ? '\r\n' : '\n';
+  } catch {
+    return '\n';
+  }
+}
+
+function writeJsonPreserveEol(filePath, data) {
+  const eol = detectEol(filePath);
+  const serialized = JSON.stringify(data, null, 2);
+  const normalized = eol === '\r\n' ? serialized.replace(/\n/g, '\r\n') : serialized;
+  fs.writeFileSync(filePath, normalized, 'utf8');
+}
+
 function isPathInside(basePath, targetPath) {
   const base = path.resolve(basePath);
   const target = path.resolve(targetPath);
@@ -58,7 +75,7 @@ class ProjectManager {
         fs.mkdirSync(PROJECTS_DIR, { recursive: true });
       }
 
-      fs.writeFileSync(INDEX_FILE, JSON.stringify(data, null, 2), 'utf8');
+      writeJsonPreserveEol(INDEX_FILE, data);
       return true;
     } catch (err) {
       console.error('Error saving projects index:', err.message);
@@ -93,6 +110,8 @@ class ProjectManager {
         projectDir,
         path.join(projectDir, 'bible'),
         path.join(projectDir, 'reference'),
+        path.join(projectDir, 'reference', 'characters'),
+        path.join(projectDir, 'reference', 'locations'),
         path.join(projectDir, 'prompts'),
         path.join(projectDir, 'rendered'),
         path.join(projectDir, 'rendered', 'shots'),
@@ -134,11 +153,7 @@ class ProjectManager {
         }
       };
 
-      fs.writeFileSync(
-        path.join(projectDir, 'project.json'),
-        JSON.stringify(projectData, null, 2),
-        'utf8'
-      );
+      writeJsonPreserveEol(path.join(projectDir, 'project.json'), projectData);
 
       // Create default sequence.json
       const sequenceData = {
@@ -151,11 +166,7 @@ class ProjectManager {
         lastUpdated: now
       };
 
-      fs.writeFileSync(
-        path.join(projectDir, 'rendered', 'storyboard', 'sequence.json'),
-        JSON.stringify(sequenceData, null, 2),
-        'utf8'
-      );
+      writeJsonPreserveEol(path.join(projectDir, 'rendered', 'storyboard', 'sequence.json'), sequenceData);
 
       // Update projects index
       const index = this.loadIndex();
@@ -224,7 +235,7 @@ class ProjectManager {
 
       // Save updated project.json
       const projectFile = path.join(PROJECTS_DIR, projectId, 'project.json');
-      fs.writeFileSync(projectFile, JSON.stringify(updated, null, 2), 'utf8');
+      writeJsonPreserveEol(projectFile, updated);
 
       // Update index if name changed
       if (updates.name && updates.name !== project.name) {

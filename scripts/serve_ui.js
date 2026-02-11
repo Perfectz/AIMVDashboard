@@ -19,7 +19,9 @@ const ROOT_DIR = path.join(__dirname, '..');
 const PROJECTS_DIR = path.join(ROOT_DIR, 'projects');
 
 const PROJECT_ID_REGEX = /^[a-z0-9-]{1,50}$/;
-const SHOT_ID_REGEX = /^SHOT_\d{2,4}$/;
+// Accept legacy SHOT_01 style plus newer project-specific shot IDs.
+// Keep this conservative: alphanumeric, underscore, and hyphen only.
+const SHOT_ID_REGEX = /^[A-Za-z0-9_-]{1,64}$/;
 const VARIATION_REGEX = /^[A-D]$/;
 const REVIEW_STATUS_VALUES = new Set(['draft', 'ready_for_review', 'changes_requested', 'approved']);
 const CHARACTER_REGEX = /^[A-Za-z0-9_-]{1,64}$/;
@@ -56,6 +58,16 @@ const MAX_IMAGE_SIZE = 10 * 1024 * 1024;  // 10MB
 const REVIEW_STATUSES = new Set(['draft', 'in_review', 'approved', 'changes_requested']);
 const MAX_COMMENT_AUTHOR_LENGTH = 60;
 const MAX_COMMENT_TEXT_LENGTH = 1000;
+const MAX_ASSIGNEE_LENGTH = 80;
+const PREVIS_SOURCE_TYPES = new Set([
+  'character_ref',
+  'location_ref',
+  'rendered_thumbnail',
+  'rendered_video',
+  'rendered_first_frame',
+  'rendered_last_frame',
+  'manual'
+]);
 
 function isPathInside(basePath, targetPath) {
   const base = path.resolve(basePath);
@@ -141,6 +153,28 @@ function safeReadText(filePath, fallback = '') {
   } catch {
     return fallback;
   }
+}
+
+function detectFileEol(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return '\n';
+    const content = fs.readFileSync(filePath, 'utf8');
+    return content.includes('\r\n') ? '\r\n' : '\n';
+  } catch {
+    return '\n';
+  }
+}
+
+function writeJsonPreserveEol(filePath, data) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  const eol = detectFileEol(filePath);
+  const serialized = JSON.stringify(data, null, 2);
+  const normalized = eol === '\r\n' ? serialized.replace(/\n/g, '\r\n') : serialized;
+  fs.writeFileSync(filePath, normalized, 'utf8');
 }
 
 function buildContextBundle(projectId) {
@@ -450,14 +484,96 @@ function readSequenceFile(projectId = 'default') {
  */
 function writeSequenceFile(data, projectId = 'default') {
   const sequencePath = getStoryboardPersistencePath(projectId);
-  const dir = path.dirname(sequencePath);
+  data.lastUpdated = new Date().toISOString();
+  writeJsonPreserveEol(sequencePath, data);
+}
 
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+function normalizeAssignee(value) {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  return trimmed.length > MAX_ASSIGNEE_LENGTH ? trimmed.slice(0, MAX_ASSIGNEE_LENGTH) : trimmed;
+}
+
+function normalizeShotReviewFields(shot) {
+  if (!shot || typeof shot !== 'object') return false;
+  let changed = false;
+
+  const normalized = sanitizeReviewMetadata(shot);
+  if (shot.reviewStatus !== normalized.reviewStatus) {
+    shot.reviewStatus = normalized.reviewStatus;
+    changed = true;
   }
 
-  data.lastUpdated = new Date().toISOString();
-  fs.writeFileSync(sequencePath, JSON.stringify(data, null, 2), 'utf8');
+  if (!Array.isArray(shot.comments) || JSON.stringify(shot.comments) !== JSON.stringify(normalized.comments)) {
+    shot.comments = normalized.comments;
+    changed = true;
+  }
+
+  const assignee = normalizeAssignee(shot.assignee);
+  if (shot.assignee !== assignee) {
+    shot.assignee = assignee;
+    changed = true;
+  }
+
+  return changed;
+}
+
+function normalizeSequenceReviewFields(sequence) {
+  if (!sequence || typeof sequence !== 'object') return false;
+  if (!Array.isArray(sequence.selections)) {
+    sequence.selections = [];
+    return true;
+  }
+
+  let changed = false;
+  sequence.selections.forEach((shot) => {
+    if (normalizeShotReviewFields(shot)) changed = true;
+  });
+
+  return changed;
+}
+
+function getPrevisMapPath(projectId = 'default') {
+  return path.join(projectManager.getProjectPath(projectId, 'rendered'), 'storyboard', 'previs_map.json');
+}
+
+function readPrevisMapFile(projectId = 'default') {
+  const previsPath = getPrevisMapPath(projectId);
+  try {
+    if (!fs.existsSync(previsPath)) return {};
+    const parsed = JSON.parse(fs.readFileSync(previsPath, 'utf8'));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writePrevisMapFile(previsMap, projectId = 'default') {
+  const previsPath = getPrevisMapPath(projectId);
+  writeJsonPreserveEol(previsPath, previsMap || {});
+}
+
+function validatePrevisEntry(entry) {
+  if (!entry || typeof entry !== 'object') {
+    throw new Error('Invalid previs entry');
+  }
+
+  const sourceTypeRaw = typeof entry.sourceType === 'string' ? entry.sourceType.trim() : '';
+  const sourceType = sourceTypeRaw || 'manual';
+  if (!PREVIS_SOURCE_TYPES.has(sourceType)) {
+    throw new Error('Invalid previs sourceType');
+  }
+
+  const sourceRef = typeof entry.sourceRef === 'string' ? entry.sourceRef.trim() : '';
+  const notes = typeof entry.notes === 'string' ? entry.notes.trim().slice(0, 500) : '';
+  const locked = Boolean(entry.locked);
+
+  return {
+    sourceType,
+    sourceRef,
+    notes,
+    locked
+  };
 }
 
 function normalizeReviewStatus(value) {
@@ -489,7 +605,8 @@ function sanitizeReviewMetadata(payload = {}) {
     reviewStatus: normalizeReviewStatus(payload.reviewStatus),
     comments: Array.isArray(payload.comments)
       ? payload.comments.map(normalizeComment).filter(Boolean)
-      : []
+      : [],
+    assignee: normalizeAssignee(payload.assignee)
   };
 }
 
@@ -504,6 +621,7 @@ function getReviewMetadataMap(sequence) {
     const normalized = sanitizeReviewMetadata(shot);
     shot.reviewStatus = normalized.reviewStatus;
     shot.comments = normalized.comments;
+    shot.assignee = normalized.assignee;
     metadata[shot.shotId] = normalized;
   });
 
@@ -535,10 +653,15 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  const requestUrl = parseRequestUrl(req);
+  const requestPath = requestUrl.pathname;
+  const projectPathMatch = requestPath.match(/^\/api\/projects\/([^\/]+)$/);
+  const previsMapPathMatch = requestPath.match(/^\/api\/storyboard\/previs-map\/([^\/]+)$/);
+
   // ===== PROJECT MANAGEMENT ENDPOINTS =====
 
   // GET /api/projects - List all projects
-  if (req.method === 'GET' && req.url === '/api/projects') {
+  if (req.method === 'GET' && requestPath === '/api/projects') {
     try {
       const projects = projectManager.listProjects();
       sendJSON(res, 200, { success: true, projects });
@@ -549,9 +672,9 @@ const server = http.createServer((req, res) => {
   }
 
   // GET /api/projects/:id - Get project details
-  if (req.method === 'GET' && req.url.match(/^\/api\/projects\/([^\/]+)$/)) {
+  if (req.method === 'GET' && projectPathMatch) {
     try {
-      const projectId = req.url.match(/^\/api\/projects\/([^\/]+)$/)[1];
+      const projectId = projectPathMatch[1];
       const project = projectManager.getProject(projectId);
       sendJSON(res, 200, { success: true, project });
     } catch (err) {
@@ -561,7 +684,7 @@ const server = http.createServer((req, res) => {
   }
 
   // POST /api/projects - Create new project
-  if (req.method === 'POST' && req.url === '/api/projects') {
+  if (req.method === 'POST' && requestPath === '/api/projects') {
     parseMultipartData(req, (err, { fields }) => {
       if (err) {
         sendJSON(res, 400, { success: false, error: 'Invalid request' });
@@ -586,8 +709,8 @@ const server = http.createServer((req, res) => {
   }
 
   // PUT /api/projects/:id - Update project metadata
-  if (req.method === 'PUT' && req.url.match(/^\/api\/projects\/([^\/]+)$/)) {
-    const projectId = req.url.match(/^\/api\/projects\/([^\/]+)$/)[1];
+  if (req.method === 'PUT' && projectPathMatch) {
+    const projectId = projectPathMatch[1];
 
     parseMultipartData(req, (err, { fields }) => {
       if (err) {
@@ -614,9 +737,9 @@ const server = http.createServer((req, res) => {
   }
 
   // DELETE /api/projects/:id - Delete project
-  if (req.method === 'DELETE' && req.url.match(/^\/api\/projects\/([^\/]+)$/)) {
+  if (req.method === 'DELETE' && projectPathMatch) {
     try {
-      const projectId = req.url.match(/^\/api\/projects\/([^\/]+)$/)[1];
+      const projectId = projectPathMatch[1];
       projectManager.deleteProject(projectId);
       sendJSON(res, 200, { success: true, message: 'Project deleted' });
     } catch (err) {
@@ -641,8 +764,8 @@ const server = http.createServer((req, res) => {
   }
 
   // PUT /api/storyboard/previs-map/:shotId
-  if (req.method === 'PUT' && req.url.match(/^\/api\/storyboard\/previs-map\/([^\/]+)$/)) {
-    const shotId = req.url.match(/^\/api\/storyboard\/previs-map\/([^\/]+)$/)[1];
+  if (req.method === 'PUT' && previsMapPathMatch) {
+    const shotId = previsMapPathMatch[1];
 
     readBody(req, MAX_BODY_SIZE, (err, body) => {
       if (err) {
@@ -670,8 +793,8 @@ const server = http.createServer((req, res) => {
   }
 
   // DELETE /api/storyboard/previs-map/:shotId
-  if (req.method === 'DELETE' && req.url.match(/^\/api\/storyboard\/previs-map\/([^\/]+)$/)) {
-    const shotId = req.url.match(/^\/api\/storyboard\/previs-map\/([^\/]+)$/)[1];
+  if (req.method === 'DELETE' && previsMapPathMatch) {
+    const shotId = previsMapPathMatch[1];
 
     try {
       const requestUrl = parseRequestUrl(req);
@@ -686,6 +809,147 @@ const server = http.createServer((req, res) => {
     } catch (err) {
       sendJSON(res, 400, { success: false, error: err.message });
     }
+    return;
+  }
+
+  // GET /api/review/sequence
+  if (req.method === 'GET' && req.url.startsWith('/api/review/sequence')) {
+    try {
+      const { projectId } = getProjectContext(req, { required: true });
+      const sequence = readSequenceFile(projectId);
+      normalizeSequenceReviewFields(sequence);
+      if (!Array.isArray(sequence.selections)) {
+        sequence.selections = [];
+      }
+      if (!Array.isArray(sequence.editorialOrder)) {
+        sequence.editorialOrder = sequence.selections.map((shot) => shot.shotId);
+      }
+      sequence.totalShots = sequence.selections.length;
+      writeSequenceFile(sequence, projectId);
+      sendJSON(res, 200, sequence);
+    } catch (err) {
+      sendJSON(res, 400, { success: false, error: err.message });
+    }
+    return;
+  }
+
+  // POST /api/storyboard/sequence
+  if (req.method === 'POST' && req.url.startsWith('/api/storyboard/sequence')) {
+    readBody(req, MAX_BODY_SIZE, (err, body) => {
+      if (err) {
+        sendJSON(res, 413, { success: false, error: 'Payload too large' });
+        return;
+      }
+
+      try {
+        const payload = JSON.parse(body || '{}');
+        const requestUrl = parseRequestUrl(req);
+        const projectId = resolveProjectId(
+          requestUrl.searchParams.get('project') || payload.project || projectManager.getActiveProject(),
+          { required: true }
+        );
+        const sequence = readSequenceFile(projectId);
+        normalizeSequenceReviewFields(sequence);
+
+        if (Array.isArray(payload.selections)) {
+          const existingById = new Map((sequence.selections || []).map((shot) => [shot.shotId, shot]));
+          const merged = [];
+          const seen = new Set();
+
+          payload.selections.forEach((incoming) => {
+            const shotId = sanitizePathSegment(String(incoming.shotId || ''), SHOT_ID_REGEX, 'shotId');
+            const shot = existingById.get(shotId) || {
+              shotId,
+              selectedVariation: 'none',
+              status: 'not_rendered',
+              reviewStatus: 'draft',
+              comments: [],
+              assignee: '',
+              renderFiles: { kling: {}, nano: {} }
+            };
+
+            if (incoming.selectedVariation !== undefined) {
+              const selectedVariation = String(incoming.selectedVariation || 'none').trim();
+              if (selectedVariation !== 'none' && !VARIATION_REGEX.test(selectedVariation)) {
+                throw new Error(`Invalid selectedVariation for ${shotId}`);
+              }
+              shot.selectedVariation = selectedVariation || 'none';
+            }
+
+            if (incoming.locked !== undefined) {
+              shot.locked = Boolean(incoming.locked);
+            }
+
+            if (incoming.sourceType !== undefined) {
+              shot.sourceType = String(incoming.sourceType || '').trim().slice(0, 64) || shot.sourceType || 'Manual';
+            }
+
+            if (incoming.assignee !== undefined) {
+              shot.assignee = normalizeAssignee(incoming.assignee);
+            }
+
+            normalizeShotReviewFields(shot);
+            merged.push(shot);
+            seen.add(shotId);
+          });
+
+          (sequence.selections || []).forEach((shot) => {
+            if (!seen.has(shot.shotId)) {
+              merged.push(shot);
+            }
+          });
+
+          sequence.selections = merged;
+        }
+
+        if (Array.isArray(payload.editorialOrder)) {
+          sequence.editorialOrder = payload.editorialOrder
+            .map((shotId) => sanitizePathSegment(String(shotId || ''), SHOT_ID_REGEX, 'shotId'))
+            .filter((shotId, idx, arr) => shotId && arr.indexOf(shotId) === idx);
+        } else {
+          sequence.editorialOrder = (sequence.selections || []).map((shot) => shot.shotId);
+        }
+
+        sequence.totalShots = Array.isArray(sequence.selections) ? sequence.selections.length : 0;
+        writeSequenceFile(sequence, projectId);
+        sendJSON(res, 200, { success: true, sequence });
+      } catch (parseErr) {
+        sendJSON(res, 400, { success: false, error: parseErr.message || 'Invalid JSON' });
+      }
+    });
+    return;
+  }
+
+  // POST /api/storyboard/readiness-report
+  if (req.method === 'POST' && req.url.startsWith('/api/storyboard/readiness-report')) {
+    readBody(req, MAX_BODY_SIZE, (err, body) => {
+      if (err) {
+        sendJSON(res, 413, { success: false, error: 'Payload too large' });
+        return;
+      }
+
+      try {
+        const payload = JSON.parse(body || '{}');
+        const requestUrl = parseRequestUrl(req);
+        const projectId = resolveProjectId(
+          requestUrl.searchParams.get('project') || payload.project || projectManager.getActiveProject(),
+          { required: true }
+        );
+        const lintDir = projectManager.getProjectPath(projectId, 'lint');
+        if (!fs.existsSync(lintDir)) {
+          fs.mkdirSync(lintDir, { recursive: true });
+        }
+
+        const reportPath = path.join(lintDir, 'readiness_report.json');
+        writeJsonPreserveEol(reportPath, payload);
+        sendJSON(res, 200, {
+          success: true,
+          path: `projects/${projectId}/lint/readiness_report.json`
+        });
+      } catch (parseErr) {
+        sendJSON(res, 400, { success: false, error: parseErr.message || 'Invalid JSON' });
+      }
+    });
     return;
   }
 
@@ -903,12 +1167,14 @@ const server = http.createServer((req, res) => {
         const current = sanitizeReviewMetadata(shot);
         const updates = {
           reviewStatus: parsed.reviewStatus !== undefined ? parsed.reviewStatus : current.reviewStatus,
-          comments: parsed.comments !== undefined ? parsed.comments : current.comments
+          comments: parsed.comments !== undefined ? parsed.comments : current.comments,
+          assignee: parsed.assignee !== undefined ? parsed.assignee : current.assignee
         };
         const normalized = sanitizeReviewMetadata(updates);
 
         shot.reviewStatus = normalized.reviewStatus;
         shot.comments = normalized.comments;
+        shot.assignee = normalized.assignee;
         writeSequenceFile(sequence, projectId);
 
         sendJSON(res, 200, {
@@ -1485,7 +1751,7 @@ const server = http.createServer((req, res) => {
       const projectId = resolveProjectId(url.searchParams.get('project') || projectManager.getActiveProject(), { required: true });
       const refDir = projectManager.getProjectPath(projectId, 'reference/characters');
       if (!fs.existsSync(refDir)) {
-        sendJSON(res, 200, { characters: [] });
+        sendJSON(res, 200, { success: true, characters: [] });
         return;
       }
 
@@ -1536,9 +1802,9 @@ const server = http.createServer((req, res) => {
         return { name, images, generatedImages, definition, prompts };
       });
 
-      sendJSON(res, 200, { characters });
+      sendJSON(res, 200, { success: true, characters });
     } catch (err) {
-      sendJSON(res, 500, { characters: [], error: err.message });
+      sendJSON(res, 500, { success: false, characters: [], error: err.message });
     }
     return;
   }
@@ -1683,7 +1949,7 @@ const server = http.createServer((req, res) => {
       const projectId = resolveProjectId(url.searchParams.get('project') || projectManager.getActiveProject(), { required: true });
       const refDir = projectManager.getProjectPath(projectId, 'reference/locations');
       if (!fs.existsSync(refDir)) {
-        sendJSON(res, 200, { locations: [] });
+        sendJSON(res, 200, { success: true, locations: [] });
         return;
       }
 
@@ -1704,9 +1970,9 @@ const server = http.createServer((req, res) => {
         return { name, images };
       });
 
-      sendJSON(res, 200, { locations });
+      sendJSON(res, 200, { success: true, locations });
     } catch (err) {
-      sendJSON(res, 500, { locations: [], error: err.message });
+      sendJSON(res, 500, { success: false, locations: [], error: err.message });
     }
     return;
   }
@@ -2297,8 +2563,6 @@ const server = http.createServer((req, res) => {
   // ===== GET FILE ROUTES =====
 
   let filePath;
-  const requestUrl = parseRequestUrl(req);
-  const requestPath = requestUrl.pathname;
 
   // Extract project context for project-specific routes
   let projectId;

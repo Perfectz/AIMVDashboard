@@ -578,52 +578,43 @@ function renderShotList() {
       }
     }
 
-    const shotItem = document.createElement('div');
-    shotItem.className = 'shot-item';
-    if (currentShot && currentShot.shotId === shot.shotId) {
-      shotItem.classList.add('active');
+    const tags = [];
+    if (hasKling) tags.push({ className: 'kling', text: `Kling (${shot.variations.kling.length})` });
+    if (hasNano) tags.push({ className: 'nanobanana', text: `Nano (${shot.variations.nanobanana.length})` });
+    if (hasSuno) tags.push({ className: 'suno', text: `Suno (${shot.variations.suno.length})` });
+    if (hasSeedream) tags.push({ className: 'seedream', text: `SeedDream (${shot.variations.seedream.length})` });
+
+    if (window.UILayer?.createShotSidebarItem) {
+      const shotItem = window.UILayer.createShotSidebarItem({
+        shotId: shot.shotId,
+        active: Boolean(currentShot && currentShot.shotId === shot.shotId),
+        tags,
+        onClick: () => selectShot(shot)
+      });
+      shotList.appendChild(shotItem);
+    } else {
+      const shotItem = document.createElement('div');
+      shotItem.className = 'shot-item';
+      if (currentShot && currentShot.shotId === shot.shotId) shotItem.classList.add('active');
+
+      const header = document.createElement('div');
+      header.className = 'shot-item-header';
+      header.textContent = shot.shotId;
+
+      const tools = document.createElement('div');
+      tools.className = 'shot-item-tools';
+      tags.forEach((tagData) => {
+        const tag = document.createElement('span');
+        tag.className = `tool-tag ${tagData.className}`;
+        tag.textContent = tagData.text;
+        tools.appendChild(tag);
+      });
+
+      shotItem.appendChild(header);
+      shotItem.appendChild(tools);
+      shotItem.addEventListener('click', () => selectShot(shot));
+      shotList.appendChild(shotItem);
     }
-
-    const header = document.createElement('div');
-    header.className = 'shot-item-header';
-    header.textContent = shot.shotId;
-
-    const tools = document.createElement('div');
-    tools.className = 'shot-item-tools';
-
-    if (hasKling) {
-      const tag = document.createElement('span');
-      tag.className = 'tool-tag kling';
-      tag.textContent = `Kling (${shot.variations.kling.length})`;
-      tools.appendChild(tag);
-    }
-
-    if (hasNano) {
-      const tag = document.createElement('span');
-      tag.className = 'tool-tag nanobanana';
-      tag.textContent = `Nano (${shot.variations.nanobanana.length})`;
-      tools.appendChild(tag);
-    }
-
-    if (hasSuno) {
-      const tag = document.createElement('span');
-      tag.className = 'tool-tag suno';
-      tag.textContent = `Suno (${shot.variations.suno.length})`;
-      tools.appendChild(tag);
-    }
-
-    if (hasSeedream) {
-      const tag = document.createElement('span');
-      tag.className = 'tool-tag seedream';
-      tag.textContent = `SeedDream (${shot.variations.seedream.length})`;
-      tools.appendChild(tag);
-    }
-
-    shotItem.appendChild(header);
-    shotItem.appendChild(tools);
-    shotItem.addEventListener('click', () => selectShot(shot));
-
-    shotList.appendChild(shotItem);
   });
 }
 
@@ -1558,6 +1549,9 @@ function setupModals() {
 
 // Save text content
 async function saveTextContent(content, endpoint, statusElementId, label) {
+  if (!currentProject?.id) {
+    throw new Error('No active project selected');
+  }
   const statusEl = document.getElementById(statusElementId);
   if (statusEl) {
     statusEl.textContent = 'Saving...';

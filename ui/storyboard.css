@@ -2,6 +2,11 @@
 /* Version: 2026-02-07 - Matches main UI aesthetic */
 
 /* Inherits all base styles and variables from styles.css */
+:root {
+  --storyboard-accent-contrast: #ffffff;
+  --storyboard-overlay-bg: rgba(18, 18, 18, 0.84);
+  --storyboard-overlay-fg: #f7f7f5;
+}
 
 /* ===== HEADER ACTIONS ===== */
 .header-actions {
@@ -38,13 +43,10 @@
 
 /* ===== STORYBOARD LAYOUT ===== */
 .storyboard-content {
-  grid-column: 2 / -1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  padding: 2rem;
+  overflow-y: auto;
   gap: 2rem;
-  background: var(--bg-app);
 }
 
 /* ===== VIEW CONTROLS ===== */
@@ -89,7 +91,7 @@
 
 .view-tab.active {
   background: var(--accent-primary);
-  color: #0d0d12;
+  color: var(--storyboard-accent-contrast);
   box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
@@ -312,9 +314,9 @@
   position: absolute;
   top: 0.5rem;
   left: 0.5rem;
-  background: rgba(12, 17, 29, 0.9);
-  color: var(--accent-primary);
-  border: 1px solid var(--accent-primary);
+  background: var(--storyboard-overlay-bg);
+  color: var(--storyboard-overlay-fg);
+  border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 999px;
   padding: 0.2rem 0.5rem;
   font-size: 11px;
@@ -338,7 +340,7 @@
   top: 1rem;
   right: 1rem;
   background: var(--accent-primary);
-  color: #0d0d12;
+  color: var(--storyboard-accent-contrast);
   padding: 0.5rem 0.875rem;
   border-radius: 8px;
   font-size: 11px;
@@ -352,9 +354,9 @@
   position: absolute;
   bottom: 1rem;
   left: 1rem;
-  background: rgba(13, 13, 18, 0.85);
+  background: var(--storyboard-overlay-bg);
   backdrop-filter: blur(12px);
-  color: var(--text-primary);
+  color: var(--storyboard-overlay-fg);
   padding: 0.5rem 0.875rem;
   border-radius: 8px;
   font-size: 10px;
@@ -678,9 +680,9 @@
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(13, 13, 18, 0.9);
+  background: var(--storyboard-overlay-bg);
   backdrop-filter: blur(8px);
-  color: var(--text-primary);
+  color: var(--storyboard-overlay-fg);
   padding: 0.375rem 0.625rem;
   font-size: 10px;
   font-weight: 700;
@@ -868,7 +870,7 @@
 .variation-card.selected .variation-check {
   background: var(--accent-primary);
   border-color: var(--accent-primary);
-  color: #0d0d12;
+  color: var(--storyboard-accent-contrast);
   box-shadow: 0 0 8px var(--accent-primary);
 }
 
@@ -1161,9 +1163,7 @@
 }
 
 .storyboard-content {
-  background:
-    radial-gradient(900px 400px at 100% -10%, rgba(26, 115, 232, 0.15), transparent 60%),
-    var(--bg-app);
+  background: var(--bg-primary);
 }
 
 .drop-zone-icon {
@@ -1208,7 +1208,7 @@ body.focus-mode .main-layout {
 
 .filter-chip.active {
   background: var(--accent-primary);
-  color: #0d0d12;
+  color: var(--storyboard-accent-contrast);
   border-color: transparent;
 }
 
@@ -1288,4 +1288,45 @@ body.focus-mode .main-layout {
   margin-top: 0.5rem;
   display: flex;
   justify-content: flex-end;
+}
+
+/* =========================================================
+   2026-02-11 Compact Density Overrides
+   ========================================================= */
+
+.storyboard-content {
+  padding: 1rem !important;
+  gap: 1rem !important;
+}
+
+.view-controls {
+  padding: 0.75rem 0.9rem !important;
+}
+
+.asset-panel,
+.readiness-panel,
+.timeline-view,
+.grid-view {
+  padding: 0.95rem !important;
+}
+
+.timeline-content,
+.timeline-track {
+  gap: 1rem !important;
+}
+
+.timeline-section {
+  padding: 0.9rem 1rem !important;
+}
+
+.shot-grid {
+  gap: 0.8rem !important;
+}
+
+.shot-card {
+  min-height: auto !important;
+}
+
+.modal-content {
+  padding: 1.2rem !important;
 }

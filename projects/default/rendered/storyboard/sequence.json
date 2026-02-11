@@ -1,16 +1,39 @@
 {
   "version": "2026-02-07",
   "projectName": "AI Music Video Project",
-  "totalShots": 0,
+  "totalShots": 1,
   "totalDuration": 0,
   "musicFile": "",
-  "selections": [],
+  "selections": [
+    {
+      "shotId": "SHOT_01",
+      "selectedVariation": "A",
+      "status": "not_rendered",
+      "reviewStatus": "in_review",
+      "comments": [
+        {
+          "author": "Smoke",
+          "text": "Looks good",
+          "timestamp": "2026-02-11T01:06:11.427Z"
+        }
+      ],
+      "assignee": "Editor Smoke",
+      "renderFiles": {
+        "kling": {},
+        "nano": {}
+      },
+      "locked": true,
+      "sourceType": "Manual"
+    }
+  ],
   "_NOTE": "This file is populated in Phase 2 after shots are rendered. Each shot record tracks selected variation, render assets, and review fields (reviewStatus, assignee, comments).",
   "_INSTRUCTIONS": {
     "howToUse": "After rendering shots in AI tools, place files in rendered/shots/{SHOT_ID}/ and update this file with selections",
     "fileNaming": "Use pattern: kling_option_A.mp4, kling_option_B.mp4, nano_first_frame.png, nano_last_frame.png",
     "workflow": "1) Render shots, 2) Place in folders, 3) Update selections, 4) View in Storyboard UI, 5) Export for CapCut"
   },
-  "lastUpdated": "2026-02-07T00:00:00Z",
-  "editorialOrder": []
+  "lastUpdated": "2026-02-11T02:35:22.394Z",
+  "editorialOrder": [
+    "SHOT_01"
+  ]
 }

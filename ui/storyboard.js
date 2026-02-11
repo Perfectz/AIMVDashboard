@@ -9,6 +9,24 @@ let selectedShot = null;
 let selectedVariation = null;
 let currentProject = null;
 let latestContextBundle = null;
+let orderedStoryboardShots = [];
+let previsMap = {};
+let assetManifest = [];
+let filteredAssets = [];
+let currentReadinessData = null;
+let currentReadinessFilter = 'all';
+let commentsModalShot = null;
+let reorderModeEnabled = false;
+const PREVIS_REF_SLOT = '1';
+const REVIEW_STATUSES = ['draft', 'in_review', 'approved', 'changes_requested'];
+const REVIEW_STATUS_OPTIONS = REVIEW_STATUSES;
+const REVIEW_STATUS_LABELS = {
+  draft: 'Draft',
+  in_review: 'In Review',
+  approved: 'Approved',
+  changes_requested: 'Changes Requested'
+};
+const activeReviewFilters = new Set(REVIEW_STATUSES);
 
 // Toast notification system
 const toastContainer = document.getElementById('toastContainer');
@@ -99,6 +117,8 @@ let emptyState, gridView, timelineView, shotGrid, timelineTrack, timelineFilmstr
 let shotModal, modalTitle, variationGrid, shotDetails;
 let statTotalShots, statRendered, statSelected, statDuration;
 let assetTypeFilter, assetStatusFilter, assetShotFilter, assetTableBody, assetCount, assetEmptyState;
+let reviewFilterChips, readinessPanel, readinessCounts, readinessLists, readinessRecommendations, clearReadinessFilterBtn;
+let timelineRuler, timelineCurrentIndicator, storyboardAudio;
 
 /**
  * Initialize DOM element references
@@ -124,6 +144,15 @@ function initializeDOMElements() {
   assetTableBody = document.getElementById('assetTableBody');
   assetCount = document.getElementById('assetCount');
   assetEmptyState = document.getElementById('assetEmptyState');
+  reviewFilterChips = document.getElementById('reviewFilterChips');
+  readinessPanel = document.getElementById('readinessPanel');
+  readinessCounts = document.getElementById('readinessCounts');
+  readinessLists = document.getElementById('readinessLists');
+  readinessRecommendations = document.getElementById('readinessRecommendations');
+  clearReadinessFilterBtn = document.getElementById('clearReadinessFilterBtn');
+  timelineRuler = document.getElementById('timelineRuler');
+  timelineCurrentIndicator = document.getElementById('timelineCurrentIndicator');
+  storyboardAudio = document.getElementById('storyboardAudio');
 }
 
 function normalizeAssetManifest(data) {
@@ -609,6 +638,49 @@ function hideUploadProgress(progressElement) {
 /**
  * Load storyboard sequence data
  */
+function normalizeShotReviewData(shot) {
+  if (!shot || typeof shot !== 'object') return;
+
+  if (!REVIEW_STATUSES.includes(shot.reviewStatus)) {
+    shot.reviewStatus = 'draft';
+  }
+
+  if (!Array.isArray(shot.comments)) {
+    shot.comments = [];
+  } else {
+    shot.comments = shot.comments
+      .map((comment) => {
+        if (!comment || typeof comment !== 'object') return null;
+        const author = typeof comment.author === 'string' && comment.author.trim()
+          ? comment.author.trim()
+          : 'Reviewer';
+        const text = typeof comment.text === 'string' ? comment.text.trim() : '';
+        if (!text) return null;
+        const timestamp = typeof comment.timestamp === 'string' && comment.timestamp.trim()
+          ? comment.timestamp
+          : new Date().toISOString();
+        return { author, text, timestamp };
+      })
+      .filter(Boolean);
+  }
+
+  if (typeof shot.assignee !== 'string') {
+    shot.assignee = '';
+  }
+}
+
+function normalizeSequenceReviewData(sequence) {
+  if (!sequence || typeof sequence !== 'object') return;
+  if (!Array.isArray(sequence.selections)) {
+    sequence.selections = [];
+  }
+  sequence.selections.forEach((shot) => normalizeShotReviewData(shot));
+}
+
+function updateMusicPreview() {
+  syncAudioSource();
+}
+
 // ===== PROJECT MANAGEMENT =====
 
 /**
@@ -724,12 +796,12 @@ function resolveRefSourcePath(sourceType, sourceRef) {
 
   if (sourceType === 'character_ref') {
     const [entityId, slot = PREVIS_REF_SLOT] = sourceRef.split(':');
-    return `projects/${currentProject.id}/reference/characters/${entityId}/${slot}.png`;
+    return `projects/${currentProject.id}/reference/characters/${entityId}/ref_${slot}.png`;
   }
 
   if (sourceType === 'location_ref') {
     const [entityId, slot = PREVIS_REF_SLOT] = sourceRef.split(':');
-    return `projects/${currentProject.id}/reference/locations/${entityId}/${slot}.png`;
+    return `projects/${currentProject.id}/reference/locations/${entityId}/ref_${slot}.png`;
   }
 
   return sourceRef;
@@ -839,6 +911,7 @@ async function loadSequence() {
     }
     sequenceData = await response.json();
     normalizeSequenceReviewData(sequenceData);
+    orderedStoryboardShots = Array.isArray(sequenceData.selections) ? sequenceData.selections : [];
     await loadReviewMetadata();
     updateStats();
     renderReviewFilterChips();
@@ -872,6 +945,7 @@ async function loadReviewMetadata() {
       if (!metadata) return;
       shot.reviewStatus = metadata.reviewStatus;
       shot.comments = metadata.comments;
+      shot.assignee = metadata.assignee || shot.assignee || '';
       normalizeShotReviewData(shot);
     });
   } catch (err) {
@@ -1141,17 +1215,18 @@ async function saveReadinessReport() {
   };
 
   try {
-    const response = await fetch(`/projects/${currentProject.id}/lint/readiness_report.json`, {
-      method: 'PUT',
+    const response = await fetch(`/api/storyboard/readiness-report?project=${currentProject.id}`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(report, null, 2)
+      body: JSON.stringify(report)
     });
+    const result = await response.json();
 
-    if (!response.ok) {
-      throw new Error('Direct save route not available in this environment');
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Failed to save readiness report');
     }
 
-    showToast('Readiness report saved', `projects/${currentProject.id}/lint/readiness_report.json`, 'success', 3000);
+    showToast('Readiness report saved', result.path || `projects/${currentProject.id}/lint/readiness_report.json`, 'success', 3000);
   } catch (err) {
     const fallbackText = JSON.stringify(report, null, 2);
     await copyText(fallbackText);
@@ -1203,6 +1278,96 @@ function getSourceBadgeClass(sourceType) {
   }
 }
 
+function getOrderedShots() {
+  if (!Array.isArray(sequenceData?.selections)) return [];
+  return sequenceData.selections;
+}
+
+function updateReorderModeButtonLabel() {
+  const btn = document.getElementById('timelineReorderBtn');
+  if (!btn) return;
+  btn.textContent = reorderModeEnabled ? 'Done Reordering' : 'Reorder';
+}
+
+function updateTimelineControlsVisibility() {
+  if (!timelineFilmstrip) return;
+  timelineFilmstrip.style.display = currentView === 'timeline' ? 'flex' : 'none';
+}
+
+async function saveEditorialOrder(orderedShotIds) {
+  if (!Array.isArray(orderedShotIds) || !Array.isArray(sequenceData?.selections)) return;
+
+  const byId = new Map(sequenceData.selections.map(shot => [shot.shotId, shot]));
+  const reordered = [];
+
+  orderedShotIds.forEach((shotId) => {
+    const shot = byId.get(shotId);
+    if (shot) reordered.push(shot);
+  });
+
+  sequenceData.selections.forEach((shot) => {
+    if (!orderedShotIds.includes(shot.shotId)) reordered.push(shot);
+  });
+
+  sequenceData.selections = reordered;
+  orderedStoryboardShots = sequenceData.selections;
+  sequenceData.editorialOrder = reordered.map(shot => shot.shotId);
+  await saveStoryboardSequence();
+  renderView();
+  showToast('Order saved', `${reordered.length} shots reordered`, 'success', 2000);
+}
+
+async function saveReviewUpdate(shotId, updates = {}) {
+  if (!shotId || !sequenceData?.selections) {
+    throw new Error('Shot sequence is not loaded');
+  }
+
+  const shot = sequenceData.selections.find(s => s.shotId === shotId);
+  if (!shot) {
+    throw new Error(`Shot '${shotId}' not found`);
+  }
+
+  const comments = Array.isArray(shot.comments) ? [...shot.comments] : [];
+  if (typeof updates.appendComment === 'string' && updates.appendComment.trim()) {
+    comments.push({
+      author: (updates.author || 'Reviewer').trim() || 'Reviewer',
+      text: updates.appendComment.trim(),
+      timestamp: new Date().toISOString()
+    });
+  } else if (Array.isArray(updates.comments)) {
+    comments.splice(0, comments.length, ...updates.comments);
+  }
+
+  const payload = {
+    shotId,
+    reviewStatus: updates.reviewStatus !== undefined ? updates.reviewStatus : shot.reviewStatus,
+    comments,
+    assignee: updates.assignee !== undefined ? String(updates.assignee || '').trim() : shot.assignee
+  };
+
+  const projectParam = currentProject ? `?project=${currentProject.id}` : '';
+  const response = await fetch(`/api/save/review-metadata${projectParam}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json();
+
+  if (!response.ok || !result.success) {
+    throw new Error(result.error || 'Failed to save review metadata');
+  }
+
+  const metadata = result.reviewMetadata || {};
+  shot.reviewStatus = metadata.reviewStatus || payload.reviewStatus || shot.reviewStatus;
+  shot.comments = Array.isArray(metadata.comments) ? metadata.comments : comments;
+  shot.assignee = typeof metadata.assignee === 'string'
+    ? metadata.assignee
+    : (payload.assignee || '');
+  normalizeShotReviewData(shot);
+
+  return shot;
+}
+
 function queueStoryboardSave() {
   if (saveStoryboardTimer) {
     clearTimeout(saveStoryboardTimer);
@@ -1219,9 +1384,12 @@ async function saveStoryboardSequence() {
   const payload = {
     selections: sequenceData.selections.map(shot => ({
       shotId: shot.shotId,
+      selectedVariation: shot.selectedVariation || 'none',
       locked: !!shot.locked,
-      sourceType: shot.sourceType || inferShotSource(shot)
-    }))
+      sourceType: shot.sourceType || inferShotSource(shot),
+      assignee: shot.assignee || ''
+    })),
+    editorialOrder: Array.isArray(sequenceData.editorialOrder) ? sequenceData.editorialOrder : []
   };
 
   try {
@@ -1284,14 +1452,14 @@ function renderView() {
  */
 function renderGridView() {
   shotGrid.innerHTML = '';
-  const shots = getFilteredShots();
+  const shots = getFilteredShotsForCurrentReadinessFilter(getFilteredShots());
 
   shots.forEach(shot => {
     const card = createShotCard(shot);
     shotGrid.appendChild(card);
   });
 
-  if (filteredShots.length === 0) {
+  if (shots.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'readiness-filter-empty';
     empty.textContent = 'No shots match this readiness filter.';
@@ -1395,26 +1563,29 @@ function createShotCard(shot) {
   const meta = document.createElement('div');
   meta.className = 'shot-meta';
 
+  const metaItems = [];
   const previewMetaAsset = resolveShotPreviewAsset(shot);
   if (previewMetaAsset?.source) {
-    const source = document.createElement('div');
-    source.className = 'shot-meta-item';
-    source.textContent = `Preview: ${previewMetaAsset.source}`;
-    meta.appendChild(source);
+    metaItems.push({ label: 'Preview', value: previewMetaAsset.source });
   }
 
   if (shot.timing) {
-    const duration = document.createElement('div');
-    duration.className = 'shot-meta-item';
-    duration.textContent = `Duration: ${shot.timing.duration || 8}s`;
-    meta.appendChild(duration);
+    metaItems.push({ label: 'Duration', value: `${shot.timing.duration || 8}s` });
 
     if (shot.timing.musicSection) {
-      const section = document.createElement('div');
-      section.className = 'shot-meta-item';
-      section.textContent = `Section: ${shot.timing.musicSection}`;
-      meta.appendChild(section);
+      metaItems.push({ label: 'Section', value: shot.timing.musicSection });
     }
+  }
+
+  if (window.UILayer?.renderMetaItems) {
+    window.UILayer.renderMetaItems(meta, metaItems, 'shot-meta-item');
+  } else {
+    metaItems.forEach((item) => {
+      const row = document.createElement('div');
+      row.className = 'shot-meta-item';
+      row.textContent = `${item.label}: ${item.value}`;
+      meta.appendChild(row);
+    });
   }
 
   info.appendChild(meta);
@@ -1624,12 +1795,28 @@ function bindTimelinePlayback(shotRanges, totalDuration) {
  * Render timeline view
  */
 async function renderTimelineView() {
+  if (!timelineTrack) return;
   timelineTrack.innerHTML = '';
-  const filteredShots = getFilteredShots();
+  renderTimelineFilmstrip();
+
+  const timingByShotId = await loadShotListTiming();
+  const allRanges = deriveShotRanges(timingByShotId);
+  const filteredIds = new Set(
+    getFilteredShotsForCurrentReadinessFilter(getFilteredShots()).map(shot => shot.shotId)
+  );
+  const shotRanges = allRanges.filter(range => filteredIds.has(range.shot.shotId));
+
+  if (shotRanges.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'readiness-filter-empty';
+    empty.textContent = 'No shots match this readiness filter.';
+    timelineTrack.appendChild(empty);
+    return;
+  }
 
   const sections = {};
-  filteredShots.forEach(shot => {
-    const sectionName = shot.timing?.musicSection || 'Unknown';
+  shotRanges.forEach(range => {
+    const sectionName = range.musicSection || 'Unknown';
     if (!sections[sectionName]) {
       sections[sectionName] = [];
     }
@@ -1641,6 +1828,10 @@ async function renderTimelineView() {
     timelineTrack.appendChild(sectionEl);
   });
 
+  syncAudioSource();
+  const totalDuration = Number(sequenceData?.totalDuration) || shotRanges[shotRanges.length - 1].end || 0;
+  const durationEl = document.getElementById('timelineDuration');
+  if (durationEl) durationEl.textContent = formatTimeLabel(totalDuration);
   bindTimelinePlayback(shotRanges, totalDuration);
 }
 
@@ -1766,8 +1957,8 @@ function createTimelineSection(sectionName, ranges) {
   const shotsContainer = document.createElement('div');
   shotsContainer.className = 'section-shots';
 
-  ranges.forEach(range => {
-    const shotEl = createTimelineShot(range);
+  ranges.forEach((range, index) => {
+    const shotEl = createTimelineShot(range, index);
     shotsContainer.appendChild(shotEl);
   });
 
@@ -1779,7 +1970,7 @@ function createTimelineSection(sectionName, ranges) {
 /**
  * Create timeline shot element
  */
-function createTimelineShot(range) {
+function createTimelineShot(range, index = null) {
   const shot = range.shot;
   const shotEl = document.createElement('div');
   shotEl.className = 'timeline-shot';
@@ -1792,7 +1983,7 @@ function createTimelineShot(range) {
     }
   });
 
-  if (!reorderMode) {
+  if (!reorderModeEnabled) {
     shotEl.addEventListener('click', () => openShotModal(shot));
   }
 
@@ -1803,7 +1994,7 @@ function createTimelineShot(range) {
   label.textContent = shot.shotId;
   shotEl.appendChild(label);
 
-  if (reorderMode) {
+  if (reorderModeEnabled) {
     shotEl.classList.add('reorderable');
     shotEl.draggable = true;
     shotEl.dataset.shotId = shot.shotId;
@@ -2126,79 +2317,9 @@ function renderShotDetails() {
   }
 }
 
-function openCommentsModal(shot) {
-  commentsShot = shot;
-  commentsShotTitle.textContent = `${shot.shotId} Comments`;
-  renderCommentsList();
-  commentsModal.style.display = 'flex';
-}
-
-function closeCommentsModal() {
-  commentsModal.style.display = 'none';
-  commentsShot = null;
-  if (commentsForm) commentsForm.reset();
-}
-
-function renderCommentsList() {
-  if (!commentsList || !commentsShot) return;
-  commentsList.innerHTML = '';
-
-  if (commentsShot.comments.length === 0) {
-    const empty = document.createElement('p');
-    empty.className = 'comments-empty';
-    empty.textContent = 'No comments yet. Add context for reviewers.';
-    commentsList.appendChild(empty);
-    return;
-  }
-
-  const sorted = [...commentsShot.comments].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  sorted.forEach((comment) => {
-    const item = document.createElement('div');
-    item.className = 'comment-item';
-
-    const meta = document.createElement('div');
-    meta.className = 'comment-meta';
-    const date = new Date(comment.timestamp);
-    meta.textContent = `${comment.author} · ${date.toLocaleString()}`;
-
-    const text = document.createElement('div');
-    text.className = 'comment-text';
-    text.textContent = comment.text;
-
-    item.appendChild(meta);
-    item.appendChild(text);
-    commentsList.appendChild(item);
-  });
-}
-
 async function updateShotReviewMetadata(shotId, updates) {
-  const shot = sequenceData?.selections?.find(s => s.shotId === shotId);
-  if (!shot) return false;
-
-  if (updates.reviewStatus && REVIEW_STATUSES.includes(updates.reviewStatus)) {
-    shot.reviewStatus = updates.reviewStatus;
-  }
-  if (Array.isArray(updates.comments)) {
-    shot.comments = updates.comments;
-  }
-
-  normalizeShotReviewData(shot);
-
   try {
-    const projectParam = currentProject ? `?project=${currentProject.id}` : '';
-    const response = await fetch(`/api/save/review-metadata${projectParam}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        shotId,
-        reviewStatus: shot.reviewStatus,
-        comments: shot.comments
-      })
-    });
-    const result = await response.json();
-    if (!response.ok || !result.success) {
-      throw new Error(result.error || 'Failed to save review metadata');
-    }
+    await saveReviewUpdate(shotId, updates);
   } catch (err) {
     console.error('Failed to save review metadata:', err);
     showToast('Save failed', err.message, 'error', 4000);
@@ -2266,7 +2387,9 @@ function openCommentsModal(shot) {
 
 function closeCommentsModal() {
   const commentsModal = document.getElementById('commentsModal');
+  const newCommentText = document.getElementById('newCommentText');
   commentsModal.style.display = 'none';
+  if (newCommentText) newCommentText.value = '';
   commentsModalShot = null;
 }
 
@@ -2425,6 +2548,11 @@ function initializeButtons() {
   const contextDrawerOverlay = document.getElementById('contextDrawerOverlay');
   const copyContextMarkdownBtn = document.getElementById('copyContextMarkdownBtn');
   const downloadContextJsonBtn = document.getElementById('downloadContextJsonBtn');
+  const commentsModalClose = document.getElementById('commentsModalClose');
+  const commentsModalOverlay = document.getElementById('commentsModalOverlay');
+  const addCommentBtn = document.getElementById('addCommentBtn');
+  const saveReadinessReportBtn = document.getElementById('saveReadinessReportBtn');
+  const clearReadinessFilterBtnLocal = document.getElementById('clearReadinessFilterBtn');
 
   if (exportBtn) exportBtn.addEventListener('click', exportPDF);
   if (copyContextBtn) copyContextBtn.addEventListener('click', copyContextForAI);
@@ -2441,8 +2569,18 @@ function initializeButtons() {
   if (modalOverlay) modalOverlay.addEventListener('click', closeModal);
   if (modalCancel) modalCancel.addEventListener('click', closeModal);
   if (modalSave) modalSave.addEventListener('click', saveSelection);
+  if (commentsModalClose) commentsModalClose.addEventListener('click', closeCommentsModal);
+  if (commentsModalOverlay) commentsModalOverlay.addEventListener('click', closeCommentsModal);
+  if (addCommentBtn) addCommentBtn.addEventListener('click', addCommentToCurrentShot);
   if (closeContextDrawerBtn) closeContextDrawerBtn.addEventListener('click', closeContextDrawer);
   if (contextDrawerOverlay) contextDrawerOverlay.addEventListener('click', closeContextDrawer);
+  if (saveReadinessReportBtn) saveReadinessReportBtn.addEventListener('click', saveReadinessReport);
+  if (clearReadinessFilterBtnLocal) {
+    clearReadinessFilterBtnLocal.addEventListener('click', () => {
+      currentReadinessFilter = 'all';
+      renderView();
+    });
+  }
   if (copyContextMarkdownBtn) {
     copyContextMarkdownBtn.addEventListener('click', async () => {
       if (!latestContextBundle) return;

@@ -1,0 +1,123 @@
+/* Reusable UI layer primitives */
+
+:root {
+  --ui-surface: var(--bg-card);
+  --ui-surface-muted: var(--bg-secondary);
+  --ui-radius: 16px;
+  --ui-radius-sm: 12px;
+  --ui-border: 1px solid var(--border);
+}
+
+.ui-panel {
+  border-radius: var(--ui-radius);
+  border: var(--ui-border);
+  background: var(--ui-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.ui-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem 0.4rem;
+}
+
+.ui-panel-title {
+  margin: 0;
+  font-size: 0.82rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.ui-stat-grid {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+
+.ui-stat-tile {
+  border-radius: var(--ui-radius);
+  border: var(--ui-border);
+  padding: 1rem;
+  background: var(--ui-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.ui-stat-label {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.ui-stat-value {
+  margin-top: 0.4rem;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text-primary);
+}
+
+.ui-stat-meta {
+  margin-top: 0.35rem;
+  color: var(--text-secondary);
+}
+
+.ui-tone-good .ui-stat-value {
+  color: var(--success);
+}
+
+.ui-tone-warn .ui-stat-value {
+  color: var(--warning);
+}
+
+.ui-tone-bad .ui-stat-value {
+  color: var(--error);
+}
+
+.ui-list {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.7rem;
+}
+
+.ui-list-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.65rem;
+  align-items: flex-start;
+  border-radius: var(--ui-radius-sm);
+  border: var(--ui-border);
+  background: var(--ui-surface-muted);
+  padding: 0.65rem 0.7rem;
+}
+
+.ui-list-item a {
+  color: var(--accent-light);
+  text-decoration: none;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+
+.ui-list-item code {
+  color: var(--text-primary);
+}
+
+.ui-page-heading {
+  margin: 0;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.ui-page-subheading {
+  color: var(--text-secondary);
+  margin-top: 0.35rem;
+}
+
+.ui-meta-item {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}

@@ -11,6 +11,11 @@
     "init-phase2": "node scripts/init_phase2.js",
     "migrate": "node scripts/migrate_to_projects.js",
     "restart": "node scripts/restart.js",
+    "health": "node scripts/health_check.js",
+    "health:full": "npm run health && npm test",
+    "test:ui": "playwright test",
+    "test:ui:headed": "playwright test --headed",
+    "health:all": "npm run health:full && npm run test:ui",
     "generate": "node scripts/generate_image.js",
     "generate-kling": "node scripts/generate_prompts_kling.js",
     "test": "npm run validate && npm run lint"
@@ -31,5 +36,8 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
   }
 }

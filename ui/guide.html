@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -6,106 +6,18 @@
   <title>User Guide - AI Music Video</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/themes/dark.css">
+  <link rel="stylesheet" href="ui-layer.css">
   <style>
-    .guide-container {
-      display: flex;
+    .main-layout.guide-layout {
+      display: grid;
+      grid-template-columns: minmax(182px, 236px) minmax(0, 1fr);
       height: 100vh;
-      background: #0d1117;
-      color: #c9d1d9;
-      font-family: 'Inter', sans-serif;
-    }
-
-    /* Left Navigation */
-    .left-nav {
-      width: 280px;
-      background: #ffffff;
-      border-right: 1px solid #d8dbe0;
-      display: flex;
-      flex-direction: column;
-      overflow-y: auto;
-    }
-
-    .nav-brand {
-      padding: 24px 20px 16px;
-      border-bottom: 1px solid #e1e4e8;
-    }
-
-    .nav-brand h1 {
-      font-size: 18px;
-      font-weight: 600;
-      margin: 0 0 4px 0;
-      color: #24292f;
-    }
-
-    .nav-subtitle {
-      font-size: 12px;
-      color: #57606a;
-      margin: 0;
-    }
-
-    .nav-divider {
-      height: 1px;
-      background: #d8dbe0;
-      margin: 8px 0;
-    }
-
-    .nav-header {
-      padding: 12px 20px 8px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .nav-title {
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: #57606a;
-    }
-
-    .nav-items {
-      padding: 0;
-    }
-
-    .nav-item {
-      display: flex;
-      align-items: center;
-      padding: 8px 20px;
-      background: none;
-      border: none;
       width: 100%;
-      text-align: left;
-      cursor: pointer;
-      transition: background 0.15s ease;
-      color: #24292f;
-      font-size: 14px;
-      text-decoration: none;
-    }
-
-    .nav-item:hover {
-      background: #f6f8fa;
-    }
-
-    .nav-item.active {
-      background: #e8f0fe;
-      color: #1a73e8;
-      font-weight: 500;
-    }
-
-    .nav-icon {
-      margin-right: 12px;
-      font-size: 16px;
-    }
-
-    .nav-footer {
-      margin-top: auto;
-      padding: 16px 20px;
-      border-top: 1px solid #d8dbe0;
-      font-size: 11px;
-      color: #57606a;
+      color: var(--text-primary);
+      font-family: 'Inter', sans-serif;
     }
 
     /* Guide Content */
@@ -115,18 +27,19 @@
       padding: 48px 64px 96px;
       max-width: 1200px;
       margin: 0 auto;
+      background: var(--bg-primary);
     }
 
     .guide-content h1 {
       font-size: 36px;
       font-weight: 700;
       margin: 0 0 8px 0;
-      color: #ffffff;
+      color: var(--text-primary);
     }
 
     .guide-content .subtitle {
       font-size: 18px;
-      color: #8b949e;
+      color: var(--text-secondary);
       margin: 0 0 48px 0;
     }
 
@@ -134,8 +47,8 @@
       font-size: 28px;
       font-weight: 600;
       margin: 48px 0 24px 0;
-      color: #ffffff;
-      border-bottom: 1px solid #21262d;
+      color: var(--text-primary);
+      border-bottom: 1px solid var(--border);
       padding-bottom: 12px;
     }
 
@@ -143,20 +56,20 @@
       font-size: 20px;
       font-weight: 600;
       margin: 32px 0 16px 0;
-      color: #c9d1d9;
+      color: var(--text-primary);
     }
 
     .guide-content h4 {
       font-size: 16px;
       font-weight: 600;
       margin: 24px 0 12px 0;
-      color: #c9d1d9;
+      color: var(--text-primary);
     }
 
     .guide-content p {
       line-height: 1.7;
       margin: 0 0 16px 0;
-      color: #c9d1d9;
+      color: var(--text-primary);
     }
 
     .guide-content ul, .guide-content ol {
@@ -167,21 +80,21 @@
     .guide-content li {
       margin: 8px 0;
       line-height: 1.7;
-      color: #c9d1d9;
+      color: var(--text-primary);
     }
 
     .guide-content code {
-      background: #161b22;
+      background: var(--bg-secondary);
       padding: 2px 6px;
       border-radius: 4px;
       font-family: 'Consolas', 'Monaco', monospace;
       font-size: 13px;
-      color: #79c0ff;
+      color: var(--accent-light);
     }
 
     .guide-content pre {
-      background: #161b22;
-      border: 1px solid #30363d;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
       border-radius: 8px;
       padding: 16px;
       overflow-x: auto;
@@ -191,14 +104,14 @@
     .guide-content pre code {
       background: none;
       padding: 0;
-      color: #c9d1d9;
+      color: var(--text-primary);
       font-size: 13px;
       line-height: 1.6;
     }
 
     .info-box {
-      background: #1c2128;
-      border: 1px solid #30363d;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
       border-left: 4px solid #1a73e8;
       border-radius: 6px;
       padding: 16px 20px;
@@ -207,7 +120,7 @@
 
     .info-box h4 {
       margin: 0 0 8px 0;
-      color: #58a6ff;
+      color: var(--accent-light);
     }
 
     .info-box p {
@@ -215,8 +128,8 @@
     }
 
     .warning-box {
-      background: #1c2128;
-      border: 1px solid #30363d;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
       border-left: 4px solid #f85149;
       border-radius: 6px;
       padding: 16px 20px;
@@ -229,8 +142,8 @@
     }
 
     .success-box {
-      background: #1c2128;
-      border: 1px solid #30363d;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
       border-left: 4px solid #3fb950;
       border-radius: 6px;
       padding: 16px 20px;
@@ -243,8 +156,8 @@
     }
 
     .example-card {
-      background: #0d1117;
-      border: 1px solid #30363d;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
       border-radius: 8px;
       padding: 20px;
       margin: 24px 0;
@@ -252,7 +165,7 @@
 
     .example-card h4 {
       margin: 0 0 12px 0;
-      color: #58a6ff;
+      color: var(--accent-light);
     }
 
     .step-number {
@@ -295,23 +208,23 @@
     }
 
     .badge-optional {
-      background: #8b949e;
+      background: var(--text-secondary);
       color: white;
     }
 
     .screenshot-placeholder {
-      background: #161b22;
-      border: 2px dashed #30363d;
+      background: var(--bg-secondary);
+      border: 2px dashed var(--border);
       border-radius: 8px;
       padding: 48px;
       text-align: center;
-      color: #8b949e;
+      color: var(--text-secondary);
       margin: 24px 0;
     }
 
     .file-tree {
-      background: #161b22;
-      border: 1px solid #30363d;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
       border-radius: 8px;
       padding: 16px;
       font-family: 'Consolas', 'Monaco', monospace;
@@ -321,18 +234,18 @@
     }
 
     .file-tree-item {
-      color: #c9d1d9;
+      color: var(--text-primary);
     }
 
     .file-tree-folder {
-      color: #58a6ff;
+      color: var(--accent-light);
     }
 
     .file-tree-file {
-      color: #79c0ff;
+      color: var(--accent-light);
     }
 
-    body.embedded-mode .guide-container {
+    body.embedded-mode .main-layout.guide-layout {
       display: block;
       height: auto;
     }
@@ -348,46 +261,26 @@
   </style>
 </head>
 <body>
-  <div class="guide-container">
+  <div class="container">
+    <div class="main-layout guide-layout">
     <!-- Left Navigation -->
     <nav class="left-nav">
-      <div class="nav-brand">
-        <h1>📖 User Guide</h1>
-        <p class="nav-subtitle">Complete workflow documentation</p>
-      </div>
-
+      <div class="nav-brand" data-ui-nav-brand data-ui-mode="standard"></div>
+      <div class="project-selector-section" data-ui-project-selector data-ui-mode="standard"></div>
       <div class="nav-divider"></div>
-
-      <div class="nav-header">
-        <div class="nav-title">Navigation</div>
-      </div>
-      <div class="nav-items">
-        <a href="index.html" class="nav-item">
-          <span class="nav-icon">📦</span>
-          <span class="nav-label">Prompts UI</span>
-        </a>
-        <a href="storyboard.html" class="nav-item">
-          <span class="nav-icon">📊</span>
-          <span class="nav-label">Storyboard</span>
-        </a>
-        <a href="guide.html" class="nav-item active">
-          <span class="nav-icon">📖</span>
-          <span class="nav-label">User Guide</span>
-        </a>
-        <a href="home.html" class="nav-item">
-          <span class="nav-icon">🏠</span>
-          <span class="nav-label">Quick Start</span>
-        </a>
-      </div>
-
-      <div class="nav-footer">
-        <div class="nav-version">v2026-02-07</div>
-      </div>
+      <div class="nav-stats" data-ui-nav-stats data-ui-mode="standard"></div>
+      <div class="nav-divider"></div>
+      <div class="nav-header"><div class="nav-title">Workflow Steps</div></div>
+      <div class="nav-items" data-ui-workflow-nav data-ui-current="guide" data-ui-mode="standard"></div>
+      <div class="nav-divider"></div>
+      <div class="nav-header"><div class="nav-title">Resources</div></div>
+      <div class="nav-items" data-ui-resource-nav data-ui-current="guide" data-ui-mode="standard"></div>
+      <div class="nav-footer" data-ui-nav-footer data-ui-mode="standard"></div>
     </nav>
 
     <!-- Guide Content -->
     <div class="guide-content">
-      <h1>🎬 AI Music Video - Complete User Guide</h1>
+      <h1>AI Music Video - Complete User Guide</h1>
       <p class="subtitle">Step-by-step instructions with examples for creating cinematic music videos</p>
 
       <!-- ========== INTRODUCTION ========== -->
@@ -396,7 +289,7 @@
       <p>This system is a <strong>Prompt Compiler</strong>, not a creative director. It enforces structure, consistency, and best practices by translating structured data (Canon + Shot Intent) into system-specific prompts for AI tools.</p>
 
       <div class="info-box">
-        <h4>💡 Core Philosophy</h4>
+        <h4>ðŸ’¡ Core Philosophy</h4>
         <p>We prioritize <strong>consistency over creativity</strong>. A mediocre but visually consistent music video is better than a stunning video where the main character's jacket changes color every 3 shots.</p>
       </div>
 
@@ -409,170 +302,13 @@
         <li><strong>Tracks asset variations</strong> - Compare A/B/C/D camera options side-by-side</li>
       </ul>
 
-      <!-- ========== PHASE 1: SETUP ========== -->
-      <h2 id="phase1-setup">Phase 1: Initial Setup <span class="badge badge-phase1">Current Phase</span></h2>
-
-      <p>Before creating your first music video, you need to set up the development environment.</p>
-
-      <div class="step-header">
-        <span class="step-number">1</span>
-        <h3>Install Dependencies</h3>
-      </div>
-
-      <p>Open your terminal in the project directory and run:</p>
-
-      <pre><code>npm install</code></pre>
-
-      <p>This installs two required packages:</p>
-      <ul>
-        <li><code>ajv</code> - JSON Schema validator for enforcing data structure</li>
-        <li><code>busboy</code> - File upload handling for music and video files</li>
-      </ul>
-
-      <div class="success-box">
-        <h4>✓ Expected Output</h4>
-        <p>You should see "added 2 packages" in the terminal. If you see errors, ensure Node.js version 14 or higher is installed.</p>
-      </div>
-
-      <div class="step-header">
-        <span class="step-number">2</span>
-        <h3>Migrate to Multi-Project Structure</h3>
-      </div>
-
-      <p>Run the migration script <strong>once</strong> to set up the multi-project folder structure:</p>
-
-      <pre><code>npm run migrate</code></pre>
-
-      <p>This script:</p>
-      <ul>
-        <li>Creates <code>projects/</code> directory</li>
-        <li>Creates <code>projects/default/</code> for your first project</li>
-        <li>Moves existing <code>bible/</code>, <code>prompts/</code>, <code>rendered/</code>, <code>music/</code> folders into <code>projects/default/</code></li>
-        <li>Creates <code>projects/projects_index.json</code> registry</li>
-        <li>Creates <code>projects/default/project.json</code> metadata file</li>
-      </ul>
-
-      <div class="warning-box">
-        <h4>⚠ Important</h4>
-        <p>Only run this migration script <strong>once</strong>. Running it multiple times may cause data duplication issues.</p>
-      </div>
-
-      <div class="example-card">
-        <h4>Example: projects_index.json</h4>
-        <pre><code>{
-  "version": "2026-02-07",
-  "activeProject": "default",
-  "projects": [
-    {
-      "id": "default",
-      "name": "My First Music Video",
-      "createdAt": "2026-02-07T00:00:00Z",
-      "lastModified": "2026-02-07T12:30:00Z",
-      "status": "active"
-    }
-  ]
-}</code></pre>
-      </div>
-
-      <div class="step-header">
-        <span class="step-number">3</span>
-        <h3>Start the UI Server</h3>
-      </div>
-
-      <p>Launch the web server to access the UI:</p>
-
-      <pre><code>npm run serve</code></pre>
-
-      <p>Open your browser and navigate to:</p>
-      <pre><code>http://localhost:8000</code></pre>
-
-      <p>You should see the main Prompts UI with:</p>
-      <ul>
-        <li>Left navigation with project selector</li>
-        <li>Empty prompts list (expected in Phase 1)</li>
-        <li>Platform filters (Kling, Nano Banana, Suno)</li>
-        <li>Storyboard link in navigation</li>
-      </ul>
-
-      <!-- ========== MULTI-PROJECT MANAGEMENT ========== -->
-      <h2 id="multi-project">Multi-Project Management</h2>
-
-      <p>The system supports unlimited projects with complete data isolation. Each project has its own canon, prompts, rendered assets, and music files.</p>
-
-      <div class="step-header">
-        <span class="step-number">1</span>
-        <h3>Create a New Project</h3>
-      </div>
-
-      <p>In the left navigation of any page (Prompts UI or Storyboard):</p>
-
-      <ol>
-        <li>Find the <strong>"Current Project"</strong> section at the top of the sidebar</li>
-        <li>Click the <strong>"+"</strong> button next to the dropdown</li>
-        <li>Enter a project name (e.g., "Cyberpunk Dreams")</li>
-        <li>Optionally add a description (e.g., "A dark, neon-soaked music video")</li>
-        <li>Click <strong>"Create Project"</strong></li>
-      </ol>
-
-      <p>The system will:</p>
-      <ul>
-        <li>Generate a unique project ID (e.g., "cyberpunk-dreams")</li>
-        <li>Create complete folder structure: <code>projects/cyberpunk-dreams/</code></li>
-        <li>Initialize empty canon files (characters.json, locations.json, etc.)</li>
-        <li>Switch the UI to your new project automatically</li>
-        <li>Save your selection in browser localStorage</li>
-      </ul>
-
-      <div class="file-tree">
-        <div class="file-tree-folder">projects/</div>
-        <div class="file-tree-folder">  └── cyberpunk-dreams/</div>
-        <div class="file-tree-file">        ├── project.json</div>
-        <div class="file-tree-folder">        ├── bible/</div>
-        <div class="file-tree-file">        │     ├── characters.json</div>
-        <div class="file-tree-file">        │     ├── locations.json</div>
-        <div class="file-tree-file">        │     ├── visual_style.json</div>
-        <div class="file-tree-file">        │     └── cinematography.json</div>
-        <div class="file-tree-folder">        ├── prompts/</div>
-        <div class="file-tree-folder">        ├── rendered/</div>
-        <div class="file-tree-folder">        └── music/</div>
-      </div>
-
-      <div class="step-header">
-        <span class="step-number">2</span>
-        <h3>Switch Between Projects</h3>
-      </div>
-
-      <p>Use the dropdown selector in the left navigation:</p>
-
-      <ol>
-        <li>Click the <strong>"Current Project"</strong> dropdown</li>
-        <li>Select a different project from the list</li>
-        <li>The page will reload with that project's data</li>
-      </ol>
-
-      <div class="info-box">
-        <h4>💾 Persistent Selection</h4>
-        <p>Your active project is saved in browser localStorage. When you reload the page or visit the UI later, you'll stay on the same project.</p>
-      </div>
-
-      <h3>Project Isolation</h3>
-
-      <p>Each project is <strong>completely isolated</strong>:</p>
-
-      <ul>
-        <li><strong>Files:</strong> Music uploaded to Project A does NOT appear in Project B</li>
-        <li><strong>Canon:</strong> Characters defined in Project A never leak into Project B</li>
-        <li><strong>Prompts:</strong> Generated prompts reference only their project's canon</li>
-        <li><strong>Renders:</strong> Videos uploaded to one project's storyboard stay isolated</li>
-      </ul>
-
       <!-- ========== PHASE 2: PRODUCTION ========== -->
       <h2 id="phase2-production">Phase 2: Production Workflow <span class="badge badge-phase2">Coming Soon</span></h2>
 
       <p>This is the full workflow for creating a music video from start to finish.</p>
 
       <div class="warning-box">
-        <h4>🚧 Phase 2 Status</h4>
+        <h4>ðŸš§ Phase 2 Status</h4>
         <p>The prompt compiler is not yet implemented. The workflow below describes how it will work when completed. You can manually prepare canon files now to be ready for Phase 2.</p>
       </div>
 
@@ -583,10 +319,10 @@
 
       <p>The canon is your project's locked visual identity. Everything defined here appears in <strong>every prompt</strong> to prevent drift.</p>
 
-      <h4>📁 Navigate to Your Project's Bible</h4>
+      <h4>ðŸ“ Navigate to Your Project's Bible</h4>
       <pre><code>projects/YOUR_PROJECT_NAME/bible/</code></pre>
 
-      <h4>👤 Define Characters (characters.json)</h4>
+      <h4>ðŸ‘¤ Define Characters (characters.json)</h4>
 
       <p>Create character definitions with identity anchors:</p>
 
@@ -609,11 +345,11 @@
       </div>
 
       <div class="info-box">
-        <h4>💡 Identity Anchors</h4>
+        <h4>ðŸ’¡ Identity Anchors</h4>
         <p><strong>Identity anchors</strong> are specific visual features that appear in every prompt. They prevent AI from changing the character's appearance mid-video. Use 3-5 highly specific details (clothing, hair, eyes, accessories).</p>
       </div>
 
-      <h4>🗺️ Define Locations (locations.json)</h4>
+      <h4>ðŸ—ºï¸ Define Locations (locations.json)</h4>
 
       <p>Create location definitions with environmental anchors:</p>
 
@@ -635,7 +371,7 @@
 }</code></pre>
       </div>
 
-      <h4>🎨 Define Visual Style (visual_style.json)</h4>
+      <h4>ðŸŽ¨ Define Visual Style (visual_style.json)</h4>
 
       <div class="example-card">
         <h4>Example: Cinematic Cyberpunk Style</h4>
@@ -662,7 +398,7 @@
 }</code></pre>
       </div>
 
-      <h4>📷 Define Camera Rules (cinematography.json)</h4>
+      <h4>ðŸ“· Define Camera Rules (cinematography.json)</h4>
 
       <div class="example-card">
         <h4>Example: Cinematography Rules</h4>
@@ -699,15 +435,15 @@
 
       <p>Upload 3 reference images per character and location to guide the AI:</p>
 
-      <h4>📁 File Structure</h4>
+      <h4>ðŸ“ File Structure</h4>
       <div class="file-tree">
         <div class="file-tree-folder">projects/YOUR_PROJECT/reference/</div>
-        <div class="file-tree-folder">  └── characters/</div>
-        <div class="file-tree-folder">        └── CHAR_01/</div>
-        <div class="file-tree-file">              ├── ref_01.png  ← Front view</div>
-        <div class="file-tree-file">              ├── ref_02.png  ← Side profile</div>
-        <div class="file-tree-file">              ├── ref_03.png  ← In context (environment)</div>
-        <div class="file-tree-file">              └── guide.json  ← Descriptions</div>
+        <div class="file-tree-folder">  â””â”€â”€ characters/</div>
+        <div class="file-tree-folder">        â””â”€â”€ CHAR_01/</div>
+        <div class="file-tree-file">              â”œâ”€â”€ ref_01.png  â† Front view</div>
+        <div class="file-tree-file">              â”œâ”€â”€ ref_02.png  â† Side profile</div>
+        <div class="file-tree-file">              â”œâ”€â”€ ref_03.png  â† In context (environment)</div>
+        <div class="file-tree-file">              â””â”€â”€ guide.json  â† Descriptions</div>
       </div>
 
       <div class="example-card">
@@ -778,7 +514,7 @@
       </div>
 
       <div class="info-box">
-        <h4>🎬 Critical Rules for Shot Intents</h4>
+        <h4>ðŸŽ¬ Critical Rules for Shot Intents</h4>
         <ul style="margin: 0;">
           <li><strong>8 seconds maximum</strong> - Longer shots increase visual drift risk</li>
           <li><strong>One action only</strong> - "Character walks" not "Character walks then sits"</li>
@@ -797,7 +533,7 @@
       <pre><code>npm run compile</code></pre>
 
       <div class="warning-box">
-        <h4>🚧 Not Yet Implemented</h4>
+        <h4>ðŸš§ Not Yet Implemented</h4>
         <p>The compiler script is planned for Phase 2. When ready, it will read your canon + shot intents and output standalone prompts.</p>
       </div>
 
@@ -847,15 +583,15 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
 
       <p>The linter checks for:</p>
       <ul>
-        <li>✓ All identity anchors present in every prompt</li>
-        <li>✓ No cross-references (standalone rule enforced)</li>
-        <li>✓ Camera specs match cinematography rules</li>
-        <li>✓ Negative prompts included</li>
-        <li>✓ Duration is 8 seconds or less</li>
+        <li>âœ“ All identity anchors present in every prompt</li>
+        <li>âœ“ No cross-references (standalone rule enforced)</li>
+        <li>âœ“ Camera specs match cinematography rules</li>
+        <li>âœ“ Negative prompts included</li>
+        <li>âœ“ Duration is 8 seconds or less</li>
       </ul>
 
       <div class="warning-box">
-        <h4>⚠ Fix Errors Before Rendering</h4>
+        <h4>âš  Fix Errors Before Rendering</h4>
         <p>If lint fails, <strong>do not proceed to rendering</strong>. Fix the errors first. Rendering inconsistent prompts wastes GPU credits and produces poor results.</p>
       </div>
 
@@ -880,7 +616,7 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
       </ol>
 
       <div class="info-box">
-        <h4>🎯 Why Render A/B/C/D?</h4>
+        <h4>ðŸŽ¯ Why Render A/B/C/D?</h4>
         <p>Camera work dramatically affects the emotion and pacing of a shot. Rendering 4 options lets you choose the best camera angle in post-production without changing the action.</p>
       </div>
 
@@ -902,7 +638,7 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
       </ol>
 
       <div class="success-box">
-        <h4>✓ Auto-Organization</h4>
+        <h4>âœ“ Auto-Organization</h4>
         <p>Uploaded files are automatically saved to <code>projects/YOUR_PROJECT/rendered/shots/SHOT_01/kling_option_A.mp4</code> and tracked in <code>sequence.json</code>.</p>
       </div>
 
@@ -985,7 +721,7 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
       <ul>
         <li><strong>Supported formats:</strong> .mp3 only</li>
         <li><strong>Max size:</strong> 50MB</li>
-        <li><strong>Location:</strong> Storyboard left navigation → "Music Track" section</li>
+        <li><strong>Location:</strong> Storyboard left navigation â†’ "Music Track" section</li>
         <li><strong>Saved to:</strong> <code>projects/YOUR_PROJECT/music/filename.mp3</code></li>
       </ul>
 
@@ -994,7 +730,7 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
       <ul>
         <li><strong>Supported formats:</strong> .mp4, .mov</li>
         <li><strong>Max size:</strong> 500MB per file</li>
-        <li><strong>Location:</strong> Storyboard modal → Click shot → Drag into A/B/C/D boxes</li>
+        <li><strong>Location:</strong> Storyboard modal â†’ Click shot â†’ Drag into A/B/C/D boxes</li>
         <li><strong>Saved to:</strong> <code>projects/YOUR_PROJECT/rendered/shots/SHOT_XX/kling_option_X.mp4</code></li>
       </ul>
 
@@ -1006,7 +742,7 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
       </ol>
 
       <div class="info-box">
-        <h4>💾 Auto-Tracking</h4>
+        <h4>ðŸ’¾ Auto-Tracking</h4>
         <p>All uploads are automatically tracked in <code>sequence.json</code>. You don't need to manually edit JSON files.</p>
       </div>
 
@@ -1170,7 +906,7 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
       <h2 id="next-steps">Next Steps</h2>
 
       <div class="success-box">
-        <h4>✓ You're Ready!</h4>
+        <h4>âœ“ You're Ready!</h4>
         <p>If you've completed Phase 1 setup, you can now:</p>
         <ul style="margin: 8px 0 0 0;">
           <li>Create multiple projects for different music videos</li>
@@ -1203,6 +939,7 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
 
       <div style="height: 64px;"></div>
     </div>
+    </div>
   </div>
   <script>
     (function() {
@@ -1212,5 +949,18 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
       }
     })();
   </script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/shoelace-autoloader.js"></script>
+  <script src="ui-layer.js"></script>
+  <script>window.UILayer && window.UILayer.init();</script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
