@@ -265,17 +265,15 @@
     <div class="main-layout guide-layout">
     <!-- Left Navigation -->
     <nav class="left-nav">
-      <div class="nav-brand" data-ui-nav-brand data-ui-mode="standard"></div>
-      <div class="project-selector-section" data-ui-project-selector data-ui-mode="standard"></div>
-      <div class="nav-divider"></div>
-      <div class="nav-stats" data-ui-nav-stats data-ui-mode="standard"></div>
+      <div class="nav-brand" data-ui-nav-brand data-ui-mode="basic"></div>
+      <div class="project-selector-section" data-ui-project-selector data-ui-mode="basic"></div>
       <div class="nav-divider"></div>
       <div class="nav-header"><div class="nav-title">Workflow Steps</div></div>
       <div class="nav-items" data-ui-workflow-nav data-ui-current="guide" data-ui-mode="standard"></div>
       <div class="nav-divider"></div>
       <div class="nav-header"><div class="nav-title">Resources</div></div>
       <div class="nav-items" data-ui-resource-nav data-ui-current="guide" data-ui-mode="standard"></div>
-      <div class="nav-footer" data-ui-nav-footer data-ui-mode="standard"></div>
+      <div class="nav-footer" data-ui-nav-footer data-ui-mode="basic"></div>
     </nav>
 
     <!-- Guide Content -->
@@ -289,7 +287,7 @@
       <p>This system is a <strong>Prompt Compiler</strong>, not a creative director. It enforces structure, consistency, and best practices by translating structured data (Canon + Shot Intent) into system-specific prompts for AI tools.</p>
 
       <div class="info-box">
-        <h4>ðŸ’¡ Core Philosophy</h4>
+        <h4>Core Philosophy</h4>
         <p>We prioritize <strong>consistency over creativity</strong>. A mediocre but visually consistent music video is better than a stunning video where the main character's jacket changes color every 3 shots.</p>
       </div>
 
@@ -308,7 +306,7 @@
       <p>This is the full workflow for creating a music video from start to finish.</p>
 
       <div class="warning-box">
-        <h4>ðŸš§ Phase 2 Status</h4>
+        <h4>Phase 2 Status</h4>
         <p>The prompt compiler is not yet implemented. The workflow below describes how it will work when completed. You can manually prepare canon files now to be ready for Phase 2.</p>
       </div>
 
@@ -319,10 +317,10 @@
 
       <p>The canon is your project's locked visual identity. Everything defined here appears in <strong>every prompt</strong> to prevent drift.</p>
 
-      <h4>ðŸ“ Navigate to Your Project's Bible</h4>
+      <h4>Navigate to Your Project's Bible</h4>
       <pre><code>projects/YOUR_PROJECT_NAME/bible/</code></pre>
 
-      <h4>ðŸ‘¤ Define Characters (characters.json)</h4>
+      <h4>Define Characters (characters.json)</h4>
 
       <p>Create character definitions with identity anchors:</p>
 
@@ -345,11 +343,11 @@
       </div>
 
       <div class="info-box">
-        <h4>ðŸ’¡ Identity Anchors</h4>
+        <h4>Identity Anchors</h4>
         <p><strong>Identity anchors</strong> are specific visual features that appear in every prompt. They prevent AI from changing the character's appearance mid-video. Use 3-5 highly specific details (clothing, hair, eyes, accessories).</p>
       </div>
 
-      <h4>ðŸ—ºï¸ Define Locations (locations.json)</h4>
+      <h4>Define Locations (locations.json)</h4>
 
       <p>Create location definitions with environmental anchors:</p>
 
@@ -371,7 +369,7 @@
 }</code></pre>
       </div>
 
-      <h4>ðŸŽ¨ Define Visual Style (visual_style.json)</h4>
+      <h4>Define Visual Style (visual_style.json)</h4>
 
       <div class="example-card">
         <h4>Example: Cinematic Cyberpunk Style</h4>
@@ -398,7 +396,7 @@
 }</code></pre>
       </div>
 
-      <h4>ðŸ“· Define Camera Rules (cinematography.json)</h4>
+      <h4>Define Camera Rules (cinematography.json)</h4>
 
       <div class="example-card">
         <h4>Example: Cinematography Rules</h4>
@@ -435,15 +433,15 @@
 
       <p>Upload 3 reference images per character and location to guide the AI:</p>
 
-      <h4>ðŸ“ File Structure</h4>
+      <h4>File Structure</h4>
       <div class="file-tree">
         <div class="file-tree-folder">projects/YOUR_PROJECT/reference/</div>
-        <div class="file-tree-folder">  â””â”€â”€ characters/</div>
-        <div class="file-tree-folder">        â””â”€â”€ CHAR_01/</div>
-        <div class="file-tree-file">              â”œâ”€â”€ ref_01.png  â† Front view</div>
-        <div class="file-tree-file">              â”œâ”€â”€ ref_02.png  â† Side profile</div>
-        <div class="file-tree-file">              â”œâ”€â”€ ref_03.png  â† In context (environment)</div>
-        <div class="file-tree-file">              â””â”€â”€ guide.json  â† Descriptions</div>
+        <div class="file-tree-folder">  \-- characters/</div>
+        <div class="file-tree-folder">      \-- CHAR_01/</div>
+        <div class="file-tree-file">          |-- ref_01.png  <- Front view</div>
+        <div class="file-tree-file">          |-- ref_02.png  <- Side profile</div>
+        <div class="file-tree-file">          |-- ref_03.png  <- In context (environment)</div>
+        <div class="file-tree-file">          \-- guide.json  <- Descriptions</div>
       </div>
 
       <div class="example-card">
@@ -514,7 +512,7 @@
       </div>
 
       <div class="info-box">
-        <h4>ðŸŽ¬ Critical Rules for Shot Intents</h4>
+        <h4>Critical Rules for Shot Intents</h4>
         <ul style="margin: 0;">
           <li><strong>8 seconds maximum</strong> - Longer shots increase visual drift risk</li>
           <li><strong>One action only</strong> - "Character walks" not "Character walks then sits"</li>
@@ -533,7 +531,7 @@
       <pre><code>npm run compile</code></pre>
 
       <div class="warning-box">
-        <h4>ðŸš§ Not Yet Implemented</h4>
+        <h4>Not Yet Implemented</h4>
         <p>The compiler script is planned for Phase 2. When ready, it will read your canon + shot intents and output standalone prompts.</p>
       </div>
 
@@ -583,15 +581,15 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
 
       <p>The linter checks for:</p>
       <ul>
-        <li>âœ“ All identity anchors present in every prompt</li>
-        <li>âœ“ No cross-references (standalone rule enforced)</li>
-        <li>âœ“ Camera specs match cinematography rules</li>
-        <li>âœ“ Negative prompts included</li>
-        <li>âœ“ Duration is 8 seconds or less</li>
+        <li>OK: All identity anchors present in every prompt</li>
+        <li>OK: No cross-references (standalone rule enforced)</li>
+        <li>OK: Camera specs match cinematography rules</li>
+        <li>OK: Negative prompts included</li>
+        <li>OK: Duration is 8 seconds or less</li>
       </ul>
 
       <div class="warning-box">
-        <h4>âš  Fix Errors Before Rendering</h4>
+        <h4>Warning: Fix Errors Before Rendering</h4>
         <p>If lint fails, <strong>do not proceed to rendering</strong>. Fix the errors first. Rendering inconsistent prompts wastes GPU credits and produces poor results.</p>
       </div>
 
@@ -616,7 +614,7 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
       </ol>
 
       <div class="info-box">
-        <h4>ðŸŽ¯ Why Render A/B/C/D?</h4>
+        <h4>Why Render A/B/C/D?</h4>
         <p>Camera work dramatically affects the emotion and pacing of a shot. Rendering 4 options lets you choose the best camera angle in post-production without changing the action.</p>
       </div>
 
@@ -638,7 +636,7 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
       </ol>
 
       <div class="success-box">
-        <h4>âœ“ Auto-Organization</h4>
+        <h4>Auto-Organization</h4>
         <p>Uploaded files are automatically saved to <code>projects/YOUR_PROJECT/rendered/shots/SHOT_01/kling_option_A.mp4</code> and tracked in <code>sequence.json</code>.</p>
       </div>
 
@@ -721,7 +719,7 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
       <ul>
         <li><strong>Supported formats:</strong> .mp3 only</li>
         <li><strong>Max size:</strong> 50MB</li>
-        <li><strong>Location:</strong> Storyboard left navigation â†’ "Music Track" section</li>
+        <li><strong>Location:</strong> Storyboard left navigation -> "Music Track" section</li>
         <li><strong>Saved to:</strong> <code>projects/YOUR_PROJECT/music/filename.mp3</code></li>
       </ul>
 
@@ -730,7 +728,7 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
       <ul>
         <li><strong>Supported formats:</strong> .mp4, .mov</li>
         <li><strong>Max size:</strong> 500MB per file</li>
-        <li><strong>Location:</strong> Storyboard modal â†’ Click shot â†’ Drag into A/B/C/D boxes</li>
+        <li><strong>Location:</strong> Storyboard modal -> Click shot -> Drag into A/B/C/D boxes</li>
         <li><strong>Saved to:</strong> <code>projects/YOUR_PROJECT/rendered/shots/SHOT_XX/kling_option_X.mp4</code></li>
       </ul>
 
@@ -742,7 +740,7 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
       </ol>
 
       <div class="info-box">
-        <h4>ðŸ’¾ Auto-Tracking</h4>
+        <h4>Auto-Tracking</h4>
         <p>All uploads are automatically tracked in <code>sequence.json</code>. You don't need to manually edit JSON files.</p>
       </div>
 
@@ -906,7 +904,7 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
       <h2 id="next-steps">Next Steps</h2>
 
       <div class="success-box">
-        <h4>âœ“ You're Ready!</h4>
+        <h4>You're Ready!</h4>
         <p>If you've completed Phase 1 setup, you can now:</p>
         <ul style="margin: 8px 0 0 0;">
           <li>Create multiple projects for different music videos</li>

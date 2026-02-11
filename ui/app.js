@@ -10,6 +10,161 @@ let currentLintFilter = 'all';
 let currentProject = null;
 let canGenerate = false;
 const activeGenerations = new Set();
+let referenceUploadService = null;
+let contentService = null;
+let projectService = null;
+
+function createLegacyReferenceUploadService() {
+  return {
+    async uploadCharacterReference(input) {
+      const file = input && input.file;
+      if (!file || !/\.(png|jpg|jpeg)$/i.test(file.name)) {
+        return { ok: false, error: 'Only PNG and JPEG images are supported' };
+      }
+
+      const formData = new FormData();
+      formData.append('project', String(input.projectId || ''));
+      formData.append('character', String(input.characterName || ''));
+      formData.append('slot', String(input.slotNum || ''));
+      formData.append('image', file);
+
+      const response = await fetch('/api/upload/reference-image', { method: 'POST', body: formData });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Upload failed' };
+      }
+      return { ok: true, data: result };
+    },
+    async uploadLocationReference(input) {
+      const file = input && input.file;
+      if (!file || !/\.(png|jpg|jpeg)$/i.test(file.name)) {
+        return { ok: false, error: 'Only PNG and JPEG images are supported' };
+      }
+
+      const formData = new FormData();
+      formData.append('project', String(input.projectId || ''));
+      formData.append('location', String(input.locationName || ''));
+      formData.append('slot', String(input.slotNum || ''));
+      formData.append('image', file);
+
+      const response = await fetch('/api/upload/location-reference-image', { method: 'POST', body: formData });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Upload failed' };
+      }
+      return { ok: true, data: result };
+    },
+    async uploadShotRenderFrame(input) {
+      const file = input && input.file;
+      if (!file || !/\.(png|jpg|jpeg|webp)$/i.test(file.name)) {
+        return { ok: false, error: 'Only PNG, JPEG, and WebP images are supported' };
+      }
+
+      const formData = new FormData();
+      formData.append('project', String(input.projectId || ''));
+      formData.append('shot', String(input.shotId || ''));
+      formData.append('variation', String(input.variation || 'A').toUpperCase());
+      formData.append('frame', String(input.frame || ''));
+      formData.append('tool', String(input.tool || 'seedream').toLowerCase());
+      formData.append('image', file);
+
+      const response = await fetch('/api/upload/shot-render', { method: 'POST', body: formData });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Upload failed' };
+      }
+      return { ok: true, data: result };
+    }
+  };
+}
+
+function createLegacyContentService() {
+  return {
+    async saveContent(input) {
+      const response = await fetch('/api/save/' + input.contentType, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project: input.projectId,
+          content: input.content
+        })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Save failed' };
+      }
+      return { ok: true, data: result };
+    },
+    async loadContent(input) {
+      const response = await fetch('/api/load/' + input.contentType + '?project=' + encodeURIComponent(input.projectId));
+      const result = await response.json();
+      if (!response.ok) {
+        return { ok: false, error: result.error || 'Load failed' };
+      }
+      return { ok: true, data: result };
+    }
+  };
+}
+
+function createLegacyProjectService() {
+  return {
+    async listProjects() {
+      const response = await fetch('/api/projects');
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Failed to load projects' };
+      }
+      return { ok: true, data: result };
+    },
+    async createProject(input) {
+      const formData = new FormData();
+      formData.append('name', String((input && input.name) || ''));
+      formData.append('description', String((input && input.description) || ''));
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        body: formData
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Failed to create project' };
+      }
+      return { ok: true, data: result };
+    }
+  };
+}
+
+function getReferenceUploadService() {
+  if (referenceUploadService) return referenceUploadService;
+
+  if (window.ReferenceUploadService && window.ReferenceUploadService.createReferenceUploadService) {
+    referenceUploadService = window.ReferenceUploadService.createReferenceUploadService();
+  } else {
+    referenceUploadService = createLegacyReferenceUploadService();
+  }
+  return referenceUploadService;
+}
+
+function getContentService() {
+  if (contentService) return contentService;
+
+  if (window.ContentService && window.ContentService.createContentService) {
+    contentService = window.ContentService.createContentService();
+  } else {
+    contentService = createLegacyContentService();
+  }
+  return contentService;
+}
+
+function getProjectService() {
+  if (projectService) return projectService;
+
+  if (window.ProjectService && window.ProjectService.createProjectService) {
+    projectService = window.ProjectService.createProjectService();
+  } else {
+    projectService = createLegacyProjectService();
+  }
+  return projectService;
+}
 
 // Search debounce timer
 let searchDebounceTimer = null;
@@ -303,8 +458,12 @@ function setWorkspaceMode(enabled) {
  */
 async function loadProjects() {
   try {
-    const response = await fetch('/api/projects');
-    const data = await response.json();
+    const service = getProjectService();
+    const result = await service.listProjects();
+    if (!result.ok) {
+      return false;
+    }
+    const data = result.data;
 
     if (!data.success || data.projects.length === 0) {
       // No projects yet - wait for migration
@@ -350,23 +509,14 @@ async function switchProject(projectId) {
  */
 async function createNewProject(name, description) {
   try {
-    const formData = new FormData();
-    formData.append('name', name);
-    formData.append('description', description);
-
-    const response = await fetch('/api/projects', {
-      method: 'POST',
-      body: formData
-    });
-
-    const result = await response.json();
-
-    if (!result.success) {
+    const service = getProjectService();
+    const result = await service.createProject({ name, description });
+    if (!result.ok || !result.data || !result.data.project) {
       throw new Error(result.error || 'Failed to create project');
     }
 
     // Switch to the new project
-    try { localStorage.setItem('activeProject', result.project.id); } catch { /* private browsing */ }
+    try { localStorage.setItem('activeProject', result.data.project.id); } catch { /* private browsing */ }
     location.reload();
   } catch (err) {
     console.error('Failed to create project:', err);
@@ -907,7 +1057,7 @@ function createPromptSection(title, icon, content) {
 
   const copyBtn = document.createElement('button');
   copyBtn.className = 'btn-small';
-  copyBtn.innerHTML = 'Copy Copy Section';
+  copyBtn.textContent = 'Copy Section';
   copyBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
     try {
@@ -1548,7 +1698,7 @@ function setupModals() {
 }
 
 // Save text content
-async function saveTextContent(content, endpoint, statusElementId, label) {
+async function saveTextContent(content, contentType, statusElementId, label) {
   if (!currentProject?.id) {
     throw new Error('No active project selected');
   }
@@ -1559,23 +1709,16 @@ async function saveTextContent(content, endpoint, statusElementId, label) {
   }
 
   try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        project: currentProject.id,
-        content: content
-      })
+    const service = getContentService();
+    const result = await service.saveContent({
+      projectId: currentProject.id,
+      contentType,
+      content
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Save failed');
+    if (!result.ok) {
+      throw new Error(result.error || 'Save failed');
     }
-
-    const result = await response.json();
 
     if (statusEl) {
       statusEl.textContent = `✓ Saved (${content.length} characters)`;
@@ -1585,7 +1728,7 @@ async function saveTextContent(content, endpoint, statusElementId, label) {
     showToast('Saved successfully', `${label} saved`, 'success', 2000);
     await checkUploadStatus();
 
-    return result;
+    return result.data;
   } catch (err) {
     if (statusEl) {
       statusEl.textContent = `✗ ${err.message}`;
@@ -1609,7 +1752,7 @@ function setupTextInputs() {
         showToast('Error', 'Please enter a Suno prompt', 'warning', 3000);
         return;
       }
-      await saveTextContent(text, '/api/save/suno-prompt', 'sunoPromptTextStatus', 'Suno prompt');
+      await saveTextContent(text, 'suno-prompt', 'sunoPromptTextStatus', 'Suno prompt');
     });
   }
 
@@ -1620,7 +1763,7 @@ function setupTextInputs() {
         showToast('Error', 'Please enter song info', 'warning', 3000);
         return;
       }
-      await saveTextContent(text, '/api/save/song-info', 'songInfoTextStatus', 'Song info');
+      await saveTextContent(text, 'song-info', 'songInfoTextStatus', 'Song info');
     });
   }
 
@@ -1632,20 +1775,29 @@ function setupTextInputs() {
         return;
       }
 
-      // Validate JSON format
-      try {
-        const parsed = JSON.parse(text);
-
-        // Basic validation - check required fields
-        if (!parsed.version || !parsed.duration || !parsed.bpm || !parsed.sections) {
-          showToast('Invalid JSON', 'Missing required fields (version, duration, bpm, sections)', 'error', 4000);
-          return;
+      const domain = window.ContentDomain;
+      let validation;
+      if (domain && domain.validateAnalysisJsonContent) {
+        validation = domain.validateAnalysisJsonContent(text);
+      } else {
+        try {
+          const parsed = JSON.parse(text);
+          if (!parsed.version || !parsed.duration || !parsed.bpm || !parsed.sections) {
+            validation = { ok: false, error: 'Missing required fields (version, duration, bpm, sections)' };
+          } else {
+            validation = { ok: true, value: text };
+          }
+        } catch (err) {
+          validation = { ok: false, error: 'Please enter valid JSON format: ' + err.message };
         }
-
-        await saveTextContent(text, '/api/save/analysis', 'analysisJsonTextStatus', 'Analysis JSON');
-      } catch (err) {
-        showToast('Invalid JSON', 'Please enter valid JSON format: ' + err.message, 'error', 4000);
       }
+
+      if (!validation.ok) {
+        showToast('Invalid JSON', validation.error, 'error', 4000);
+        return;
+      }
+
+      await saveTextContent(validation.value, 'analysis', 'analysisJsonTextStatus', 'Analysis JSON');
     });
   }
 }
@@ -1655,10 +1807,11 @@ async function loadTextContent() {
   if (!currentProject) return;
 
   try {
+    const service = getContentService();
     // Load Suno prompt
-    const sunoResponse = await fetch(`/api/load/suno-prompt?project=${currentProject.id}`);
-    if (sunoResponse.ok) {
-      const data = await sunoResponse.json();
+    const sunoResult = await service.loadContent({ projectId: currentProject.id, contentType: 'suno-prompt' });
+    if (sunoResult.ok) {
+      const data = sunoResult.data || {};
       if (data.content) {
         const el = document.getElementById('sunoPromptText');
         if (el) {
@@ -1670,9 +1823,9 @@ async function loadTextContent() {
     }
 
     // Load song info
-    const songInfoResponse = await fetch(`/api/load/song-info?project=${currentProject.id}`);
-    if (songInfoResponse.ok) {
-      const data = await songInfoResponse.json();
+    const songInfoResult = await service.loadContent({ projectId: currentProject.id, contentType: 'song-info' });
+    if (songInfoResult.ok) {
+      const data = songInfoResult.data || {};
       if (data.content) {
         const el = document.getElementById('songInfoText');
         if (el) {
@@ -1684,9 +1837,9 @@ async function loadTextContent() {
     }
 
     // Load analysis JSON
-    const analysisResponse = await fetch(`/api/load/analysis?project=${currentProject.id}`);
-    if (analysisResponse.ok) {
-      const data = await analysisResponse.json();
+    const analysisResult = await service.loadContent({ projectId: currentProject.id, contentType: 'analysis' });
+    if (analysisResult.ok) {
+      const data = analysisResult.data || {};
       if (data.content) {
         const el = document.getElementById('analysisJsonText');
         if (el) {
@@ -1704,6 +1857,7 @@ async function loadTextContent() {
 // Load saved Step 1 content (Theme & Concept)
 async function loadStep1Content() {
   if (!currentProject) return;
+  const service = getContentService();
 
   const contentTypes = [
     { id: 'conceptText', status: 'conceptTextStatus', endpoint: 'concept' },
@@ -1714,9 +1868,9 @@ async function loadStep1Content() {
 
   for (const type of contentTypes) {
     try {
-      const response = await fetch(`/api/load/${type.endpoint}?project=${currentProject.id}`);
-      if (response.ok) {
-        const data = await response.json();
+      const result = await service.loadContent({ projectId: currentProject.id, contentType: type.endpoint });
+      if (result.ok) {
+        const data = result.data || {};
         if (data.content) {
           const textEl = document.getElementById(type.id);
           const statusEl = document.getElementById(type.status);
@@ -1750,7 +1904,7 @@ function setupStep1TextInputs() {
         showToast('Error', 'Please enter project concept', 'warning', 3000);
         return;
       }
-      await saveTextContent(text, '/api/save/concept', 'conceptTextStatus', 'Project concept');
+      await saveTextContent(text, 'concept', 'conceptTextStatus', 'Project concept');
     });
   }
 
@@ -1761,7 +1915,7 @@ function setupStep1TextInputs() {
         showToast('Error', 'Please enter visual inspiration', 'warning', 3000);
         return;
       }
-      await saveTextContent(text, '/api/save/inspiration', 'inspirationTextStatus', 'Visual inspiration');
+      await saveTextContent(text, 'inspiration', 'inspirationTextStatus', 'Visual inspiration');
     });
   }
 
@@ -1772,7 +1926,7 @@ function setupStep1TextInputs() {
         showToast('Error', 'Please enter mood & tone', 'warning', 3000);
         return;
       }
-      await saveTextContent(text, '/api/save/mood', 'moodTextStatus', 'Mood & tone');
+      await saveTextContent(text, 'mood', 'moodTextStatus', 'Mood & tone');
     });
   }
 
@@ -1783,7 +1937,7 @@ function setupStep1TextInputs() {
         showToast('Error', 'Please enter genre & style', 'warning', 3000);
         return;
       }
-      await saveTextContent(text, '/api/save/genre', 'genreTextStatus', 'Genre & style');
+      await saveTextContent(text, 'genre', 'genreTextStatus', 'Genre & style');
     });
   }
 }
@@ -2384,35 +2538,25 @@ async function loadLocationReferences() {
   }
 }
 
-function uploadLocationReferenceImage(locationName, slotNum, file) {
+async function uploadLocationReferenceImage(locationName, slotNum, file) {
   if (!file) return;
-  if (!/\.(png|jpg|jpeg)$/i.test(file.name)) {
-    showToast('Invalid file', 'Only PNG and JPEG images are supported', 'warning', 3000);
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append('project', currentProject.id);
-  formData.append('location', locationName);
-  formData.append('slot', slotNum);
-  formData.append('image', file);
-
-  fetch('/api/upload/location-reference-image', {
-    method: 'POST',
-    body: formData
-  })
-    .then(r => r.json())
-    .then(result => {
-      if (result.success) {
-        showToast('Uploaded', `Location reference ${slotNum} uploaded`, 'success', 2000);
-        loadLocationReferences();
-      } else {
-        showToast('Upload failed', result.error || 'Unknown error', 'error', 4000);
-      }
-    })
-    .catch(err => {
-      showToast('Upload failed', err.message, 'error', 4000);
+  try {
+    const uploadService = getReferenceUploadService();
+    const result = await uploadService.uploadLocationReference({
+      projectId: currentProject.id,
+      locationName,
+      slotNum,
+      file
     });
+    if (result.ok) {
+      showToast('Uploaded', `Location reference ${slotNum} uploaded`, 'success', 2000);
+      await loadLocationReferences();
+    } else {
+      showToast('Upload failed', result.error || 'Unknown error', 'error', 4000);
+    }
+  } catch (err) {
+    showToast('Upload failed', err.message, 'error', 4000);
+  }
 }
 
 function buildLocationImageSlot(location, slotNum) {
@@ -2565,38 +2709,27 @@ async function copyCharacterPrompt(characterName, slot) {
 /**
  * Handle drag-and-drop file upload for image slots
  */
-function handleDragDropUpload(characterName, slotNum, file) {
+async function handleDragDropUpload(characterName, slotNum, file) {
   if (!file) return;
-  if (!/\.(png|jpg|jpeg)$/i.test(file.name)) {
-    showToast('Invalid file', 'Only PNG and JPEG images are supported', 'warning', 3000);
-    return;
-  }
-
-  // Fields MUST come before file - busboy processes in order
-  const formData = new FormData();
-  formData.append('project', currentProject.id);
-  formData.append('character', characterName);
-  formData.append('slot', slotNum);
-  formData.append('image', file);
-
   showToast('Uploading', 'Uploading reference image...', 'info', 2000);
 
-  fetch('/api/upload/reference-image', {
-    method: 'POST',
-    body: formData
-  })
-    .then(r => r.json())
-    .then(result => {
-      if (result.success) {
-        showToast('Uploaded', `Reference image ${slotNum} uploaded`, 'success', 2000);
-        loadCharactersReferences();
-      } else {
-        showToast('Upload failed', result.error || 'Unknown error', 'error', 4000);
-      }
-    })
-    .catch(err => {
-      showToast('Upload failed', err.message, 'error', 4000);
+  try {
+    const uploadService = getReferenceUploadService();
+    const result = await uploadService.uploadCharacterReference({
+      projectId: currentProject.id,
+      characterName,
+      slotNum,
+      file
     });
+    if (result.ok) {
+      showToast('Uploaded', `Reference image ${slotNum} uploaded`, 'success', 2000);
+      await loadCharactersReferences();
+    } else {
+      showToast('Upload failed', result.error || 'Unknown error', 'error', 4000);
+    }
+  } catch (err) {
+    showToast('Upload failed', err.message, 'error', 4000);
+  }
 }
 
 /**
@@ -2907,24 +3040,17 @@ async function handleReferenceImageUpload(characterName, slotNum, inputEl) {
     return;
   }
 
-  // Fields MUST come before file - busboy processes in order
-  const formData = new FormData();
-  formData.append('project', currentProject.id);
-  formData.append('character', characterName);
-  formData.append('slot', slotNum);
-  formData.append('image', file);
-
   try {
     showToast('Uploading', 'Uploading reference image...', 'info', 2000);
-
-    const response = await fetch('/api/upload/reference-image', {
-      method: 'POST',
-      body: formData
+    const uploadService = getReferenceUploadService();
+    const result = await uploadService.uploadCharacterReference({
+      projectId: currentProject.id,
+      characterName,
+      slotNum,
+      file
     });
 
-    const result = await response.json();
-
-    if (result.success) {
+    if (result.ok) {
       showToast('Success', 'Reference image uploaded', 'success', 3000);
       await loadCharactersReferences();
     } else {
@@ -3353,31 +3479,20 @@ function triggerFrameUpload(shotId, variation, frame, tool) {
 async function uploadShotFrame(shotId, variation, frame, tool, file) {
   if (!file || !currentProject) return;
 
-  if (!/\.(png|jpg|jpeg|webp)$/i.test(file.name)) {
-    showToast('Invalid file', 'Only PNG, JPEG, and WebP images are supported', 'warning', 3000);
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append('project', currentProject.id);
-  formData.append('shot', shotId);
-  formData.append('variation', variation);
-  formData.append('frame', frame);
-  formData.append('tool', tool);
-  formData.append('image', file);
-
   const frameLabel = frame === 'first' ? 'First Frame' : 'Last Frame';
   showToast('Uploading', `${frameLabel} for ${shotId} ${variation}...`, 'info', 2000);
 
   try {
-    const response = await fetch('/api/upload/shot-render', {
-      method: 'POST',
-      body: formData
+    const uploadService = getReferenceUploadService();
+    const result = await uploadService.uploadShotRenderFrame({
+      projectId: currentProject.id,
+      shotId,
+      variation,
+      frame,
+      tool,
+      file
     });
-
-    const result = await response.json();
-
-    if (result.success) {
+    if (result.ok) {
       showToast('Uploaded', `${frameLabel} uploaded`, 'success', 2000);
       await loadShotRenders();
     } else {

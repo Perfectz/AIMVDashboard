@@ -8,6 +8,8 @@ This project now uses a dedicated UI layer on top of a component library.
 - Reusable layer script: `ui/ui-layer.js`
 - Reusable layer styles: `ui/ui-layer.css`
 - Base app theme: `ui/styles.css`
+- Domain layer (business validation): `ui/domain/*.js`
+- Service layer (API access): `ui/services/*.js`
 
 ## Global Includes
 
@@ -62,9 +64,76 @@ Each UI page (`ui/*.html`) loads:
 
 When adding UI:
 
-1. Add/update primitive in `ui/ui-layer.js`
-2. Add styles in `ui/ui-layer.css`
-3. Consume primitive from page/app script
-4. For nav links, prefer declarative mounts over hardcoded buttons
+1. Put business rules in `ui/domain/*` (pure functions, no DOM/network).
+2. Put API calls in `ui/services/*` (no direct DOM manipulation).
+3. Add/update visual primitives in `ui/ui-layer.js`.
+4. Consume domain/service from page scripts (`ui/app.js`, `ui/storyboard.js`).
+5. For nav links, prefer declarative mounts over hardcoded buttons.
 
 This keeps styling and behavior centralized so new pages can scale without duplicating component logic.
+
+## Service/Domain Slice (Implemented)
+
+Storyboard upload flow now uses:
+
+- `ui/domain/upload-domain.js`
+  - `validateKlingVideoUpload(input)` for upload validation.
+- `ui/services/http-client.js`
+  - `createHttpClient()` to centralize JSON request handling.
+- `ui/services/storyboard-upload-service.js`
+  - `uploadKlingVariation(input)` to call `/api/upload/shot`.
+
+`ui/storyboard.js` now delegates upload logic to this service instead of calling `fetch` directly in the view code.
+
+Prompts/reference upload flow now uses:
+
+- `ui/domain/reference-upload-domain.js`
+  - `validateReferenceImageFile(file)`
+  - `validateShotRenderUpload(input)`
+- `ui/services/reference-upload-service.js`
+  - `uploadCharacterReference(input)`
+  - `uploadLocationReference(input)`
+  - `uploadShotRenderFrame(input)`
+
+`ui/app.js` now routes character, location, and shot-frame image uploads through this service layer.
+
+Step 1/2 text content flow now uses:
+
+- `ui/domain/content-domain.js`
+  - `validateContentType(contentType)`
+  - `validateNonEmptyContent(content)`
+  - `validateAnalysisJsonContent(content)`
+- `ui/services/content-service.js`
+  - `saveContent({ projectId, contentType, content })`
+  - `loadContent({ projectId, contentType })`
+
+`ui/app.js` now routes concept/inspiration/mood/genre/suno/song-info/analysis save-load calls through this service layer.
+
+Project + storyboard review flow now uses:
+
+- `ui/services/project-service.js`
+  - `listProjects()`
+  - `createProject({ name, description })`
+- `ui/services/review-service.js`
+  - `loadPrevisMap(projectId)`
+  - `savePrevisMapEntry({ projectId, shotId, entry })`
+  - `resetPrevisMapEntry({ projectId, shotId })`
+  - `loadReviewSequence(projectId)`
+  - `loadReviewMetadata(projectId)`
+  - `saveReviewMetadata({ projectId, payload })`
+  - `saveStoryboardSequence({ projectId, payload })`
+
+`ui/app.js` and `ui/storyboard.js` now route project-management/review-metadata calls through services, with legacy fallbacks for pages that have not yet loaded the new service scripts.
+
+## Test Separation
+
+- Domain/service unit tests (no browser): `tests/unit/*`
+  - `tests/unit/upload-domain.test.js`
+  - `tests/unit/storyboard-upload-service.test.js`
+  - `tests/unit/reference-upload-domain.test.js`
+  - `tests/unit/reference-upload-service.test.js`
+  - `tests/unit/content-domain.test.js`
+  - `tests/unit/content-service.test.js`
+  - `tests/unit/project-service.test.js`
+  - `tests/unit/review-service.test.js`
+- UI/e2e tests (browser): `tests/ui.smoke.spec.js`

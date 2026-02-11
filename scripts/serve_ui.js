@@ -1011,7 +1011,8 @@ const server = http.createServer((req, res) => {
   }
 
   // POST /api/upload/shot
-  if (req.method === 'POST' && req.url.startsWith('/api/upload/shot')) {
+  // Use exact route matching so /api/upload/shot-render is not misrouted here.
+  if (req.method === 'POST' && /^\/api\/upload\/shot(?:\?|$)/.test(req.url)) {
     parseMultipartData(req, (err, { fields, files }) => {
       if (err || files.length === 0) {
         sendJSON(res, err && err.message === 'File too large'

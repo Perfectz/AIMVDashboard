@@ -17,6 +17,9 @@ let currentReadinessData = null;
 let currentReadinessFilter = 'all';
 let commentsModalShot = null;
 let reorderModeEnabled = false;
+let storyboardUploadService = null;
+let projectService = null;
+let reviewService = null;
 const PREVIS_REF_SLOT = '1';
 const REVIEW_STATUSES = ['draft', 'in_review', 'approved', 'changes_requested'];
 const REVIEW_STATUS_OPTIONS = REVIEW_STATUSES;
@@ -27,6 +30,148 @@ const REVIEW_STATUS_LABELS = {
   changes_requested: 'Changes Requested'
 };
 const activeReviewFilters = new Set(REVIEW_STATUSES);
+
+function getStoryboardUploadService() {
+  if (storyboardUploadService) return storyboardUploadService;
+
+  if (!window.StoryboardUploadService || !window.StoryboardUploadService.createStoryboardUploadService) {
+    throw new Error('Upload service is unavailable');
+  }
+
+  storyboardUploadService = window.StoryboardUploadService.createStoryboardUploadService();
+  return storyboardUploadService;
+}
+
+function createLegacyProjectService() {
+  return {
+    async listProjects() {
+      const response = await fetch('/api/projects');
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Failed to load projects' };
+      }
+      return { ok: true, data: result };
+    },
+    async createProject(input) {
+      const formData = new FormData();
+      formData.append('name', String((input && input.name) || ''));
+      formData.append('description', String((input && input.description) || ''));
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        body: formData
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Failed to create project' };
+      }
+      return { ok: true, data: result };
+    }
+  };
+}
+
+function createLegacyReviewService() {
+  return {
+    async loadPrevisMap(projectId) {
+      const projectParam = projectId ? `?project=${encodeURIComponent(projectId)}` : '';
+      const response = await fetch(`/api/storyboard/previs-map${projectParam}`);
+      const result = await response.json();
+      if (!response.ok) {
+        return { ok: false, error: result.error || 'Failed to load previs map' };
+      }
+      return { ok: true, data: result };
+    },
+    async savePrevisMapEntry(input) {
+      const response = await fetch(`/api/storyboard/previs-map/${encodeURIComponent(input.shotId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project: input.projectId,
+          entry: input.entry
+        })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Failed to save previs override' };
+      }
+      return { ok: true, data: result };
+    },
+    async resetPrevisMapEntry(input) {
+      const projectParam = input.projectId ? `?project=${encodeURIComponent(input.projectId)}` : '';
+      const response = await fetch(`/api/storyboard/previs-map/${encodeURIComponent(input.shotId)}${projectParam}`, {
+        method: 'DELETE'
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Failed to reset previs override' };
+      }
+      return { ok: true, data: result };
+    },
+    async loadReviewSequence(projectId) {
+      const projectParam = projectId ? `?project=${encodeURIComponent(projectId)}` : '';
+      const response = await fetch(`/api/review/sequence${projectParam}`);
+      const result = await response.json();
+      if (!response.ok) {
+        return { ok: false, error: result.error || 'Sequence file not found' };
+      }
+      return { ok: true, data: result };
+    },
+    async loadReviewMetadata(projectId) {
+      const projectParam = projectId ? `?project=${encodeURIComponent(projectId)}` : '';
+      const response = await fetch(`/api/load/review-metadata${projectParam}`);
+      const result = await response.json();
+      if (!response.ok) {
+        return { ok: false, error: result.error || 'Failed to load review metadata' };
+      }
+      return { ok: true, data: result };
+    },
+    async saveReviewMetadata(input) {
+      const projectParam = input.projectId ? `?project=${encodeURIComponent(input.projectId)}` : '';
+      const response = await fetch(`/api/save/review-metadata${projectParam}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input.payload || {})
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Failed to save review metadata' };
+      }
+      return { ok: true, data: result };
+    },
+    async saveStoryboardSequence(input) {
+      const projectParam = input.projectId ? `?project=${encodeURIComponent(input.projectId)}` : '';
+      const response = await fetch(`/api/storyboard/sequence${projectParam}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input.payload || {})
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Failed to save storyboard sequence' };
+      }
+      return { ok: true, data: result };
+    }
+  };
+}
+
+function getProjectService() {
+  if (projectService) return projectService;
+  if (window.ProjectService && window.ProjectService.createProjectService) {
+    projectService = window.ProjectService.createProjectService();
+  } else {
+    projectService = createLegacyProjectService();
+  }
+  return projectService;
+}
+
+function getReviewService() {
+  if (reviewService) return reviewService;
+  if (window.ReviewService && window.ReviewService.createReviewService) {
+    reviewService = window.ReviewService.createReviewService();
+  } else {
+    reviewService = createLegacyReviewService();
+  }
+  return reviewService;
+}
 
 // Toast notification system
 const toastContainer = document.getElementById('toastContainer');
@@ -281,18 +426,29 @@ function renderAssetRows() {
     const source = getAssetField(asset, ['source'], '-');
     const usedIn = collectShotIds(asset);
     const missing = String(status).toLowerCase().includes('missing') || usedIn.length === 0;
+    const makeCell = (text) => {
+      const td = document.createElement('td');
+      td.textContent = text;
+      return td;
+    };
 
-    row.innerHTML = `
-      <td>${assetName}</td>
-      <td>${type}</td>
-      <td>${status}</td>
-      <td>${owner}</td>
-      <td>${source}</td>
-      <td class="asset-used-in"></td>
-      <td><span class="asset-readiness ${missing ? 'asset-badge-missing' : 'asset-badge-ready'}">${missing ? 'Missing' : 'Ready'}</span></td>
-    `;
+    row.appendChild(makeCell(assetName));
+    row.appendChild(makeCell(type));
+    row.appendChild(makeCell(status));
+    row.appendChild(makeCell(owner));
+    row.appendChild(makeCell(source));
 
-    const usedInCell = row.querySelector('.asset-used-in');
+    const usedInCell = document.createElement('td');
+    usedInCell.className = 'asset-used-in';
+    row.appendChild(usedInCell);
+
+    const readinessCell = document.createElement('td');
+    const readinessBadge = document.createElement('span');
+    readinessBadge.className = `asset-readiness ${missing ? 'asset-badge-missing' : 'asset-badge-ready'}`;
+    readinessBadge.textContent = missing ? 'Missing' : 'Ready';
+    readinessCell.appendChild(readinessBadge);
+    row.appendChild(readinessCell);
+
     if (usedIn.length === 0) {
       usedInCell.textContent = '-';
     } else {
@@ -688,8 +844,12 @@ function updateMusicPreview() {
  */
 async function loadProjects() {
   try {
-    const response = await fetch('/api/projects');
-    const data = await response.json();
+    const service = getProjectService();
+    const result = await service.listProjects();
+    if (!result.ok) {
+      return false;
+    }
+    const data = result.data;
 
     if (!data.success || data.projects.length === 0) {
       return false;
@@ -730,22 +890,13 @@ async function switchProject(projectId) {
  */
 async function createNewProject(name, description) {
   try {
-    const formData = new FormData();
-    formData.append('name', name);
-    formData.append('description', description);
-
-    const response = await fetch('/api/projects', {
-      method: 'POST',
-      body: formData
-    });
-
-    const result = await response.json();
-
-    if (!result.success) {
+    const service = getProjectService();
+    const result = await service.createProject({ name, description });
+    if (!result.ok || !result.data || !result.data.project) {
       throw new Error(result.error || 'Failed to create project');
     }
 
-    localStorage.setItem('activeProject', result.project.id);
+    localStorage.setItem('activeProject', result.data.project.id);
     location.reload();
   } catch (err) {
     console.error('Failed to create project:', err);
@@ -756,14 +907,12 @@ async function createNewProject(name, description) {
 
 async function loadPrevisMap() {
   try {
-    const projectParam = currentProject ? `?project=${currentProject.id}` : '';
-    const response = await fetch(`/api/storyboard/previs-map${projectParam}`);
-    if (!response.ok) {
-      throw new Error('Failed to load previs map');
+    const service = getReviewService();
+    const result = await service.loadPrevisMap(currentProject ? currentProject.id : '');
+    if (!result.ok) {
+      throw new Error(result.error || 'Failed to load previs map');
     }
-
-    const result = await response.json();
-    previsMap = result.previsMap || {};
+    previsMap = result.data.previsMap || {};
   } catch (err) {
     console.warn('Failed to load previs map:', err);
     previsMap = {};
@@ -867,33 +1016,26 @@ function applyPreviewNode(container, shot) {
 }
 
 async function saveShotPrevisOverride(shotId, entry) {
-  const payload = {
-    project: currentProject?.id,
+  const service = getReviewService();
+  const result = await service.savePrevisMapEntry({
+    projectId: currentProject?.id,
+    shotId,
     entry
-  };
-
-  const response = await fetch(`/api/storyboard/previs-map/${encodeURIComponent(shotId)}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
   });
-
-  const result = await response.json();
-  if (!response.ok || !result.success) {
+  if (!result.ok) {
     throw new Error(result.error || 'Failed to save previs override');
   }
 
-  previsMap[shotId] = result.entry;
+  previsMap[shotId] = result.data.entry;
 }
 
 async function resetShotPrevisOverride(shotId) {
-  const projectParam = currentProject ? `?project=${currentProject.id}` : '';
-  const response = await fetch(`/api/storyboard/previs-map/${encodeURIComponent(shotId)}${projectParam}`, {
-    method: 'DELETE'
+  const service = getReviewService();
+  const result = await service.resetPrevisMapEntry({
+    projectId: currentProject ? currentProject.id : '',
+    shotId
   });
-
-  const result = await response.json();
-  if (!response.ok || !result.success) {
+  if (!result.ok) {
     throw new Error(result.error || 'Failed to reset previs override');
   }
 
@@ -904,12 +1046,12 @@ async function loadSequence() {
   const loadingOverlay = showLoading(document.body, 'Loading storyboard...');
 
   try {
-    const projectParam = currentProject ? `?project=${currentProject.id}` : '';
-    const response = await fetch(`/api/review/sequence${projectParam}`);
-    if (!response.ok) {
-      throw new Error('Sequence file not found');
+    const service = getReviewService();
+    const result = await service.loadReviewSequence(currentProject ? currentProject.id : '');
+    if (!result.ok) {
+      throw new Error(result.error || 'Sequence file not found');
     }
-    sequenceData = await response.json();
+    sequenceData = result.data;
     normalizeSequenceReviewData(sequenceData);
     orderedStoryboardShots = Array.isArray(sequenceData.selections) ? sequenceData.selections : [];
     await loadReviewMetadata();
@@ -933,15 +1075,12 @@ async function loadSequence() {
 
 async function loadReviewMetadata() {
   try {
-    const projectParam = currentProject ? `?project=${currentProject.id}` : '';
-    const response = await fetch(`/api/load/review-metadata${projectParam}`);
-    if (!response.ok) return;
-
-    const result = await response.json();
-    if (!result.success || !result.reviewMetadata || !sequenceData?.selections) return;
+    const service = getReviewService();
+    const result = await service.loadReviewMetadata(currentProject ? currentProject.id : '');
+    if (!result.ok || !result.data || !result.data.success || !result.data.reviewMetadata || !sequenceData?.selections) return;
 
     sequenceData.selections.forEach((shot) => {
-      const metadata = result.reviewMetadata[shot.shotId];
+      const metadata = result.data.reviewMetadata[shot.shotId];
       if (!metadata) return;
       shot.reviewStatus = metadata.reviewStatus;
       shot.comments = metadata.comments;
@@ -1345,19 +1484,16 @@ async function saveReviewUpdate(shotId, updates = {}) {
     assignee: updates.assignee !== undefined ? String(updates.assignee || '').trim() : shot.assignee
   };
 
-  const projectParam = currentProject ? `?project=${currentProject.id}` : '';
-  const response = await fetch(`/api/save/review-metadata${projectParam}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+  const service = getReviewService();
+  const result = await service.saveReviewMetadata({
+    projectId: currentProject ? currentProject.id : '',
+    payload
   });
-  const result = await response.json();
-
-  if (!response.ok || !result.success) {
+  if (!result.ok) {
     throw new Error(result.error || 'Failed to save review metadata');
   }
 
-  const metadata = result.reviewMetadata || {};
+  const metadata = result.data.reviewMetadata || {};
   shot.reviewStatus = metadata.reviewStatus || payload.reviewStatus || shot.reviewStatus;
   shot.comments = Array.isArray(metadata.comments) ? metadata.comments : comments;
   shot.assignee = typeof metadata.assignee === 'string'
@@ -1380,7 +1516,6 @@ function queueStoryboardSave() {
 async function saveStoryboardSequence() {
   if (!sequenceData || !Array.isArray(sequenceData.selections)) return;
 
-  const projectParam = currentProject ? `?project=${currentProject.id}` : '';
   const payload = {
     selections: sequenceData.selections.map(shot => ({
       shotId: shot.shotId,
@@ -1393,14 +1528,12 @@ async function saveStoryboardSequence() {
   };
 
   try {
-    const response = await fetch(`/api/storyboard/sequence${projectParam}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+    const service = getReviewService();
+    const result = await service.saveStoryboardSequence({
+      projectId: currentProject ? currentProject.id : '',
+      payload
     });
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
+    if (!result.ok) {
       throw new Error(result.error || 'Failed to save storyboard sequence');
     }
   } catch (err) {
@@ -2203,36 +2336,18 @@ function setupVariationDropZone(dropZone, shotId, variation) {
  * Upload shot variation file
  */
 async function uploadShotFile(file, shotId, variation) {
-  // Validate
-  const ext = file.name.toLowerCase();
-  if (!ext.endsWith('.mp4') && !ext.endsWith('.mov')) {
-    showToast('Invalid file', 'Please upload MP4 or MOV', 'error', 4000);
-    return;
-  }
-
-  if (file.size > 500 * 1024 * 1024) {
-    showToast('File too large', 'Maximum size is 500MB', 'error', 4000);
-    return;
-  }
-
   const loadingToast = showToast('Uploading...', `${shotId} - Option ${variation}`, 'info', 0);
 
   try {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('shotId', shotId);
-    formData.append('variation', variation);
-    formData.append('fileType', 'kling');
-
-    const projectParam = currentProject ? `?project=${currentProject.id}` : '';
-    const response = await fetch(`/api/upload/shot${projectParam}`, {
-      method: 'POST',
-      body: formData
+    const uploadService = getStoryboardUploadService();
+    const result = await uploadService.uploadKlingVariation({
+      file,
+      shotId,
+      variation,
+      projectId: currentProject ? currentProject.id : ''
     });
 
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
+    if (!result.ok) {
       throw new Error(result.error || 'Upload failed');
     }
 
@@ -2292,11 +2407,27 @@ function renderShotDetails() {
 
   const assigneeWrap = document.createElement('div');
   assigneeWrap.className = 'assignee-editor';
-  assigneeWrap.innerHTML = `
-    <label for="shotAssigneeInput"><strong>Assignee:</strong></label>
-    <input id="shotAssigneeInput" type="text" value="${selectedShot.assignee || ''}" placeholder="Name or @handle" />
-    <button class="btn btn-small btn-secondary" id="saveAssigneeBtn">Save Assignee</button>
-  `;
+  const assigneeLabel = document.createElement('label');
+  assigneeLabel.setAttribute('for', 'shotAssigneeInput');
+  const assigneeStrong = document.createElement('strong');
+  assigneeStrong.textContent = 'Assignee:';
+  assigneeLabel.appendChild(assigneeStrong);
+
+  const assigneeInput = document.createElement('input');
+  assigneeInput.id = 'shotAssigneeInput';
+  assigneeInput.type = 'text';
+  assigneeInput.value = selectedShot.assignee || '';
+  assigneeInput.placeholder = 'Name or @handle';
+
+  const assigneeSave = document.createElement('button');
+  assigneeSave.className = 'btn btn-small btn-secondary';
+  assigneeSave.id = 'saveAssigneeBtn';
+  assigneeSave.type = 'button';
+  assigneeSave.textContent = 'Save Assignee';
+
+  assigneeWrap.appendChild(assigneeLabel);
+  assigneeWrap.appendChild(assigneeInput);
+  assigneeWrap.appendChild(assigneeSave);
   shotDetails.appendChild(assigneeWrap);
 
   const saveAssigneeBtn = document.getElementById('saveAssigneeBtn');

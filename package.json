@@ -15,6 +15,7 @@
     "health:full": "npm run health && npm test",
     "test:ui": "playwright test",
     "test:ui:headed": "playwright test --headed",
+    "test:unit": "node tests/unit/upload-domain.test.js && node tests/unit/storyboard-upload-service.test.js && node tests/unit/reference-upload-domain.test.js && node tests/unit/reference-upload-service.test.js && node tests/unit/content-domain.test.js && node tests/unit/content-service.test.js && node tests/unit/project-service.test.js && node tests/unit/review-service.test.js",
     "health:all": "npm run health:full && npm run test:ui",
     "generate": "node scripts/generate_image.js",
     "generate-kling": "node scripts/generate_prompts_kling.js",

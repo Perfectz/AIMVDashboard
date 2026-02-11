@@ -260,6 +260,7 @@
   function renderResourceNavs(root) {
     const scope = root || document;
     scope.querySelectorAll('[data-ui-resource-nav]').forEach((container) => {
+      const current = container.getAttribute('data-ui-current') || '';
       const mode = container.getAttribute('data-ui-mode') || 'standard';
       const useWorkspaceUrl = mode === 'prompts';
       container.innerHTML = '';
@@ -271,7 +272,7 @@
         href: 'guide.html',
         id: useWorkspaceUrl ? 'openGuideNavBtn' : ''
       };
-      const button = createNavButton(guide, '', { useWorkspaceUrl });
+      const button = createNavButton(guide, current, { useWorkspaceUrl });
       container.appendChild(button);
     });
   }
@@ -294,6 +295,49 @@
     });
   }
 
+  async function hydrateGuideProjectSelector(root) {
+    const scope = root || document;
+    const isGuidePage = /\/guide\.html$/i.test(window.location.pathname) || /guide\.html/i.test(window.location.href);
+    if (!isGuidePage) return;
+
+    const selector = scope.querySelector('#projectSelector');
+    if (!selector) return;
+
+    try {
+      const response = await fetch('/api/projects');
+      const data = await response.json();
+      if (!response.ok || !data.success || !Array.isArray(data.projects) || data.projects.length === 0) return;
+
+      let activeId = null;
+      try { activeId = localStorage.getItem('activeProject'); } catch { activeId = null; }
+      if (!activeId || !data.projects.some((p) => p.id === activeId)) {
+        activeId = data.projects[0].id;
+      }
+
+      selector.innerHTML = '';
+      data.projects.forEach((project) => {
+        const option = createElement('option', '', project.name);
+        option.value = project.id;
+        selector.appendChild(option);
+      });
+      selector.value = activeId;
+      selector.dataset.uiGuideBound = '1';
+
+      if (!selector.dataset.uiGuideChangeBound) {
+        selector.dataset.uiGuideChangeBound = '1';
+        selector.addEventListener('change', (e) => {
+          const nextProject = e.target.value;
+          try { localStorage.setItem('activeProject', nextProject); } catch {}
+          const url = new URL(window.location.href);
+          url.searchParams.set('project', nextProject);
+          window.location.href = url.toString();
+        });
+      }
+    } catch {
+      // Keep the selector in its loading/fallback state if fetch fails.
+    }
+  }
+
   function init() {
     document.documentElement.setAttribute('data-ui-layer', '1');
     renderNavBrand(document);
@@ -304,6 +348,7 @@
     renderResourceNavs(document);
     renderGuideNavs(document);
     wireDataNav(document);
+    hydrateGuideProjectSelector(document);
   }
 
   window.UILayer = {

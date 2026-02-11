@@ -12,6 +12,7 @@ const { spawn } = require('child_process');
 const BASE_URL = process.env.HEALTH_BASE_URL || 'http://127.0.0.1:8000';
 const SERVER_START_TIMEOUT_MS = 20000;
 const POLL_INTERVAL_MS = 250;
+const TINY_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7ZL3sAAAAASUVORK5CYII=';
 
 let startedServer = false;
 let serverProc = null;
@@ -209,6 +210,34 @@ async function checkProjectScopedEndpoints() {
   assert(
     !invalidShotUpload.response.ok && invalidShotUpload.json.success === false,
     'Invalid shot upload should fail validation'
+  );
+
+  const shotRenderForm = new FormData();
+  shotRenderForm.set('project', project);
+  shotRenderForm.set('shot', shotId);
+  shotRenderForm.set('variation', 'A');
+  shotRenderForm.set('frame', 'first');
+  shotRenderForm.set('tool', 'seedream');
+  shotRenderForm.set(
+    'image',
+    new Blob([Buffer.from(TINY_PNG_BASE64, 'base64')], { type: 'image/png' }),
+    'health-first-frame.png'
+  );
+  const shotRenderUpload = await requestJSON('/api/upload/shot-render', {
+    method: 'POST',
+    body: shotRenderForm
+  });
+  assert(
+    shotRenderUpload.response.ok && shotRenderUpload.json.success,
+    'Valid shot render image upload failed'
+  );
+
+  const shotRenders = await requestJSON(`/api/shot-renders?project=${encodeURIComponent(project)}&shot=${encodeURIComponent(shotId)}`);
+  assert(shotRenders.response.ok && shotRenders.json.success, 'GET /api/shot-renders failed');
+  assert(
+    typeof shotRenders.json.renders?.seedream?.A?.first === 'string' &&
+      shotRenders.json.renders.seedream.A.first.includes('seedream_A_first'),
+    'Uploaded shot render was not discoverable via /api/shot-renders'
   );
 
   const loadSequence = await requestJSON(`/api/review/sequence?project=${encodeURIComponent(project)}`);

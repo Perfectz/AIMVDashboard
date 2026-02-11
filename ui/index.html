@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ï»¿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -160,7 +160,7 @@
   <div class="modal" id="newProjectModal" style="display: none;">
     <div class="modal-overlay" id="newProjectModalOverlay"></div>
     <div class="modal-content">
-      <div class="modal-header"><h2>Create New Project</h2><button class="modal-close" id="newProjectModalClose">×</button></div>
+      <div class="modal-header"><h2>Create New Project</h2><button class="modal-close" id="newProjectModalClose">Ã—</button></div>
       <div class="modal-body">
         <form id="newProjectForm">
           <div class="form-group"><label for="projectName">Project Name *</label><input type="text" id="projectName" required maxlength="100" placeholder="My Music Video" /></div>
@@ -174,7 +174,7 @@
   <div class="modal" id="analysisPromptModal" style="display: none;">
     <div class="modal-overlay" id="analysisPromptModalOverlay"></div>
     <div class="modal-content modal-large">
-      <div class="modal-header"><h2>AI Music Analysis Prompt</h2><button class="modal-close" id="analysisPromptModalClose">×</button></div>
+      <div class="modal-header"><h2>AI Music Analysis Prompt</h2><button class="modal-close" id="analysisPromptModalClose">Ã—</button></div>
       <div class="modal-body">
         <p class="modal-description">Copy this prompt and paste it into another AI (Claude, ChatGPT, etc.) along with your music file. The AI will analyze your music and return a JSON file that you can upload here.</p>
         <div class="prompt-box"><button class="btn btn-primary btn-sm copy-prompt-btn" id="copyAnalysisPromptBtn">Copy Prompt</button><pre id="analysisPromptText">Loading prompt...</pre></div>
@@ -209,9 +209,17 @@
   <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/shoelace-autoloader.js"></script>
   <script src="ui-layer.js"></script>
   <script>window.UILayer && window.UILayer.init();</script>
+  <script src="domain/content-domain.js"></script>
+  <script src="domain/reference-upload-domain.js"></script>
+  <script src="services/http-client.js"></script>
+  <script src="services/content-service.js"></script>
+  <script src="services/project-service.js"></script>
+  <script src="services/reference-upload-service.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
+
+
 
 
 
