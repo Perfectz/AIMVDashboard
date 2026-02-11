@@ -39,6 +39,20 @@ function isPathInside(basePath, targetPath) {
 }
 
 class ProjectManager {
+  getDiskProjectIds() {
+    try {
+      if (!fs.existsSync(PROJECTS_DIR)) return [];
+      return fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .filter((id) => PROJECT_ID_REGEX.test(id))
+        .filter((id) => fs.existsSync(path.join(PROJECTS_DIR, id, 'project.json')))
+        .sort();
+    } catch {
+      return [];
+    }
+  }
+
   /**
    * Load projects index from disk
    */
@@ -298,7 +312,38 @@ class ProjectManager {
    */
   listProjects() {
     const index = this.loadIndex();
-    return index.projects;
+    const projects = Array.isArray(index.projects) ? index.projects : [];
+    const existingIds = new Set(this.getDiskProjectIds());
+    const byId = new Map();
+
+    for (const project of projects) {
+      if (!project || !project.id || !existingIds.has(project.id)) continue;
+      byId.set(project.id, project);
+    }
+
+    for (const projectId of existingIds) {
+      if (byId.has(projectId)) continue;
+      try {
+        const metadata = this.getProject(projectId);
+        byId.set(projectId, {
+          id: metadata.id,
+          name: metadata.name || metadata.id,
+          createdAt: metadata.createdAt || new Date().toISOString(),
+          lastModified: metadata.lastModified || metadata.createdAt || new Date().toISOString(),
+          status: 'active'
+        });
+      } catch {
+        byId.set(projectId, {
+          id: projectId,
+          name: projectId,
+          createdAt: new Date().toISOString(),
+          lastModified: new Date().toISOString(),
+          status: 'active'
+        });
+      }
+    }
+
+    return Array.from(byId.values());
   }
 
   /**
@@ -341,7 +386,29 @@ class ProjectManager {
    */
   getActiveProject() {
     const index = this.loadIndex();
-    return index.activeProject || 'default';
+    const activeProject = String(index.activeProject || '').trim();
+    if (this.projectExists(activeProject)) {
+      return activeProject;
+    }
+
+    const indexedExisting = (Array.isArray(index.projects) ? index.projects : [])
+      .map((project) => String((project && project.id) || '').trim())
+      .find((projectId) => this.projectExists(projectId));
+
+    if (indexedExisting) {
+      index.activeProject = indexedExisting;
+      this.saveIndex(index);
+      return indexedExisting;
+    }
+
+    const diskProjects = this.getDiskProjectIds();
+    if (diskProjects.length > 0) {
+      index.activeProject = diskProjects[0];
+      this.saveIndex(index);
+      return diskProjects[0];
+    }
+
+    return 'default';
   }
 
   /**

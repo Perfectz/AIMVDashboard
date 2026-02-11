@@ -1,0 +1,11 @@
+{
+  "version": "2026-02-11",
+  "policy": "direct fetch() should live in ui/services/*",
+  "files": [
+    "ui/app.js"
+  ],
+  "notes": [
+    "These are legacy orchestration files being incrementally migrated to feature/service modules.",
+    "Do not add new UI files here without explicit architectural review."
+  ]
+}

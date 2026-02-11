@@ -20,6 +20,7 @@ let reorderModeEnabled = false;
 let storyboardUploadService = null;
 let projectService = null;
 let reviewService = null;
+let storyboardPageService = null;
 const PREVIS_REF_SLOT = '1';
 const REVIEW_STATUSES = ['draft', 'in_review', 'approved', 'changes_requested'];
 const REVIEW_STATUS_OPTIONS = REVIEW_STATUSES;
@@ -42,135 +43,32 @@ function getStoryboardUploadService() {
   return storyboardUploadService;
 }
 
-function createLegacyProjectService() {
-  return {
-    async listProjects() {
-      const response = await fetch('/api/projects');
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        return { ok: false, error: result.error || 'Failed to load projects' };
-      }
-      return { ok: true, data: result };
-    },
-    async createProject(input) {
-      const formData = new FormData();
-      formData.append('name', String((input && input.name) || ''));
-      formData.append('description', String((input && input.description) || ''));
-      const response = await fetch('/api/projects', {
-        method: 'POST',
-        body: formData
-      });
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        return { ok: false, error: result.error || 'Failed to create project' };
-      }
-      return { ok: true, data: result };
-    }
-  };
-}
-
-function createLegacyReviewService() {
-  return {
-    async loadPrevisMap(projectId) {
-      const projectParam = projectId ? `?project=${encodeURIComponent(projectId)}` : '';
-      const response = await fetch(`/api/storyboard/previs-map${projectParam}`);
-      const result = await response.json();
-      if (!response.ok) {
-        return { ok: false, error: result.error || 'Failed to load previs map' };
-      }
-      return { ok: true, data: result };
-    },
-    async savePrevisMapEntry(input) {
-      const response = await fetch(`/api/storyboard/previs-map/${encodeURIComponent(input.shotId)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          project: input.projectId,
-          entry: input.entry
-        })
-      });
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        return { ok: false, error: result.error || 'Failed to save previs override' };
-      }
-      return { ok: true, data: result };
-    },
-    async resetPrevisMapEntry(input) {
-      const projectParam = input.projectId ? `?project=${encodeURIComponent(input.projectId)}` : '';
-      const response = await fetch(`/api/storyboard/previs-map/${encodeURIComponent(input.shotId)}${projectParam}`, {
-        method: 'DELETE'
-      });
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        return { ok: false, error: result.error || 'Failed to reset previs override' };
-      }
-      return { ok: true, data: result };
-    },
-    async loadReviewSequence(projectId) {
-      const projectParam = projectId ? `?project=${encodeURIComponent(projectId)}` : '';
-      const response = await fetch(`/api/review/sequence${projectParam}`);
-      const result = await response.json();
-      if (!response.ok) {
-        return { ok: false, error: result.error || 'Sequence file not found' };
-      }
-      return { ok: true, data: result };
-    },
-    async loadReviewMetadata(projectId) {
-      const projectParam = projectId ? `?project=${encodeURIComponent(projectId)}` : '';
-      const response = await fetch(`/api/load/review-metadata${projectParam}`);
-      const result = await response.json();
-      if (!response.ok) {
-        return { ok: false, error: result.error || 'Failed to load review metadata' };
-      }
-      return { ok: true, data: result };
-    },
-    async saveReviewMetadata(input) {
-      const projectParam = input.projectId ? `?project=${encodeURIComponent(input.projectId)}` : '';
-      const response = await fetch(`/api/save/review-metadata${projectParam}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input.payload || {})
-      });
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        return { ok: false, error: result.error || 'Failed to save review metadata' };
-      }
-      return { ok: true, data: result };
-    },
-    async saveStoryboardSequence(input) {
-      const projectParam = input.projectId ? `?project=${encodeURIComponent(input.projectId)}` : '';
-      const response = await fetch(`/api/storyboard/sequence${projectParam}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input.payload || {})
-      });
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        return { ok: false, error: result.error || 'Failed to save storyboard sequence' };
-      }
-      return { ok: true, data: result };
-    }
-  };
-}
 
 function getProjectService() {
   if (projectService) return projectService;
-  if (window.ProjectService && window.ProjectService.createProjectService) {
-    projectService = window.ProjectService.createProjectService();
-  } else {
-    projectService = createLegacyProjectService();
+  if (!window.ProjectService || !window.ProjectService.createProjectService) {
+    throw new Error('Project service is unavailable');
   }
+  projectService = window.ProjectService.createProjectService();
   return projectService;
 }
 
 function getReviewService() {
   if (reviewService) return reviewService;
-  if (window.ReviewService && window.ReviewService.createReviewService) {
-    reviewService = window.ReviewService.createReviewService();
-  } else {
-    reviewService = createLegacyReviewService();
+  if (!window.ReviewService || !window.ReviewService.createReviewService) {
+    throw new Error('Review service is unavailable');
   }
+  reviewService = window.ReviewService.createReviewService();
   return reviewService;
+}
+
+function getStoryboardPageService() {
+  if (storyboardPageService) return storyboardPageService;
+  if (!window.StoryboardPageService || !window.StoryboardPageService.createStoryboardPageService) {
+    throw new Error('Storyboard page service is unavailable');
+  }
+  storyboardPageService = window.StoryboardPageService.createStoryboardPageService();
+  return storyboardPageService;
 }
 
 // Toast notification system
@@ -315,15 +213,13 @@ function collectShotIds(asset) {
 
 async function loadAssetManifest() {
   try {
-    const projectParam = currentProject ? `?project=${currentProject.id}` : '';
-    const response = await fetch(`/projects/${currentProject.id}/bible/asset_manifest.json${projectParam}`);
-    if (!response.ok) {
+    const result = await getStoryboardPageService().loadAssetManifest(currentProject && currentProject.id);
+    if (!result.ok) {
       assetManifest = [];
       renderAssetPanel();
       return;
     }
-    const data = await response.json();
-    assetManifest = normalizeAssetManifest(data);
+    assetManifest = normalizeAssetManifest(result.data);
     renderAssetPanel();
   } catch (err) {
     console.warn('Failed to load asset manifest:', err);
@@ -612,10 +508,9 @@ function downloadJson(filename, data) {
 async function openContextDrawer() {
   if (!currentProject) return;
   try {
-    const response = await fetch(`/api/export/context-bundle?project=${currentProject.id}`);
-    const data = await response.json();
-    if (!response.ok || !data.success) throw new Error(data.error || 'Failed to generate context bundle');
-    latestContextBundle = data.bundle;
+    const result = await getStoryboardPageService().loadContextBundlePreview(currentProject.id);
+    if (!result.ok) throw new Error(result.error || 'Failed to generate context bundle');
+    latestContextBundle = result.data;
     renderContextDrawer(latestContextBundle);
 
     const drawer = document.getElementById('contextDrawer');
@@ -714,23 +609,17 @@ async function uploadMusicFile(file) {
   const progressBar = showUploadProgress(dropZone);
 
   try {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const projectParam = currentProject ? `?project=${currentProject.id}` : '';
-    const response = await fetch(`/api/upload/music${projectParam}`, {
-      method: 'POST',
-      body: formData
+    const result = await getStoryboardPageService().uploadMusic({
+      projectId: currentProject && currentProject.id,
+      file
     });
 
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
+    if (!result.ok) {
       throw new Error(result.error || 'Upload failed');
     }
 
-    currentMusicFile = result.filePath;
-    updateMusicDisplay(result.filePath);
+    currentMusicFile = result.data.filePath;
+    updateMusicDisplay(result.data.filePath);
     showToast('Music uploaded', file.name, 'success', 3000);
 
     await loadSequence();
@@ -1354,18 +1243,16 @@ async function saveReadinessReport() {
   };
 
   try {
-    const response = await fetch(`/api/storyboard/readiness-report?project=${currentProject.id}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(report)
+    const result = await getStoryboardPageService().saveReadinessReport({
+      projectId: currentProject.id,
+      payload: report
     });
-    const result = await response.json();
 
-    if (!response.ok || !result.success) {
+    if (!result.ok) {
       throw new Error(result.error || 'Failed to save readiness report');
     }
 
-    showToast('Readiness report saved', result.path || `projects/${currentProject.id}/lint/readiness_report.json`, 'success', 3000);
+    showToast('Readiness report saved', result.data.path || `projects/${currentProject.id}/lint/readiness_report.json`, 'success', 3000);
   } catch (err) {
     const fallbackText = JSON.stringify(report, null, 2);
     await copyText(fallbackText);
@@ -1773,9 +1660,9 @@ function getProjectQueryParam() {
 
 async function loadShotListTiming() {
   try {
-    const response = await fetch(`/api/load/canon/script${getProjectQueryParam()}`);
-    if (!response.ok) return null;
-    const payload = await response.json();
+    const result = await getStoryboardPageService().loadCanonScript(currentProject && currentProject.id);
+    if (!result.ok) return null;
+    const payload = result.data;
     if (!payload || !payload.content) return null;
 
     const parsed = JSON.parse(payload.content);
@@ -2589,21 +2476,16 @@ function exportPDF() {
 }
 
 async function fetchContextBundle(includePromptTemplates = true) {
-  const response = await fetch('/api/export/context-bundle', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      project: currentProject?.id,
-      includePromptTemplates
-    })
+  const result = await getStoryboardPageService().exportContextBundle({
+    projectId: currentProject && currentProject.id,
+    includePromptTemplates
   });
 
-  const result = await response.json();
-  if (!response.ok || !result.success) {
+  if (!result.ok) {
     throw new Error(result.error || 'Failed to export context bundle');
   }
 
-  return result.bundle;
+  return result.data;
 }
 
 async function copyContextForAI() {
