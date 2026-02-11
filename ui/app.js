@@ -10,160 +10,39 @@ let currentLintFilter = 'all';
 let currentProject = null;
 let canGenerate = false;
 const activeGenerations = new Set();
-let referenceUploadService = null;
-let contentService = null;
-let projectService = null;
+const appDeps = window.AppDeps && window.AppDeps.createAppDeps
+  ? window.AppDeps.createAppDeps({ windowRef: window })
+  : null;
 
-function createLegacyReferenceUploadService() {
-  return {
-    async uploadCharacterReference(input) {
-      const file = input && input.file;
-      if (!file || !/\.(png|jpg|jpeg)$/i.test(file.name)) {
-        return { ok: false, error: 'Only PNG and JPEG images are supported' };
-      }
-
-      const formData = new FormData();
-      formData.append('project', String(input.projectId || ''));
-      formData.append('character', String(input.characterName || ''));
-      formData.append('slot', String(input.slotNum || ''));
-      formData.append('image', file);
-
-      const response = await fetch('/api/upload/reference-image', { method: 'POST', body: formData });
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        return { ok: false, error: result.error || 'Upload failed' };
-      }
-      return { ok: true, data: result };
-    },
-    async uploadLocationReference(input) {
-      const file = input && input.file;
-      if (!file || !/\.(png|jpg|jpeg)$/i.test(file.name)) {
-        return { ok: false, error: 'Only PNG and JPEG images are supported' };
-      }
-
-      const formData = new FormData();
-      formData.append('project', String(input.projectId || ''));
-      formData.append('location', String(input.locationName || ''));
-      formData.append('slot', String(input.slotNum || ''));
-      formData.append('image', file);
-
-      const response = await fetch('/api/upload/location-reference-image', { method: 'POST', body: formData });
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        return { ok: false, error: result.error || 'Upload failed' };
-      }
-      return { ok: true, data: result };
-    },
-    async uploadShotRenderFrame(input) {
-      const file = input && input.file;
-      if (!file || !/\.(png|jpg|jpeg|webp)$/i.test(file.name)) {
-        return { ok: false, error: 'Only PNG, JPEG, and WebP images are supported' };
-      }
-
-      const formData = new FormData();
-      formData.append('project', String(input.projectId || ''));
-      formData.append('shot', String(input.shotId || ''));
-      formData.append('variation', String(input.variation || 'A').toUpperCase());
-      formData.append('frame', String(input.frame || ''));
-      formData.append('tool', String(input.tool || 'seedream').toLowerCase());
-      formData.append('image', file);
-
-      const response = await fetch('/api/upload/shot-render', { method: 'POST', body: formData });
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        return { ok: false, error: result.error || 'Upload failed' };
-      }
-      return { ok: true, data: result };
-    }
-  };
-}
-
-function createLegacyContentService() {
-  return {
-    async saveContent(input) {
-      const response = await fetch('/api/save/' + input.contentType, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          project: input.projectId,
-          content: input.content
-        })
-      });
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        return { ok: false, error: result.error || 'Save failed' };
-      }
-      return { ok: true, data: result };
-    },
-    async loadContent(input) {
-      const response = await fetch('/api/load/' + input.contentType + '?project=' + encodeURIComponent(input.projectId));
-      const result = await response.json();
-      if (!response.ok) {
-        return { ok: false, error: result.error || 'Load failed' };
-      }
-      return { ok: true, data: result };
-    }
-  };
-}
-
-function createLegacyProjectService() {
-  return {
-    async listProjects() {
-      const response = await fetch('/api/projects');
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        return { ok: false, error: result.error || 'Failed to load projects' };
-      }
-      return { ok: true, data: result };
-    },
-    async createProject(input) {
-      const formData = new FormData();
-      formData.append('name', String((input && input.name) || ''));
-      formData.append('description', String((input && input.description) || ''));
-      const response = await fetch('/api/projects', {
-        method: 'POST',
-        body: formData
-      });
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        return { ok: false, error: result.error || 'Failed to create project' };
-      }
-      return { ok: true, data: result };
-    }
-  };
+function requireAppDeps() {
+  if (!appDeps) {
+    throw new Error('App dependency module is unavailable. Ensure ui/controllers/app-deps.js is loaded before app.js');
+  }
+  return appDeps;
 }
 
 function getReferenceUploadService() {
-  if (referenceUploadService) return referenceUploadService;
-
-  if (window.ReferenceUploadService && window.ReferenceUploadService.createReferenceUploadService) {
-    referenceUploadService = window.ReferenceUploadService.createReferenceUploadService();
-  } else {
-    referenceUploadService = createLegacyReferenceUploadService();
-  }
-  return referenceUploadService;
+  return requireAppDeps().getReferenceUploadService();
 }
 
 function getContentService() {
-  if (contentService) return contentService;
-
-  if (window.ContentService && window.ContentService.createContentService) {
-    contentService = window.ContentService.createContentService();
-  } else {
-    contentService = createLegacyContentService();
-  }
-  return contentService;
+  return requireAppDeps().getContentService();
 }
 
 function getProjectService() {
-  if (projectService) return projectService;
+  return requireAppDeps().getProjectService();
+}
 
-  if (window.ProjectService && window.ProjectService.createProjectService) {
-    projectService = window.ProjectService.createProjectService();
-  } else {
-    projectService = createLegacyProjectService();
-  }
-  return projectService;
+function getReferenceFeature() {
+  return requireAppDeps().getReferenceFeature();
+}
+
+function getContentFeature() {
+  return requireAppDeps().getContentFeature();
+}
+
+function getProjectFeature() {
+  return requireAppDeps().getProjectFeature();
 }
 
 // Search debounce timer
@@ -458,29 +337,18 @@ function setWorkspaceMode(enabled) {
  */
 async function loadProjects() {
   try {
-    const service = getProjectService();
-    const result = await service.listProjects();
-    if (!result.ok) {
+    const feature = getProjectFeature();
+    const result = await feature.loadProjects();
+    if (!result.ok || !result.projects || result.projects.length === 0) {
       return false;
     }
-    const data = result.data;
-
-    if (!data.success || data.projects.length === 0) {
-      // No projects yet - wait for migration
-      return false;
-    }
-
-    // Get active project from localStorage or use first project
-    let activeId;
-    try { activeId = localStorage.getItem('activeProject'); } catch { /* private browsing */ }
-    activeId = activeId || data.projects[0].id;
-    currentProject = data.projects.find(p => p.id === activeId) || data.projects[0];
+    currentProject = result.currentProject;
 
     // Populate dropdown
     const selector = document.getElementById('projectSelector');
     if (selector) {
       selector.innerHTML = '';
-      data.projects.forEach(p => {
+      result.projects.forEach(p => {
         const opt = document.createElement('option');
         opt.value = p.id;
         opt.textContent = p.name;
@@ -500,7 +368,7 @@ async function loadProjects() {
  * Switch to a different project
  */
 async function switchProject(projectId) {
-  try { localStorage.setItem('activeProject', projectId); } catch { /* private browsing */ }
+  getProjectFeature().setActiveProjectId(projectId);
   location.reload();
 }
 
@@ -509,14 +377,10 @@ async function switchProject(projectId) {
  */
 async function createNewProject(name, description) {
   try {
-    const service = getProjectService();
-    const result = await service.createProject({ name, description });
-    if (!result.ok || !result.data || !result.data.project) {
+    const result = await getProjectFeature().createProject({ name, description });
+    if (!result.ok || !result.project) {
       throw new Error(result.error || 'Failed to create project');
     }
-
-    // Switch to the new project
-    try { localStorage.setItem('activeProject', result.data.project.id); } catch { /* private browsing */ }
     location.reload();
   } catch (err) {
     console.error('Failed to create project:', err);
@@ -1709,8 +1573,7 @@ async function saveTextContent(content, contentType, statusElementId, label) {
   }
 
   try {
-    const service = getContentService();
-    const result = await service.saveContent({
+    const result = await getContentFeature().saveContent({
       projectId: currentProject.id,
       contentType,
       content
@@ -1775,22 +1638,7 @@ function setupTextInputs() {
         return;
       }
 
-      const domain = window.ContentDomain;
-      let validation;
-      if (domain && domain.validateAnalysisJsonContent) {
-        validation = domain.validateAnalysisJsonContent(text);
-      } else {
-        try {
-          const parsed = JSON.parse(text);
-          if (!parsed.version || !parsed.duration || !parsed.bpm || !parsed.sections) {
-            validation = { ok: false, error: 'Missing required fields (version, duration, bpm, sections)' };
-          } else {
-            validation = { ok: true, value: text };
-          }
-        } catch (err) {
-          validation = { ok: false, error: 'Please enter valid JSON format: ' + err.message };
-        }
-      }
+      const validation = getContentFeature().validateAnalysisJson(text);
 
       if (!validation.ok) {
         showToast('Invalid JSON', validation.error, 'error', 4000);
@@ -1807,9 +1655,9 @@ async function loadTextContent() {
   if (!currentProject) return;
 
   try {
-    const service = getContentService();
+    const feature = getContentFeature();
     // Load Suno prompt
-    const sunoResult = await service.loadContent({ projectId: currentProject.id, contentType: 'suno-prompt' });
+    const sunoResult = await feature.loadContent({ projectId: currentProject.id, contentType: 'suno-prompt' });
     if (sunoResult.ok) {
       const data = sunoResult.data || {};
       if (data.content) {
@@ -1823,7 +1671,7 @@ async function loadTextContent() {
     }
 
     // Load song info
-    const songInfoResult = await service.loadContent({ projectId: currentProject.id, contentType: 'song-info' });
+    const songInfoResult = await feature.loadContent({ projectId: currentProject.id, contentType: 'song-info' });
     if (songInfoResult.ok) {
       const data = songInfoResult.data || {};
       if (data.content) {
@@ -1837,7 +1685,7 @@ async function loadTextContent() {
     }
 
     // Load analysis JSON
-    const analysisResult = await service.loadContent({ projectId: currentProject.id, contentType: 'analysis' });
+    const analysisResult = await feature.loadContent({ projectId: currentProject.id, contentType: 'analysis' });
     if (analysisResult.ok) {
       const data = analysisResult.data || {};
       if (data.content) {
@@ -1857,7 +1705,7 @@ async function loadTextContent() {
 // Load saved Step 1 content (Theme & Concept)
 async function loadStep1Content() {
   if (!currentProject) return;
-  const service = getContentService();
+  const feature = getContentFeature();
 
   const contentTypes = [
     { id: 'conceptText', status: 'conceptTextStatus', endpoint: 'concept' },
@@ -1868,7 +1716,7 @@ async function loadStep1Content() {
 
   for (const type of contentTypes) {
     try {
-      const result = await service.loadContent({ projectId: currentProject.id, contentType: type.endpoint });
+      const result = await feature.loadContent({ projectId: currentProject.id, contentType: type.endpoint });
       if (result.ok) {
         const data = result.data || {};
         if (data.content) {
@@ -2541,8 +2389,7 @@ async function loadLocationReferences() {
 async function uploadLocationReferenceImage(locationName, slotNum, file) {
   if (!file) return;
   try {
-    const uploadService = getReferenceUploadService();
-    const result = await uploadService.uploadLocationReference({
+    const result = await getReferenceFeature().uploadLocationReference({
       projectId: currentProject.id,
       locationName,
       slotNum,
@@ -2714,8 +2561,7 @@ async function handleDragDropUpload(characterName, slotNum, file) {
   showToast('Uploading', 'Uploading reference image...', 'info', 2000);
 
   try {
-    const uploadService = getReferenceUploadService();
-    const result = await uploadService.uploadCharacterReference({
+    const result = await getReferenceFeature().uploadCharacterReference({
       projectId: currentProject.id,
       characterName,
       slotNum,
@@ -3042,8 +2888,7 @@ async function handleReferenceImageUpload(characterName, slotNum, inputEl) {
 
   try {
     showToast('Uploading', 'Uploading reference image...', 'info', 2000);
-    const uploadService = getReferenceUploadService();
-    const result = await uploadService.uploadCharacterReference({
+    const result = await getReferenceFeature().uploadCharacterReference({
       projectId: currentProject.id,
       characterName,
       slotNum,
@@ -3483,8 +3328,7 @@ async function uploadShotFrame(shotId, variation, frame, tool, file) {
   showToast('Uploading', `${frameLabel} for ${shotId} ${variation}...`, 'info', 2000);
 
   try {
-    const uploadService = getReferenceUploadService();
-    const result = await uploadService.uploadShotRenderFrame({
+    const result = await getReferenceFeature().uploadShotRenderFrame({
       projectId: currentProject.id,
       shotId,
       variation,
@@ -3712,5 +3556,4 @@ async function initializeReferences() {
     showToast('No projects found', 'Run npm run migrate to initialize multi-project support', 'info', 0);
   }
 })();
-
 

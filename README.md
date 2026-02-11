@@ -102,7 +102,8 @@ AIMusicVideo/
 │   ├── validate_schemas.js       Validate Bible files
 │   ├── generate_index.js         Generate prompts index
 │   ├── init_phase2.js            Initialize Phase 2
-│   └── serve_ui.js               Web server + API
+│   ├── serve_ui.js               Web server + API
+│   └── scaffold_feature.js       Feature/domain/service scaffolder
 │
 ├── ui/                            Web interface
 │   ├── index.html                Main prompts UI
@@ -117,6 +118,16 @@ AIMusicVideo/
 ```
 
 ---
+
+
+### Architecture Scaffold (AI-friendly)
+
+```bash
+npm run scaffold:feature -- my-feature --with-domain --with-service --dry-run
+```
+
+Creates a starter feature slice and unit test with consistent layering.
+Use `--force` to overwrite existing scaffold files.
 
 ## Quick Start
 
@@ -453,6 +464,7 @@ npm run lint          # Run linter on Bible files + prompts
 npm run index         # Generate prompts_index.json (default project)
 npm run index <id>    # Generate prompts_index.json for specific project
 npm run serve         # Start UI server on port 8000
+npm run lint:architecture  # Enforce UI->Service fetch boundary
 npm run init-phase2   # Initialize Phase 2 (interactive)
 npm test              # Run validate + lint
 ```

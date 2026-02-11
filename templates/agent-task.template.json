@@ -1,0 +1,21 @@
+{
+  "taskId": "TASK-0001",
+  "summary": "Implement X capability",
+  "allowedFiles": [
+    "ui/features/**",
+    "ui/services/**",
+    "ui/domain/**",
+    "tests/unit/**",
+    "docs/**"
+  ],
+  "requiredChecks": [
+    "npm run test:unit",
+    "npm run lint"
+  ],
+  "acceptanceCriteria": [
+    "Feature module exists and is used by UI entry",
+    "Unit tests pass"
+  ],
+  "risk": "low",
+  "notes": "Avoid direct fetch in UI wiring where possible"
+}

@@ -304,9 +304,13 @@
     if (!selector) return;
 
     try {
-      const response = await fetch('/api/projects');
-      const data = await response.json();
-      if (!response.ok || !data.success || !Array.isArray(data.projects) || data.projects.length === 0) return;
+      const projectServiceFactory = window.ProjectService;
+      if (!projectServiceFactory || !projectServiceFactory.createProjectService) return;
+
+      const service = projectServiceFactory.createProjectService();
+      const result = await service.listProjects();
+      const data = result && result.data;
+      if (!result || !result.ok || !data || !Array.isArray(data.projects) || data.projects.length === 0) return;
 
       let activeId = null;
       try { activeId = localStorage.getItem('activeProject'); } catch { activeId = null; }
@@ -334,7 +338,7 @@
         });
       }
     } catch {
-      // Keep the selector in its loading/fallback state if fetch fails.
+      // Keep the selector in its loading/fallback state if service hydration fails.
     }
   }
 

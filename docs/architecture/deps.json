@@ -1,0 +1,181 @@
+{
+  "version": "2026-02-11",
+  "layers": [
+    "ui",
+    "feature",
+    "domain",
+    "api"
+  ],
+  "dependencies": [
+    {
+      "from": "ui/app.js",
+      "to": "ui/features/content-feature.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/app.js",
+      "to": "ui/features/project-feature.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/app.js",
+      "to": "ui/features/reference-feature.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/features/content-feature.js",
+      "to": "ui/domain/content-domain.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/features/content-feature.js",
+      "to": "ui/services/content-service.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/features/project-feature.js",
+      "to": "ui/services/project-service.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/features/reference-feature.js",
+      "to": "ui/services/reference-upload-service.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/services/content-service.js",
+      "to": "scripts/serve_ui.js:/api/save/*,/api/load/*",
+      "type": "calls"
+    },
+    {
+      "from": "ui/services/project-service.js",
+      "to": "scripts/serve_ui.js:/api/projects",
+      "type": "calls"
+    },
+    {
+      "from": "ui/services/reference-upload-service.js",
+      "to": "scripts/serve_ui.js:/api/upload/*",
+      "type": "calls"
+    },
+    {
+      "from": "ui/ui-layer.js",
+      "to": "ui/services/project-service.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/index.html",
+      "to": "ui/controllers/app-deps.js",
+      "type": "loads"
+    },
+    {
+      "from": "ui/index.html",
+      "to": "ui/app.js",
+      "type": "loads"
+    },
+    {
+      "from": "ui/step1.html",
+      "to": "ui/controllers/app-deps.js",
+      "type": "loads"
+    },
+    {
+      "from": "ui/step1.html",
+      "to": "ui/app.js",
+      "type": "loads"
+    },
+    {
+      "from": "ui/step2.html",
+      "to": "ui/controllers/app-deps.js",
+      "type": "loads"
+    },
+    {
+      "from": "ui/step2.html",
+      "to": "ui/app.js",
+      "type": "loads"
+    },
+    {
+      "from": "ui/step3.html",
+      "to": "ui/controllers/app-deps.js",
+      "type": "loads"
+    },
+    {
+      "from": "ui/step3.html",
+      "to": "ui/app.js",
+      "type": "loads"
+    },
+    {
+      "from": "ui/step4.html",
+      "to": "ui/controllers/app-deps.js",
+      "type": "loads"
+    },
+    {
+      "from": "ui/step4.html",
+      "to": "ui/app.js",
+      "type": "loads"
+    },
+    {
+      "from": "ui/guide.html",
+      "to": "ui/services/project-service.js",
+      "type": "loads"
+    },
+    {
+      "from": "ui/guide.html",
+      "to": "ui/ui-layer.js",
+      "type": "loads"
+    },
+    {
+      "from": "ui/storyboard.html",
+      "to": "ui/storyboard.js",
+      "type": "loads"
+    },
+    {
+      "from": "ui/storyboard.html",
+      "to": "ui/services/storyboard-page-service.js",
+      "type": "loads"
+    },
+    {
+      "from": "ui/storyboard.js",
+      "to": "ui/services/storyboard-page-service.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/services/storyboard-page-service.js",
+      "to": "scripts/serve_ui.js:/api/export/context-bundle",
+      "type": "calls"
+    },
+    {
+      "from": "ui/services/storyboard-page-service.js",
+      "to": "scripts/serve_ui.js:/api/upload/music",
+      "type": "calls"
+    },
+    {
+      "from": "ui/services/storyboard-page-service.js",
+      "to": "scripts/serve_ui.js:/api/storyboard/readiness-report",
+      "type": "calls"
+    },
+    {
+      "from": "ui/services/storyboard-page-service.js",
+      "to": "scripts/serve_ui.js:/api/load/canon/script",
+      "type": "calls"
+    },
+    {
+      "from": "ui/controllers/app-deps.js",
+      "to": "ui/features/content-feature.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/controllers/app-deps.js",
+      "to": "ui/features/project-feature.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/controllers/app-deps.js",
+      "to": "ui/features/reference-feature.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/app.js",
+      "to": "ui/controllers/app-deps.js",
+      "type": "uses"
+    }
+  ]
+}

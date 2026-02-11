@@ -10,6 +10,7 @@ This project now uses a dedicated UI layer on top of a component library.
 - Base app theme: `ui/styles.css`
 - Domain layer (business validation): `ui/domain/*.js`
 - Service layer (API access): `ui/services/*.js`
+- Feature layer (workflow orchestration): `ui/features/*.js`
 
 ## Global Includes
 
@@ -66,11 +67,24 @@ When adding UI:
 
 1. Put business rules in `ui/domain/*` (pure functions, no DOM/network).
 2. Put API calls in `ui/services/*` (no direct DOM manipulation).
-3. Add/update visual primitives in `ui/ui-layer.js`.
-4. Consume domain/service from page scripts (`ui/app.js`, `ui/storyboard.js`).
-5. For nav links, prefer declarative mounts over hardcoded buttons.
+3. Put workflow/use-case orchestration in `ui/features/*` (compose domain + services, no direct DOM).
+4. Add/update visual primitives in `ui/ui-layer.js`.
+5. Consume features from page scripts (`ui/app.js`, `ui/storyboard.js`).
+6. For app pages, load dependency composition from `ui/controllers/app-deps.js` before `ui/app.js`.
+7. For nav links, prefer declarative mounts over hardcoded buttons.
 
 This keeps styling and behavior centralized so new pages can scale without duplicating component logic.
+
+## Four-Layer Frontend Architecture
+
+The frontend is organized into four layers:
+
+- UI Layer: rendering, reusable visual primitives, and page wiring.
+- Feature Layer: workflow orchestration and use-cases.
+- Domain Layer: pure business rules and validation.
+- API Layer: HTTP/API adapters and server interaction.
+
+Data flow should generally move UI -> Feature -> Domain/API.
 
 ## Service/Domain Slice (Implemented)
 
@@ -84,6 +98,7 @@ Storyboard upload flow now uses:
   - `uploadKlingVariation(input)` to call `/api/upload/shot`.
 
 `ui/storyboard.js` now delegates upload logic to this service instead of calling `fetch` directly in the view code.
+Additional storyboard page API calls now route through `ui/services/storyboard-page-service.js`.
 
 Prompts/reference upload flow now uses:
 
@@ -96,6 +111,7 @@ Prompts/reference upload flow now uses:
   - `uploadShotRenderFrame(input)`
 
 `ui/app.js` now routes character, location, and shot-frame image uploads through this service layer.
+Feature orchestration for those uploads now lives in `ui/features/reference-feature.js`.
 
 Step 1/2 text content flow now uses:
 
@@ -125,9 +141,24 @@ Project + storyboard review flow now uses:
 
 `ui/app.js` and `ui/storyboard.js` now route project-management/review-metadata calls through services, with legacy fallbacks for pages that have not yet loaded the new service scripts.
 
+
+## AI-Centric Iteration Enhancements
+
+- Task-manifest workflow: `docs/AI_AGENT_WORKFLOW.md`
+- Task template: `templates/agent-task.template.json`
+- Machine-readable dependency map: `docs/architecture/deps.json`
+- Feature scaffolder command:
+  - `npm run scaffold:feature -- <feature-name> [--with-domain] [--with-service] [--dry-run] [--force]`
+
+These additions make it easier for AI agents to execute constrained, repeatable changes.
+- Architecture guardrail check: `npm run lint:architecture` (enforces service-layer fetch policy with explicit legacy allowlist).
+
 ## Test Separation
 
 - Domain/service unit tests (no browser): `tests/unit/*`
+  - `tests/unit/reference-feature.test.js`
+  - `tests/unit/content-feature.test.js`
+  - `tests/unit/project-feature.test.js`
   - `tests/unit/upload-domain.test.js`
   - `tests/unit/storyboard-upload-service.test.js`
   - `tests/unit/reference-upload-domain.test.js`

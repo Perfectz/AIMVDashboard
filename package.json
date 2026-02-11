@@ -15,11 +15,14 @@
     "health:full": "npm run health && npm test",
     "test:ui": "playwright test",
     "test:ui:headed": "playwright test --headed",
-    "test:unit": "node tests/unit/upload-domain.test.js && node tests/unit/storyboard-upload-service.test.js && node tests/unit/reference-upload-domain.test.js && node tests/unit/reference-upload-service.test.js && node tests/unit/content-domain.test.js && node tests/unit/content-service.test.js && node tests/unit/project-service.test.js && node tests/unit/review-service.test.js",
+    "test:unit": "node tests/unit/upload-domain.test.js && node tests/unit/storyboard-upload-service.test.js && node tests/unit/reference-upload-domain.test.js && node tests/unit/reference-upload-service.test.js && node tests/unit/reference-feature.test.js && node tests/unit/content-domain.test.js && node tests/unit/content-feature.test.js && node tests/unit/content-service.test.js && node tests/unit/project-feature.test.js && node tests/unit/project-service.test.js && node tests/unit/review-service.test.js && node tests/unit/lint-architecture-script.test.js && node tests/unit/scaffold-feature-script.test.js && node tests/unit/storyboard-page-service.test.js && node tests/unit/app-deps.test.js",
     "health:all": "npm run health:full && npm run test:ui",
     "generate": "node scripts/generate_image.js",
     "generate-kling": "node scripts/generate_prompts_kling.js",
-    "test": "npm run validate && npm run lint"
+    "test": "npm run validate && npm run lint",
+    "scaffold:feature": "node scripts/scaffold_feature.js",
+    "lint:architecture": "node scripts/lint_architecture.js",
+    "lint:all": "npm run lint && npm run lint:architecture"
   },
   "keywords": [
     "ai",
