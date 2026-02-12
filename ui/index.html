@@ -72,6 +72,8 @@
             <p id="pageToolbarSubtitle">Find a shot, verify its text and references, then generate outputs.</p>
           </div>
           <div class="page-toolbar-actions">
+            <button id="mobileNavToggle" class="btn btn-secondary mobile-panel-toggle" type="button">Menu</button>
+            <button id="mobileSidebarToggle" class="btn btn-secondary mobile-panel-toggle" type="button">Shots</button>
             <button id="focusModeBtn" class="btn btn-secondary">Focus Mode</button>
             <button id="commandPaletteBtn" class="btn btn-secondary">Command Menu</button>
           </div>
@@ -157,6 +159,8 @@
     </div>
   </div>
 
+  <div class="mobile-panel-overlay" id="mobilePanelOverlay" aria-hidden="true"></div>
+
   <div class="modal" id="newProjectModal" style="display: none;">
     <div class="modal-overlay" id="newProjectModalOverlay"></div>
     <div class="modal-content">
@@ -222,7 +226,6 @@
   <script src="app.js"></script>
 </body>
 </html>
-
 
 
 

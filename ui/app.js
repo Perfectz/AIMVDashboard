@@ -200,6 +200,9 @@ const focusModeBtn = document.getElementById('focusModeBtn');
 const commandPaletteBtn = document.getElementById('commandPaletteBtn');
 const commandPalette = document.getElementById('commandPalette');
 const commandPaletteOverlay = document.getElementById('commandPaletteOverlay');
+const mobileNavToggle = document.getElementById('mobileNavToggle');
+const mobileSidebarToggle = document.getElementById('mobileSidebarToggle');
+const mobilePanelOverlay = document.getElementById('mobilePanelOverlay');
 const promptsNavBtn = document.getElementById('promptsNavBtn');
 const workspaceNavButtons = document.querySelectorAll('.nav-item[data-workspace-url]');
 const promptsWorkspace = document.getElementById('promptsWorkspace');
@@ -1033,6 +1036,30 @@ if (lintFilter) {
   });
 }
 
+
+function closeMobilePanels() {
+  if (!mainLayout) return;
+  mainLayout.classList.remove('mobile-nav-open', 'mobile-sidebar-open');
+  if (mobilePanelOverlay) mobilePanelOverlay.setAttribute('aria-hidden', 'true');
+}
+
+function toggleMobilePanel(panelType) {
+  if (!mainLayout) return;
+  const navOpen = mainLayout.classList.contains('mobile-nav-open');
+  const sidebarOpen = mainLayout.classList.contains('mobile-sidebar-open');
+
+  if (panelType === 'nav') {
+    mainLayout.classList.toggle('mobile-nav-open', !navOpen);
+    mainLayout.classList.remove('mobile-sidebar-open');
+  } else if (panelType === 'sidebar') {
+    mainLayout.classList.toggle('mobile-sidebar-open', !sidebarOpen);
+    mainLayout.classList.remove('mobile-nav-open');
+  }
+
+  const isAnyOpen = mainLayout.classList.contains('mobile-nav-open') || mainLayout.classList.contains('mobile-sidebar-open');
+  if (mobilePanelOverlay) mobilePanelOverlay.setAttribute('aria-hidden', isAnyOpen ? 'false' : 'true');
+}
+
 // Sidebar toggle
 if (sidebarToggle) {
   sidebarToggle.addEventListener('click', () => {
@@ -1046,6 +1073,19 @@ if (sidebarToggle) {
       sidebarToggle.title = 'Collapse sidebar';
     }
   });
+}
+
+
+if (mobileNavToggle) {
+  mobileNavToggle.addEventListener('click', () => toggleMobilePanel('nav'));
+}
+
+if (mobileSidebarToggle) {
+  mobileSidebarToggle.addEventListener('click', () => toggleMobilePanel('sidebar'));
+}
+
+if (mobilePanelOverlay) {
+  mobilePanelOverlay.addEventListener('click', closeMobilePanels);
 }
 
 if (focusModeBtn) {
@@ -1204,6 +1244,7 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.key === 'Escape') {
     closeCommandPalette();
+    closeMobilePanels();
   }
 });
 
@@ -1218,10 +1259,14 @@ if (projectSelector) {
 workspaceNavButtons.forEach((btn) => {
   btn.addEventListener('click', () => {
     openWorkspacePane(btn.dataset.workspaceUrl, btn.dataset.workspaceTitle || 'Workspace');
+    closeMobilePanels();
   });
 });
 if (promptsNavBtn) {
-  promptsNavBtn.addEventListener('click', () => closeWorkspacePane());
+  promptsNavBtn.addEventListener('click', () => {
+    closeWorkspacePane();
+    closeMobilePanels();
+  });
 }
 if (workspaceShellCloseBtn) {
   workspaceShellCloseBtn.addEventListener('click', closeWorkspacePane);
