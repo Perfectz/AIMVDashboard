@@ -12,8 +12,8 @@ const Busboy = require('busboy');
 const projectManager = require('./project_manager');
 const replicate = require('./replicate_client');
 
-const PORT = 8000;
-const HOST = process.env.HOST || '127.0.0.1';
+const PORT = Number(process.env.PORT || 8000);
+const HOST = process.env.HOST || '0.0.0.0';
 const UI_DIR = path.join(__dirname, '..', 'ui');
 const ROOT_DIR = path.join(__dirname, '..');
 const PROJECTS_DIR = path.join(ROOT_DIR, 'projects');
@@ -2633,6 +2633,9 @@ server.listen(PORT, HOST, () => {
   console.log('║   Version: 2026-02-07 (with file uploads)   ║');
   console.log('╚═══════════════════════════════════════════════╝\n');
   console.log(`Server running at http://${HOST}:${PORT}/`);
+  if (HOST === '0.0.0.0') {
+    console.log(`Local access: http://127.0.0.1:${PORT}/`);
+  }
   console.log('\nPress Ctrl+C to stop the server.\n');
   console.log('UI Features:');
   console.log('  - Browse all prompts by shot and tool');
