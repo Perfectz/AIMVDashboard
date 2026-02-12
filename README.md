@@ -120,6 +120,31 @@ AIMusicVideo/
 ---
 
 
+
+### Agent Skills by Workflow Step
+
+The repo now includes one reusable skill per production step:
+
+- `skills/step1-theme-concept/` — fill Step 1 Theme & Concept
+- `skills/step2-music-analysis/` — complete Step 2 music + analysis artifacts
+- `skills/step3-content-blueprint/` — complete Step 3 canon JSON tabs
+- `skills/step4-references-assets/` — complete Step 4 reference libraries
+- `skills/step5-shots-prompts/` — complete Step 5 prompts + index
+- Step 2 and Step 5 skills include system-specific prompt best-practice references for Suno, Kling, Nano Banana, and SeedDream.
+
+To use a skill correctly with an AI agent:
+
+1. Ask the agent to use the exact skill name (for example: `use skill step3-content-blueprint`).
+2. Provide the `project` id and any missing creative context.
+3. Have the agent run the skill's completeness checks before marking the step done.
+4. Review generated artifacts in the corresponding Step page (`/step1.html` ... `/step4.html`, `/index.html` for Step 5).
+
+Step 1 also includes a deterministic helper script:
+
+```bash
+python3 skills/step1-theme-concept/scripts/fill_step1.py --project default --concept "..." --inspiration "..." --mood "..." --genre "..."
+```
+
 ### Architecture Scaffold (AI-friendly)
 
 ```bash
