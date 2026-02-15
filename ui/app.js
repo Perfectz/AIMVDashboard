@@ -9,6 +9,7 @@ let currentPlatform = 'all';
 let currentLintFilter = 'all';
 let currentProject = null;
 let canGenerate = false;
+let generateTokenSource = 'none';
 const activeGenerations = new Set();
 const appDeps = window.AppDeps && window.AppDeps.createAppDeps
   ? window.AppDeps.createAppDeps({ windowRef: window })
@@ -21,8 +22,237 @@ function requireAppDeps() {
   return appDeps;
 }
 
+let referenceUploadService = null;
+let referenceLibraryService = null;
+let contentService = null;
+let projectService = null;
+let previsMapCache = {};
+let pendingGeneratedPreviews = null;
+let githubAuthState = { connected: false, username: '', scopes: [], tokenSource: 'none' };
+let agentActiveRunId = null;
+let agentEventSource = null;
+let agentRunCache = null;
+let generationJobEventSource = null;
+let activeGenerationJobId = null;
+let generationMetricsCache = null;
+let generationHistoryAutoRefreshTimer = null;
+let generationHistoryRefreshInFlight = false;
+let generationHistoryJobsById = new Map();
+let generationDetailsJobId = null;
+
+function createLegacyReferenceUploadService() {
+  return {
+    async uploadCharacterReference(input) {
+      const file = input && input.file;
+      if (!file || !/\.(png|jpg|jpeg)$/i.test(file.name)) {
+        return { ok: false, error: 'Only PNG and JPEG images are supported' };
+      }
+
+      const formData = new FormData();
+      formData.append('project', String(input.projectId || ''));
+      formData.append('character', String(input.characterName || ''));
+      formData.append('slot', String(input.slotNum || ''));
+      formData.append('image', file);
+
+      const response = await fetch('/api/upload/reference-image', { method: 'POST', body: formData });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Upload failed' };
+      }
+      return { ok: true, data: result };
+    },
+    async uploadLocationReference(input) {
+      const file = input && input.file;
+      if (!file || !/\.(png|jpg|jpeg)$/i.test(file.name)) {
+        return { ok: false, error: 'Only PNG and JPEG images are supported' };
+      }
+
+      const formData = new FormData();
+      formData.append('project', String(input.projectId || ''));
+      formData.append('location', String(input.locationName || ''));
+      formData.append('slot', String(input.slotNum || ''));
+      formData.append('image', file);
+
+      const response = await fetch('/api/upload/location-reference-image', { method: 'POST', body: formData });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Upload failed' };
+      }
+      return { ok: true, data: result };
+    },
+    async uploadShotRenderFrame(input) {
+      const file = input && input.file;
+      if (!file || !/\.(png|jpg|jpeg|webp)$/i.test(file.name)) {
+        return { ok: false, error: 'Only PNG, JPEG, and WebP images are supported' };
+      }
+
+      const formData = new FormData();
+      formData.append('project', String(input.projectId || ''));
+      formData.append('shot', String(input.shotId || ''));
+      formData.append('variation', String(input.variation || 'A').toUpperCase());
+      formData.append('frame', String(input.frame || ''));
+      formData.append('tool', String(input.tool || 'seedream').toLowerCase());
+      formData.append('image', file);
+
+      const response = await fetch('/api/upload/shot-render', { method: 'POST', body: formData });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Upload failed' };
+      }
+      return { ok: true, data: result };
+    }
+  };
+}
+
+function createLegacyReferenceLibraryService() {
+  return {
+    async listCharacters(projectId) {
+      const response = await fetch(`/api/references/characters?project=${projectId}`);
+      const result = await response.json();
+      if (!response.ok) {
+        return { ok: false, error: result.error || 'Failed to load character references' };
+      }
+      return { ok: true, data: result };
+    },
+    async listLocations(projectId) {
+      const response = await fetch(`/api/references/locations?project=${projectId}`);
+      const result = await response.json();
+      if (!response.ok) {
+        return { ok: false, error: result.error || 'Failed to load location references' };
+      }
+      return { ok: true, data: result };
+    },
+    async addCharacter(projectId, characterName) {
+      const response = await fetch(`/api/add-character?project=${projectId}&character=${encodeURIComponent(characterName)}`, {
+        method: 'POST'
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Failed to add character' };
+      }
+      return { ok: true, data: result };
+    },
+    async deleteCharacter(projectId, characterName) {
+      const response = await fetch(`/api/delete/character-reference?project=${projectId}&character=${characterName}`, {
+        method: 'DELETE'
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Failed to delete character' };
+      }
+      return { ok: true, data: result };
+    },
+    async deleteCharacterImage(projectId, characterName, slotNum) {
+      const response = await fetch(`/api/delete/reference-image?project=${projectId}&character=${characterName}&slot=${slotNum}`, {
+        method: 'DELETE'
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Failed to delete image' };
+      }
+      return { ok: true, data: result };
+    },
+    async addLocation(projectId, locationName) {
+      const response = await fetch(`/api/add-location?project=${projectId}&location=${encodeURIComponent(locationName)}`, {
+        method: 'POST'
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Failed to add location' };
+      }
+      return { ok: true, data: result };
+    },
+    async deleteLocation(projectId, locationName) {
+      const response = await fetch(`/api/delete/location-reference?project=${projectId}&location=${encodeURIComponent(locationName)}`, {
+        method: 'DELETE'
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Failed to delete location' };
+      }
+      return { ok: true, data: result };
+    },
+    async deleteLocationImage(projectId, locationName, slotNum) {
+      const response = await fetch(`/api/delete/location-reference-image?project=${projectId}&location=${encodeURIComponent(locationName)}&slot=${slotNum}`, {
+        method: 'DELETE'
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Failed to delete image' };
+      }
+      return { ok: true, data: result };
+    }
+  };
+}
+
+function createLegacyContentService() {
+  return {
+    async saveContent(input) {
+      const response = await fetch('/api/save/' + input.contentType, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project: input.projectId,
+          content: input.content
+        })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Save failed' };
+      }
+      return { ok: true, data: result };
+    },
+    async loadContent(input) {
+      const response = await fetch('/api/load/' + input.contentType + '?project=' + encodeURIComponent(input.projectId));
+      const result = await response.json();
+      if (!response.ok) {
+        return { ok: false, error: result.error || 'Load failed' };
+      }
+      return { ok: true, data: result };
+    }
+  };
+}
+
+function createLegacyProjectService() {
+  return {
+    async listProjects() {
+      const response = await fetch('/api/projects');
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Failed to load projects' };
+      }
+      return { ok: true, data: result };
+    },
+    async createProject(input) {
+      const formData = new FormData();
+      formData.append('name', String((input && input.name) || ''));
+      formData.append('description', String((input && input.description) || ''));
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        body: formData
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || 'Failed to create project' };
+      }
+      return { ok: true, data: result };
+    }
+  };
+}
+
 function getReferenceUploadService() {
   return requireAppDeps().getReferenceUploadService();
+}
+
+function getReferenceLibraryService() {
+  if (referenceLibraryService) return referenceLibraryService;
+
+  if (window.ReferenceLibraryService && window.ReferenceLibraryService.createReferenceLibraryService) {
+    referenceLibraryService = window.ReferenceLibraryService.createReferenceLibraryService();
+  } else {
+    referenceLibraryService = createLegacyReferenceLibraryService();
+  }
+  return referenceLibraryService;
 }
 
 function getContentService() {
@@ -176,8 +406,31 @@ const lintErrorsRow = document.getElementById('lintErrorsRow');
 const lintErrorsList = document.getElementById('lintErrorsList');
 const breadcrumbs = document.getElementById('breadcrumbs');
 const generateShotBtn = document.getElementById('generateShotBtn');
+const generateRefImageBtn = document.getElementById('generateRefImageBtn');
+const autoUploadRefSetBtn = document.getElementById('autoUploadRefSetBtn');
+const generationCancelBtn = document.getElementById('generationCancelBtn');
+const refreshGenerationHistoryBtn = document.getElementById('refreshGenerationHistoryBtn');
+const agentGeneratePromptBtn = document.getElementById('agentGeneratePromptBtn');
+const replicateKeyBtn = document.getElementById('replicateKeyBtn');
+const generationJobStatus = document.getElementById('generationJobStatus');
+const generationMetrics = document.getElementById('generationMetrics');
+const generationHistorySection = document.getElementById('generationHistorySection');
+const generationHistoryList = document.getElementById('generationHistoryList');
+const shotGenerationLayout = document.getElementById('shotGenerationLayout');
 const shotRenders = document.getElementById('shotRenders');
 const shotRendersGrid = document.getElementById('shotRendersGrid');
+const continuityToggle = document.getElementById('continuityToggle');
+const continuityNote = document.getElementById('continuityNote');
+const refSetNote = document.getElementById('refSetNote');
+const agentRunPanel = document.getElementById('agentRunPanel');
+const githubAuthPill = document.getElementById('githubAuthPill');
+const githubConnectBtn = document.getElementById('githubConnectBtn');
+const githubLogoutBtn = document.getElementById('githubLogoutBtn');
+const agentCancelRunBtn = document.getElementById('agentCancelRunBtn');
+const agentRevertRunBtn = document.getElementById('agentRevertRunBtn');
+const agentRunStatus = document.getElementById('agentRunStatus');
+const agentRunFiles = document.getElementById('agentRunFiles');
+const agentRunLog = document.getElementById('agentRunLog');
 const previewContextBtn = document.getElementById('previewContextBtn');
 const contextDrawer = document.getElementById('contextDrawer');
 const contextDrawerOverlay = document.getElementById('contextDrawerOverlay');
@@ -185,6 +438,36 @@ const closeContextDrawerBtn = document.getElementById('closeContextDrawerBtn');
 const contextDrawerContent = document.getElementById('contextDrawerContent');
 const copyContextMarkdownBtn = document.getElementById('copyContextMarkdownBtn');
 const downloadContextJsonBtn = document.getElementById('downloadContextJsonBtn');
+const replicateKeyModal = document.getElementById('replicateKeyModal');
+const replicateKeyModalOverlay = document.getElementById('replicateKeyModalOverlay');
+const replicateKeyModalClose = document.getElementById('replicateKeyModalClose');
+const replicateKeyInput = document.getElementById('replicateKeyInput');
+const replicateKeyStatus = document.getElementById('replicateKeyStatus');
+const saveReplicateKeyBtn = document.getElementById('saveReplicateKeyBtn');
+const clearReplicateKeyBtn = document.getElementById('clearReplicateKeyBtn');
+const generationChoiceModal = document.getElementById('generationChoiceModal');
+const generationChoiceModalOverlay = document.getElementById('generationChoiceModalOverlay');
+const generationChoiceModalClose = document.getElementById('generationChoiceModalClose');
+const generationChoiceMeta = document.getElementById('generationChoiceMeta');
+const generationChoiceGrid = document.getElementById('generationChoiceGrid');
+const discardGeneratedBtn = document.getElementById('discardGeneratedBtn');
+const closeGenerationChoiceBtn = document.getElementById('closeGenerationChoiceBtn');
+const generationJobDetailsModal = document.getElementById('generationJobDetailsModal');
+const generationJobDetailsModalOverlay = document.getElementById('generationJobDetailsModalOverlay');
+const generationJobDetailsModalClose = document.getElementById('generationJobDetailsModalClose');
+const generationJobDetailsCancelBtn = document.getElementById('generationJobDetailsCancelBtn');
+const generationJobDetailsMeta = document.getElementById('generationJobDetailsMeta');
+const generationJobInputJson = document.getElementById('generationJobInputJson');
+const generationJobResultJson = document.getElementById('generationJobResultJson');
+const generationJobFailureJson = document.getElementById('generationJobFailureJson');
+const generationJobEventsJson = document.getElementById('generationJobEventsJson');
+const generationRetryVariation = document.getElementById('generationRetryVariation');
+const generationRetryMaxImages = document.getElementById('generationRetryMaxImages');
+const generationRetryAspectRatio = document.getElementById('generationRetryAspectRatio');
+const generationRetryRequireReference = document.getElementById('generationRetryRequireReference');
+const generationRetryPreviewOnly = document.getElementById('generationRetryPreviewOnly');
+const generationJobRetryDefaultBtn = document.getElementById('generationJobRetryDefaultBtn');
+const generationJobRetryOverrideBtn = document.getElementById('generationJobRetryOverrideBtn');
 
 // Stats
 const statShots = document.getElementById('stat-shots');
@@ -405,6 +688,7 @@ async function loadIndex() {
       throw new Error('Index file not found');
     }
     indexData = await response.json();
+    previsMapCache = {};
     updateStats();
     renderShotList();
 
@@ -639,6 +923,7 @@ function renderShotList() {
  * Select a shot
  */
 function selectShot(shot) {
+  const previousShotId = currentShot ? currentShot.shotId : '';
   currentShot = shot;
   currentVariation = 'A';
 
@@ -663,6 +948,10 @@ function selectShot(shot) {
     }
   }
 
+  if (!previousShotId || previousShotId !== currentShot.shotId) {
+    resetAgentRunUI({ clearLog: true });
+  }
+  updateAgentControlsForShot();
   renderPrompt();
 }
 
@@ -691,6 +980,8 @@ function getCurrentPrompt() {
 async function renderPrompt() {
   const prompt = getCurrentPrompt();
   if (!prompt) {
+    resetAgentRunUI({ clearLog: true });
+    updateAgentControlsForShot();
     showEmptyState();
     return;
   }
@@ -770,12 +1061,45 @@ async function renderPrompt() {
       generateShotBtn.style.display = 'none';
     }
   }
+  if (generateRefImageBtn) {
+    if (canGenerate && currentTool === 'seedream') {
+      generateRefImageBtn.style.display = 'inline-flex';
+    } else {
+      generateRefImageBtn.style.display = 'none';
+    }
+  }
+  if (autoUploadRefSetBtn) {
+    if (currentTool === 'seedream') {
+      autoUploadRefSetBtn.style.display = 'inline-flex';
+    } else {
+      autoUploadRefSetBtn.style.display = 'none';
+    }
+  }
+  if (agentGeneratePromptBtn) {
+    if (currentTool) {
+      agentGeneratePromptBtn.style.display = 'inline-flex';
+    } else {
+      agentGeneratePromptBtn.style.display = 'none';
+    }
+  }
+
+  updateAgentControlsForShot();
 
   // Load existing shot renders + upload slots for SeedDream and Kling
   if (currentTool === 'seedream' || currentTool === 'kling') {
     loadShotRenders();
   } else if (shotRenders) {
     shotRenders.style.display = 'none';
+    if (shotGenerationLayout) {
+      shotGenerationLayout.style.display = currentShot ? 'grid' : 'none';
+      shotGenerationLayout.style.gridTemplateColumns = '1fr';
+    }
+    if (continuityNote) {
+      continuityNote.textContent = '';
+      continuityNote.classList.remove('warning');
+    }
+    if (refSetNote) refSetNote.textContent = '';
+    if (continuityToggle) continuityToggle.disabled = true;
   }
 }
 
@@ -1002,6 +1326,7 @@ platformFilterBtns.forEach(btn => {
 document.querySelectorAll('.variation-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     currentVariation = btn.dataset.variation;
+    resetAgentRunUI({ clearLog: true });
     updateVariationButtons();
     renderPrompt();
   });
@@ -1009,6 +1334,20 @@ document.querySelectorAll('.variation-btn').forEach(btn => {
 
 // Copy button
 if (copyBtn) copyBtn.addEventListener('click', copyToClipboard);
+
+if (continuityToggle) {
+  continuityToggle.addEventListener('change', async () => {
+    if (!currentProject || !currentShot || currentTool !== 'seedream') return;
+    const enabled = Boolean(continuityToggle.checked);
+    try {
+      await saveShotContinuityToggle(currentShot.shotId, enabled);
+      await loadShotRenders();
+    } catch (err) {
+      continuityToggle.checked = !enabled;
+      showToast('Continuity update failed', err.message, 'error', 4000);
+    }
+  });
+}
 
 // Search (debounced)
 if (searchInput) {
@@ -2404,11 +2743,13 @@ async function loadCharactersReferences() {
   if (!currentProject) return;
 
   try {
-    const response = await fetch(`/api/references/characters?project=${currentProject.id}`);
-    if (response.ok) {
-      const data = await response.json();
-      charactersData = data.characters || [];
+    const libraryService = getReferenceLibraryService();
+    const result = await libraryService.listCharacters(currentProject.id);
+    if (result.ok) {
+      charactersData = (result.data && result.data.characters) || [];
       renderCharactersReferences();
+    } else {
+      showToast('Error', result.error || 'Failed to load character references', 'error', 3000);
     }
   } catch (err) {
     console.error('Error loading character references:', err);
@@ -2420,11 +2761,13 @@ async function loadLocationReferences() {
   if (!currentProject) return;
 
   try {
-    const response = await fetch(`/api/references/locations?project=${currentProject.id}`);
-    if (response.ok) {
-      const data = await response.json();
-      locationsData = data.locations || [];
+    const libraryService = getReferenceLibraryService();
+    const result = await libraryService.listLocations(currentProject.id);
+    if (result.ok) {
+      locationsData = (result.data && result.data.locations) || [];
       renderLocationReferences();
+    } else {
+      showToast('Error', result.error || 'Failed to load location references', 'error', 3000);
     }
   } catch (err) {
     console.error('Error loading location references:', err);
@@ -2495,9 +2838,9 @@ function buildLocationImageSlot(location, slotNum) {
     delBtn.title = 'Delete image';
     delBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      const response = await fetch(`/api/delete/location-reference-image?project=${currentProject.id}&location=${encodeURIComponent(location.name)}&slot=${slotNum}`, { method: 'DELETE' });
-      const result = await response.json();
-      if (result.success) loadLocationReferences();
+      const libraryService = getReferenceLibraryService();
+      const result = await libraryService.deleteLocationImage(currentProject.id, location.name, slotNum);
+      if (result.ok) loadLocationReferences();
       else showToast('Error', result.error || 'Failed to delete image', 'error', 4000);
     });
     slot.appendChild(delBtn);
@@ -2542,9 +2885,9 @@ function renderLocationReferences() {
     delBtn.textContent = 'Delete';
     delBtn.addEventListener('click', async () => {
       if (!confirm(`Delete location "${location.name}" and all references?`)) return;
-      const response = await fetch(`/api/delete/location-reference?project=${currentProject.id}&location=${encodeURIComponent(location.name)}`, { method: 'DELETE' });
-      const result = await response.json();
-      if (result.success) loadLocationReferences();
+      const libraryService = getReferenceLibraryService();
+      const result = await libraryService.deleteLocation(currentProject.id, location.name);
+      if (result.ok) loadLocationReferences();
       else showToast('Error', result.error || 'Failed to delete location', 'error', 4000);
     });
 
@@ -2957,13 +3300,9 @@ async function deleteReferenceImage(characterName, slotNum) {
   if (!confirm(`Delete reference image ${slotNum} for ${characterName}?`)) return;
 
   try {
-    const response = await fetch(`/api/delete/reference-image?project=${currentProject.id}&character=${characterName}&slot=${slotNum}`, {
-      method: 'DELETE'
-    });
-
-    const result = await response.json();
-
-    if (result.success) {
+    const libraryService = getReferenceLibraryService();
+    const result = await libraryService.deleteCharacterImage(currentProject.id, characterName, slotNum);
+    if (result.ok) {
       showToast('Success', 'Reference image deleted', 'success', 3000);
       await loadCharactersReferences();
     } else {
@@ -2978,13 +3317,9 @@ async function deleteCharacterReference(characterName) {
   if (!confirm(`Delete all reference images for ${characterName}?`)) return;
 
   try {
-    const response = await fetch(`/api/delete/character-reference?project=${currentProject.id}&character=${characterName}`, {
-      method: 'DELETE'
-    });
-
-    const result = await response.json();
-
-    if (result.success) {
+    const libraryService = getReferenceLibraryService();
+    const result = await libraryService.deleteCharacter(currentProject.id, characterName);
+    if (result.ok) {
       showToast('Success', 'Character references deleted', 'success', 3000);
       await loadCharactersReferences();
     } else {
@@ -3013,13 +3348,9 @@ if (addCharacterBtn) {
     }
 
     try {
-      const response = await fetch(`/api/add-character?project=${currentProject.id}&character=${encodeURIComponent(characterName)}`, {
-        method: 'POST'
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
+      const libraryService = getReferenceLibraryService();
+      const result = await libraryService.addCharacter(currentProject.id, characterName);
+      if (result.ok) {
         showToast('Success', `Character "${characterName}" added`, 'success', 3000);
         nameInput.value = '';
         await loadCharactersReferences();
@@ -3051,12 +3382,9 @@ if (addLocationBtn) {
     }
 
     try {
-      const response = await fetch(`/api/add-location?project=${currentProject.id}&location=${encodeURIComponent(locationName)}`, {
-        method: 'POST'
-      });
-      const result = await response.json();
-
-      if (result.success) {
+      const libraryService = getReferenceLibraryService();
+      const result = await libraryService.addLocation(currentProject.id, locationName);
+      if (result.ok) {
         showToast('Success', `Location "${locationName}" added`, 'success', 3000);
         nameInput.value = '';
         await loadLocationReferences();
@@ -3076,10 +3404,398 @@ async function checkGenerateStatus() {
     if (response.ok) {
       const data = await response.json();
       canGenerate = data.configured === true;
+      generateTokenSource = data.tokenSource || 'none';
+      if (replicateKeyStatus) {
+        if (canGenerate) {
+          replicateKeyStatus.textContent = generateTokenSource === 'session'
+            ? 'Configured (session key)'
+            : 'Configured (.env key)';
+        } else {
+          replicateKeyStatus.textContent = 'Not configured';
+        }
+      }
     }
   } catch {
     canGenerate = false;
+    generateTokenSource = 'none';
+    if (replicateKeyStatus) replicateKeyStatus.textContent = 'Status check failed';
   }
+}
+
+function isTerminalRunStatus(status) {
+  return status === 'completed' || status === 'failed' || status === 'canceled' || status === 'reverted';
+}
+
+function closeAgentEventStream() {
+  if (!agentEventSource) return;
+  agentEventSource.close();
+  agentEventSource = null;
+}
+
+function resetAgentRunUI({ clearLog = true } = {}) {
+  if (agentRunStatus) {
+    agentRunStatus.textContent = 'No run started yet.';
+  }
+  if (agentRunFiles) {
+    agentRunFiles.innerHTML = '';
+  }
+  if (clearLog && agentRunLog) {
+    agentRunLog.textContent = '';
+  }
+  if (agentCancelRunBtn) {
+    agentCancelRunBtn.disabled = true;
+  }
+  if (agentRevertRunBtn) {
+    agentRevertRunBtn.disabled = true;
+  }
+  agentRunCache = null;
+  agentActiveRunId = null;
+  closeAgentEventStream();
+}
+
+function appendAgentLogLine(line) {
+  if (!agentRunLog) return;
+  const text = String(line || '').trim();
+  if (!text) return;
+  const maxLines = 200;
+  const existing = agentRunLog.textContent ? agentRunLog.textContent.split('\n') : [];
+  existing.push(text);
+  if (existing.length > maxLines) {
+    existing.splice(0, existing.length - maxLines);
+  }
+  agentRunLog.textContent = existing.join('\n');
+  agentRunLog.scrollTop = agentRunLog.scrollHeight;
+}
+
+function updateGitHubAuthUI() {
+  if (githubAuthPill) {
+    githubAuthPill.classList.remove('connected', 'disconnected');
+    if (githubAuthState.connected) {
+      githubAuthPill.classList.add('connected');
+      const who = githubAuthState.username ? `@${githubAuthState.username}` : 'connected';
+      githubAuthPill.textContent = `GitHub ${who}`;
+    } else {
+      githubAuthPill.classList.add('disconnected');
+      githubAuthPill.textContent = 'GitHub not connected';
+    }
+  }
+  if (githubConnectBtn) {
+    githubConnectBtn.style.display = githubAuthState.connected ? 'none' : 'inline-flex';
+  }
+  if (githubLogoutBtn) {
+    githubLogoutBtn.style.display = githubAuthState.connected ? 'inline-flex' : 'none';
+  }
+}
+
+function updateAgentControlsForShot() {
+  const hasShot = Boolean(currentProject && currentShot && currentTool);
+  const showRenders = hasShot && (currentTool === 'seedream' || currentTool === 'kling');
+
+  if (agentGeneratePromptBtn) {
+    agentGeneratePromptBtn.style.display = hasShot ? 'inline-flex' : 'none';
+    agentGeneratePromptBtn.disabled = !hasShot;
+  }
+  if (shotGenerationLayout) {
+    if (!hasShot) {
+      shotGenerationLayout.style.display = 'none';
+    } else {
+      shotGenerationLayout.style.display = 'grid';
+      shotGenerationLayout.style.gridTemplateColumns = showRenders ? '' : '1fr';
+    }
+  }
+  if (agentRunPanel) {
+    agentRunPanel.style.display = hasShot ? 'block' : 'none';
+  }
+}
+
+function renderAgentRunFiles(run) {
+  if (!agentRunFiles) return;
+  const writes = Array.isArray(run?.writes) ? run.writes : [];
+  if (writes.length === 0) {
+    agentRunFiles.innerHTML = '';
+    return;
+  }
+
+  const projectQuery = currentProject ? `?project=${encodeURIComponent(currentProject.id)}` : '';
+  agentRunFiles.innerHTML = '';
+  writes.forEach((write) => {
+    const row = document.createElement('div');
+    row.className = 'agent-run-file';
+    const pathText = String(write.path || '').replace(/^\/+/, '');
+    const anchor = document.createElement('a');
+    anchor.href = `/${pathText}${projectQuery}`;
+    anchor.target = '_blank';
+    anchor.rel = 'noopener noreferrer';
+    anchor.textContent = pathText;
+    const status = document.createElement('span');
+    status.textContent = `[${write.result || 'written'}]`;
+    row.appendChild(anchor);
+    row.appendChild(status);
+    agentRunFiles.appendChild(row);
+  });
+}
+
+function renderAgentRunState(run) {
+  if (!run) return;
+  agentRunCache = run;
+  const status = run.status || 'unknown';
+  const step = run.step || '';
+  const progress = Number.isFinite(run.progress) ? Math.max(0, Math.min(100, run.progress)) : 0;
+  if (agentRunStatus) {
+    const statusLabel = `${status}${step ? ` · ${step}` : ''}`;
+    agentRunStatus.textContent = `${statusLabel} (${progress}%)`;
+  }
+  renderAgentRunFiles(run);
+
+  const terminal = isTerminalRunStatus(status);
+  if (agentCancelRunBtn) {
+    agentCancelRunBtn.disabled = !agentActiveRunId || terminal;
+  }
+  if (agentRevertRunBtn) {
+    const canRevert = Boolean(agentActiveRunId) && (status === 'completed' || status === 'failed' || status === 'canceled');
+    agentRevertRunBtn.disabled = !canRevert;
+  }
+}
+
+async function refreshGitHubAuthStatus({ silent = false } = {}) {
+  try {
+    const response = await fetch('/api/auth/github/status');
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    githubAuthState = {
+      connected: Boolean(data.connected),
+      username: data.username || '',
+      scopes: Array.isArray(data.scopes) ? data.scopes : [],
+      tokenSource: data.tokenSource || 'none'
+    };
+  } catch (err) {
+    githubAuthState = { connected: false, username: '', scopes: [], tokenSource: 'none' };
+    if (!silent) {
+      showToast('GitHub auth error', err.message || 'Failed to check auth status', 'error', 3500);
+    }
+  }
+  updateGitHubAuthUI();
+  return githubAuthState;
+}
+
+function startGitHubOAuth() {
+  const returnTo = `${window.location.pathname}${window.location.search || ''}`;
+  window.location.assign(`/api/auth/github/start?returnTo=${encodeURIComponent(returnTo)}`);
+}
+
+async function logoutGitHubOAuth() {
+  try {
+    const response = await fetch('/api/auth/github/logout', {
+      method: 'POST'
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Failed to logout');
+    }
+    githubAuthState = {
+      connected: Boolean(result.connected),
+      username: result.username || '',
+      scopes: Array.isArray(result.scopes) ? result.scopes : [],
+      tokenSource: result.tokenSource || 'none'
+    };
+    updateGitHubAuthUI();
+    showToast('GitHub disconnected', 'OAuth session cleared for this browser session.', 'info', 2500);
+  } catch (err) {
+    showToast('Logout failed', err.message || 'Could not clear GitHub session', 'error', 3500);
+  }
+}
+
+async function fetchAgentRunState(runId) {
+  const response = await fetch(`/api/agents/prompt-runs/${encodeURIComponent(runId)}`);
+  const result = await response.json();
+  if (!response.ok || !result.success) {
+    throw new Error(result.error || 'Failed to fetch run state');
+  }
+  return result;
+}
+
+function connectAgentRunEvents(runId) {
+  closeAgentEventStream();
+  const source = new EventSource(`/api/agents/prompt-runs/${encodeURIComponent(runId)}/events`);
+  agentEventSource = source;
+
+  source.onmessage = (event) => {
+    let payload;
+    try {
+      payload = JSON.parse(event.data || '{}');
+    } catch {
+      payload = {};
+    }
+
+    const eventName = payload.event || 'event';
+    if (eventName === 'stream_open') {
+      appendAgentLogLine(`[stream] ${payload.status || 'open'}`);
+      return;
+    }
+
+    const ts = payload.timestamp ? new Date(payload.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+    const logSummary = payload.error?.message
+      ? `${eventName}: ${payload.error.message}`
+      : (payload.path ? `${eventName}: ${payload.path}` : eventName);
+    appendAgentLogLine(`[${ts}] ${logSummary}`);
+
+    if (payload.event === 'file_write_preview' && payload.preview) {
+      appendAgentLogLine(`preview> ${String(payload.preview).replace(/\s+/g, ' ').slice(0, 220)}`);
+    }
+
+    if (payload.event === 'run_completed' || payload.event === 'run_failed' || payload.event === 'run_reverted') {
+      closeAgentEventStream();
+    }
+
+    if (agentActiveRunId) {
+      fetchAgentRunState(agentActiveRunId)
+        .then((run) => {
+          renderAgentRunState(run);
+          if (isTerminalRunStatus(run.status)) {
+            if (run.status === 'completed') {
+              showToast('Agent run completed', `${run.shotId} ${run.variation}`, 'success', 2500);
+              loadIndex();
+            } else if (run.status === 'failed') {
+              showToast('Agent run failed', run.error?.message || 'Unknown error', 'error', 5000);
+            } else if (run.status === 'reverted') {
+              showToast('Agent run reverted', `${run.shotId} ${run.variation}`, 'info', 3000);
+              loadIndex();
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  };
+
+  source.onerror = () => {
+    if (agentEventSource === source) {
+      closeAgentEventStream();
+      if (agentActiveRunId) {
+        fetchAgentRunState(agentActiveRunId)
+          .then(renderAgentRunState)
+          .catch(() => {});
+      }
+    }
+  };
+}
+
+async function startAgentPromptRun() {
+  if (!currentProject || !currentShot || !currentTool) return;
+
+  if (!githubAuthState.connected) {
+    showToast('GitHub required', 'Connect GitHub first to run the in-app prompt agent.', 'warning', 3500);
+    startGitHubOAuth();
+    return;
+  }
+
+  if (agentGeneratePromptBtn) {
+    agentGeneratePromptBtn.disabled = true;
+    agentGeneratePromptBtn.textContent = 'Starting...';
+  }
+  if (agentRunLog && !agentRunLog.textContent.trim()) {
+    appendAgentLogLine(`[${new Date().toLocaleTimeString()}] run queued`);
+  }
+
+  try {
+    const response = await fetch('/api/agents/prompt-runs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectId: currentProject.id,
+        shotId: currentShot.shotId,
+        variation: currentVariation,
+        mode: 'generate',
+        tool: currentTool
+      })
+    });
+
+    const result = await response.json();
+    if (response.status === 409 && result.code === 'LOCK_CONFLICT') {
+      throw new Error(`Shot is locked by active run ${result.activeRunId || ''}`.trim());
+    }
+    if (response.status === 401 && result.code === 'AUTH_REQUIRED') {
+      throw new Error('GitHub auth session expired. Reconnect GitHub.');
+    }
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Failed to start run');
+    }
+
+    agentActiveRunId = result.runId;
+    appendAgentLogLine(`[${new Date().toLocaleTimeString()}] run started: ${result.runId}`);
+    const run = await fetchAgentRunState(result.runId);
+    renderAgentRunState(run);
+    connectAgentRunEvents(result.runId);
+  } catch (err) {
+    if (/auth/i.test(String(err.message || ''))) {
+      refreshGitHubAuthStatus({ silent: true });
+    }
+    showToast('Agent run failed to start', err.message || 'Unknown error', 'error', 4500);
+  } finally {
+    if (agentGeneratePromptBtn) {
+      agentGeneratePromptBtn.disabled = false;
+      agentGeneratePromptBtn.textContent = 'Agent Generate Prompt';
+    }
+  }
+}
+
+async function cancelAgentRun() {
+  if (!agentActiveRunId) return;
+  try {
+    const response = await fetch(`/api/agents/prompt-runs/${encodeURIComponent(agentActiveRunId)}/cancel`, {
+      method: 'POST'
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Failed to cancel run');
+    }
+    appendAgentLogLine(`[${new Date().toLocaleTimeString()}] cancel requested`);
+    showToast('Cancel requested', 'Agent run will stop at the next safe step.', 'info', 2500);
+    const run = await fetchAgentRunState(agentActiveRunId);
+    renderAgentRunState(run);
+  } catch (err) {
+    showToast('Cancel failed', err.message || 'Could not cancel run', 'error', 3500);
+  }
+}
+
+async function revertAgentRun() {
+  if (!agentActiveRunId) return;
+  try {
+    const response = await fetch(`/api/agents/prompt-runs/${encodeURIComponent(agentActiveRunId)}/revert`, {
+      method: 'POST'
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Failed to revert run');
+    }
+    appendAgentLogLine(`[${new Date().toLocaleTimeString()}] reverted ${result.revertedCount || 0} file(s)`);
+    showToast('Run reverted', `${result.revertedCount || 0} file(s) restored`, 'success', 3000);
+    const run = await fetchAgentRunState(agentActiveRunId);
+    renderAgentRunState(run);
+    await loadIndex();
+  } catch (err) {
+    showToast('Revert failed', err.message || 'Could not revert run', 'error', 4000);
+  }
+}
+
+function handleGitHubOAuthQueryFeedback() {
+  const params = new URLSearchParams(window.location.search || '');
+  const oauthState = params.get('gh_oauth');
+  if (!oauthState) return;
+  const message = params.get('gh_oauth_message') || '';
+
+  if (oauthState === 'connected') {
+    showToast('GitHub connected', 'OAuth session is active for prompt agents.', 'success', 3000);
+  } else if (oauthState === 'error') {
+    showToast('GitHub OAuth failed', message || 'Authorization did not complete', 'error', 5000);
+  }
+
+  params.delete('gh_oauth');
+  params.delete('gh_oauth_message');
+  const nextQuery = params.toString();
+  const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash || ''}`;
+  window.history.replaceState({}, '', nextUrl);
 }
 
 async function generateImage(characterName, slotNum) {
@@ -3131,6 +3847,579 @@ async function generateImage(characterName, slotNum) {
   }
 }
 
+function closeGenerationJobStream() {
+  if (!generationJobEventSource) return;
+  generationJobEventSource.close();
+  generationJobEventSource = null;
+}
+
+function setGenerationJobStatus(text = '', tone = '') {
+  if (!generationJobStatus) return;
+  generationJobStatus.textContent = text || '';
+  generationJobStatus.classList.remove('running', 'error', 'success');
+  if (tone) {
+    generationJobStatus.classList.add(tone);
+  }
+}
+
+function setGenerationControlsForActiveJob(active) {
+  const isActive = Boolean(active);
+  if (generationCancelBtn) {
+    generationCancelBtn.style.display = isActive ? 'inline-flex' : 'none';
+    generationCancelBtn.disabled = !isActive;
+  }
+}
+
+function formatJobCreatedAt(isoString) {
+  const ms = Date.parse(String(isoString || ''));
+  if (!Number.isFinite(ms)) return 'unknown time';
+  return new Date(ms).toLocaleString();
+}
+
+function formatJobDuration(job) {
+  const startedMs = Date.parse(String(job && job.startedAt || ''));
+  const finishedMs = Date.parse(String(job && job.finishedAt || ''));
+  if (!Number.isFinite(startedMs) || !Number.isFinite(finishedMs) || finishedMs < startedMs) {
+    return '';
+  }
+  return `${((finishedMs - startedMs) / 1000).toFixed(1)}s`;
+}
+
+function stopGenerationHistoryAutoRefresh() {
+  if (!generationHistoryAutoRefreshTimer) return;
+  clearInterval(generationHistoryAutoRefreshTimer);
+  generationHistoryAutoRefreshTimer = null;
+}
+
+function setGenerationHistoryAutoRefresh(enabled) {
+  if (!enabled) {
+    stopGenerationHistoryAutoRefresh();
+    return;
+  }
+  if (generationHistoryAutoRefreshTimer) return;
+  generationHistoryAutoRefreshTimer = setInterval(async () => {
+    if (generationHistoryRefreshInFlight) return;
+    generationHistoryRefreshInFlight = true;
+    try {
+      await loadShotGenerationHistory();
+      await loadGenerationMetrics();
+    } finally {
+      generationHistoryRefreshInFlight = false;
+    }
+  }, 4000);
+}
+
+function closeGenerationJobDetailsModal() {
+  if (!generationJobDetailsModal) return;
+  generationJobDetailsModal.style.display = 'none';
+  generationDetailsJobId = null;
+}
+
+function buildFailureTrace(job) {
+  const events = Array.isArray(job?.events) ? job.events : [];
+  const lastFailedEvent = events
+    .slice()
+    .reverse()
+    .find((evt) => evt && evt.event === 'job_failed');
+  return {
+    status: job?.status || 'unknown',
+    error: job?.error || null,
+    lastFailedEvent: lastFailedEvent || null
+  };
+}
+
+function openGenerationJobDetailsModal(jobId) {
+  if (!generationJobDetailsModal) return;
+  const job = generationHistoryJobsById.get(jobId);
+  if (!job) return;
+
+  generationDetailsJobId = job.jobId;
+  if (generationJobDetailsMeta) {
+    generationJobDetailsMeta.textContent = `${job.jobId} · ${job.type} · ${job.status} · ${formatJobCreatedAt(job.createdAt)}`;
+  }
+
+  if (generationJobInputJson) {
+    generationJobInputJson.textContent = JSON.stringify(job.input || {}, null, 2);
+  }
+
+  const resultView = {
+    result: job.result || {},
+    references: {
+      source: job.result?.referenceSource || '',
+      count: job.result?.referenceCount || 0,
+      trimmed: Boolean(job.result?.referenceTrimmed),
+      trimmedCount: job.result?.trimmedReferenceCount || 0
+    }
+  };
+  if (generationJobResultJson) {
+    generationJobResultJson.textContent = JSON.stringify(resultView, null, 2);
+  }
+
+  if (generationJobFailureJson) {
+    generationJobFailureJson.textContent = JSON.stringify(buildFailureTrace(job), null, 2);
+  }
+
+  const eventTail = (Array.isArray(job.events) ? job.events : []).slice(-25);
+  if (generationJobEventsJson) {
+    generationJobEventsJson.textContent = JSON.stringify(eventTail, null, 2);
+  }
+
+  const variationValue = String(job.input?.variation || '').toUpperCase();
+  if (generationRetryVariation) {
+    generationRetryVariation.value = /^[A-D]$/.test(variationValue) ? variationValue : '';
+  }
+  if (generationRetryMaxImages) {
+    const maxImages = Number(job.input?.maxImages);
+    generationRetryMaxImages.value = Number.isFinite(maxImages) ? String(Math.max(1, Math.min(2, Math.floor(maxImages)))) : '';
+  }
+  if (generationRetryAspectRatio) {
+    generationRetryAspectRatio.value = String(job.input?.aspect_ratio || '');
+  }
+  if (generationRetryRequireReference) {
+    generationRetryRequireReference.checked = Boolean(job.input?.requireReference);
+  }
+  if (generationRetryPreviewOnly) {
+    generationRetryPreviewOnly.checked = job.input?.previewOnly !== false;
+  }
+
+  const canRetry = ['failed', 'canceled', 'completed'].includes(String(job.status || ''));
+  if (generationJobRetryDefaultBtn) generationJobRetryDefaultBtn.disabled = !canRetry || Boolean(activeGenerationJobId);
+  if (generationJobRetryOverrideBtn) generationJobRetryOverrideBtn.disabled = !canRetry || Boolean(activeGenerationJobId);
+  generationJobDetailsModal.style.display = 'flex';
+}
+
+function collectGenerationRetryOverridesFromForm() {
+  const overrides = {};
+
+  const variation = generationRetryVariation ? String(generationRetryVariation.value || '').trim().toUpperCase() : '';
+  if (/^[A-D]$/.test(variation)) {
+    overrides.variation = variation;
+  }
+
+  const maxImagesRaw = generationRetryMaxImages ? String(generationRetryMaxImages.value || '').trim() : '';
+  if (maxImagesRaw) {
+    const maxImages = Number(maxImagesRaw);
+    if (Number.isFinite(maxImages)) {
+      overrides.maxImages = Math.max(1, Math.min(2, Math.floor(maxImages)));
+    }
+  }
+
+  const aspectRatio = generationRetryAspectRatio ? String(generationRetryAspectRatio.value || '').trim() : '';
+  if (aspectRatio) {
+    overrides.aspect_ratio = aspectRatio;
+  }
+
+  if (generationRetryRequireReference) {
+    overrides.requireReference = Boolean(generationRetryRequireReference.checked);
+  }
+
+  if (generationRetryPreviewOnly) {
+    overrides.previewOnly = Boolean(generationRetryPreviewOnly.checked);
+  }
+
+  return overrides;
+}
+
+async function retryGenerationJobFromDetails(useOverrides) {
+  if (!generationDetailsJobId) return;
+  const sourceJobId = generationDetailsJobId;
+  const overrides = useOverrides ? collectGenerationRetryOverridesFromForm() : null;
+
+  if (generationJobRetryDefaultBtn) generationJobRetryDefaultBtn.disabled = true;
+  if (generationJobRetryOverrideBtn) generationJobRetryOverrideBtn.disabled = true;
+  try {
+    await retryGenerationJobFromHistory(sourceJobId, overrides);
+  } finally {
+    if (generationJobRetryDefaultBtn) generationJobRetryDefaultBtn.disabled = false;
+    if (generationJobRetryOverrideBtn) generationJobRetryOverrideBtn.disabled = false;
+  }
+}
+
+async function cancelGenerationJobById(jobId) {
+  if (!jobId) return;
+  try {
+    const response = await fetch(`/api/generation-jobs/${encodeURIComponent(jobId)}/cancel`, {
+      method: 'POST'
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Failed to cancel generation job');
+    }
+    if (jobId === activeGenerationJobId) {
+      setGenerationJobStatus('Cancel requested...', 'running');
+    }
+    showToast('Cancel requested', 'Generation job cancellation requested.', 'info', 2500);
+  } catch (err) {
+    showToast('Cancel failed', err.message || 'Could not cancel generation job', 'error', 4000);
+  } finally {
+    await loadShotGenerationHistory();
+    await loadGenerationMetrics();
+  }
+}
+
+async function retryGenerationJobFromHistory(jobId, overrides = null) {
+  if (!currentProject || !jobId) return;
+  try {
+    const payload = { projectId: currentProject.id };
+    if (overrides && Object.keys(overrides).length > 0) {
+      payload.overrides = overrides;
+    }
+    const response = await fetch(`/api/generation-jobs/${encodeURIComponent(jobId)}/retry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json();
+
+    let runJobId = '';
+    if (response.ok && result.success && result.jobId) {
+      runJobId = result.jobId;
+    } else if (response.status === 409 && result.code === 'LOCK_CONFLICT' && result.activeJobId) {
+      runJobId = result.activeJobId;
+      showToast('Generation In Progress', 'Using active generation job for this shot.', 'info', 2500);
+    } else {
+      throw new Error(result.error || 'Failed to retry generation');
+    }
+
+    closeGenerationJobDetailsModal();
+    const job = await trackGenerationJob(runJobId, null);
+    const output = job.result || {};
+    if (Array.isArray(output.images) && output.images.length > 0) {
+      openGenerationChoiceModal({
+        shotId: output.shotId || currentShot?.shotId || '',
+        variation: output.variation || currentVariation,
+        tool: 'seedream',
+        images: output.images
+      });
+    }
+
+    await loadShotGenerationHistory();
+  } catch (err) {
+    showToast('Retry failed', err.message || 'Could not retry generation', 'error', 5000);
+    await loadShotGenerationHistory();
+  }
+}
+
+function renderShotGenerationHistory(jobs) {
+  if (!generationHistoryList) return;
+  generationHistoryList.innerHTML = '';
+  const list = Array.isArray(jobs) ? jobs : [];
+  generationHistoryJobsById = new Map(list.map((job) => [job.jobId, job]));
+
+  if (list.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'generation-history-empty';
+    empty.textContent = 'No generation jobs yet for this shot.';
+    generationHistoryList.appendChild(empty);
+    return;
+  }
+
+  list.slice(0, 16).forEach((job) => {
+    const status = String(job.status || '').toLowerCase();
+    const variation = String(job.input?.variation || 'A').toUpperCase();
+    const requireReference = Boolean(job.input?.requireReference);
+    const modeLabel = requireReference ? 'Ref image' : 'First+Last';
+    const duration = formatJobDuration(job);
+    const refCount = Number(job.result?.referenceCount || 0);
+    const refMeta = refCount > 0 ? ` · refs ${refCount}` : '';
+
+    const item = document.createElement('div');
+    item.className = `generation-history-item status-${status}`;
+
+    const top = document.createElement('div');
+    top.className = 'generation-history-top';
+
+    const main = document.createElement('div');
+    main.className = 'generation-history-main';
+    main.textContent = `Var ${variation} · ${modeLabel}${refMeta}`;
+
+    const badge = document.createElement('span');
+    badge.className = `render-variation-badge variation-${/^[A-D]$/.test(variation) ? variation : 'A'}`;
+    badge.textContent = status || 'unknown';
+
+    top.appendChild(main);
+    top.appendChild(badge);
+
+    const meta = document.createElement('div');
+    meta.className = 'generation-history-meta';
+    meta.textContent = `${formatJobCreatedAt(job.createdAt)}${duration ? ` · ${duration}` : ''}`;
+
+    item.appendChild(top);
+    item.appendChild(meta);
+
+    if (status === 'failed' && job.error?.message) {
+      const error = document.createElement('div');
+      error.className = 'generation-history-error';
+      error.textContent = job.error.message;
+      item.appendChild(error);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'generation-history-actions';
+
+    const detailsBtn = document.createElement('button');
+    detailsBtn.className = 'btn btn-secondary btn-sm';
+    detailsBtn.textContent = 'Details';
+    detailsBtn.addEventListener('click', () => openGenerationJobDetailsModal(job.jobId));
+    actions.appendChild(detailsBtn);
+
+    if (status === 'running' || status === 'queued') {
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'btn btn-secondary btn-sm';
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.disabled = Boolean(activeGenerationJobId && activeGenerationJobId !== job.jobId);
+      cancelBtn.addEventListener('click', () => cancelGenerationJobById(job.jobId));
+      actions.appendChild(cancelBtn);
+    }
+
+    if (status === 'failed' || status === 'canceled') {
+      const retryBtn = document.createElement('button');
+      retryBtn.className = 'btn btn-secondary btn-sm';
+      retryBtn.textContent = 'Retry';
+      retryBtn.disabled = Boolean(activeGenerationJobId);
+      retryBtn.addEventListener('click', () => retryGenerationJobFromHistory(job.jobId));
+      actions.appendChild(retryBtn);
+    }
+
+    item.appendChild(actions);
+    generationHistoryList.appendChild(item);
+  });
+}
+
+async function loadShotGenerationHistory() {
+  if (!generationHistorySection || !generationHistoryList || !currentProject || !currentShot || currentTool !== 'seedream') {
+    if (generationHistorySection) generationHistorySection.style.display = 'none';
+    if (generationHistoryList) generationHistoryList.innerHTML = '';
+    generationHistoryJobsById = new Map();
+    setGenerationHistoryAutoRefresh(false);
+    return;
+  }
+
+  generationHistorySection.style.display = 'block';
+  try {
+    const params = new URLSearchParams({
+      project: currentProject.id,
+      type: 'generate-shot',
+      shotId: currentShot.shotId,
+      limit: '40'
+    });
+    const response = await fetch(`/api/generation-jobs?${params.toString()}`);
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Failed to load generation history');
+    }
+    const jobs = result.jobs || [];
+    renderShotGenerationHistory(jobs);
+    const hasActive = jobs.some((job) => {
+      const status = String(job.status || '').toLowerCase();
+      return status === 'running' || status === 'queued';
+    });
+    setGenerationHistoryAutoRefresh(hasActive);
+  } catch {
+    renderShotGenerationHistory([]);
+    setGenerationHistoryAutoRefresh(false);
+  }
+}
+
+async function loadGenerationMetrics() {
+  if (!currentProject) {
+    generationMetricsCache = null;
+    if (generationMetrics) generationMetrics.textContent = '';
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/generation-jobs/metrics?project=${encodeURIComponent(currentProject.id)}&limit=150`);
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Failed to load generation metrics');
+    }
+
+    generationMetricsCache = result.metrics || null;
+    const counts = generationMetricsCache && generationMetricsCache.counts ? generationMetricsCache.counts : null;
+    if (!counts) {
+      if (generationMetrics) generationMetrics.textContent = '';
+      return;
+    }
+
+    const terminal = (counts.completed || 0) + (counts.failed || 0) + (counts.canceled || 0);
+    const successRate = Number(generationMetricsCache.successRate || 0).toFixed(1);
+    const avgDuration = Number(generationMetricsCache.avgDurationSec || 0).toFixed(1);
+    const running = Number(counts.running || 0);
+    const summary = terminal > 0
+      ? `Gen health ${successRate}% ok · avg ${avgDuration}s · running ${running}`
+      : `Gen health pending · running ${running}`;
+    if (generationMetrics) {
+      generationMetrics.textContent = summary;
+    }
+  } catch {
+    generationMetricsCache = null;
+    if (generationMetrics) generationMetrics.textContent = '';
+  }
+}
+
+async function cancelActiveGenerationJob() {
+  if (!activeGenerationJobId) return;
+  if (generationCancelBtn) generationCancelBtn.disabled = true;
+  try {
+    await cancelGenerationJobById(activeGenerationJobId);
+  } finally {
+    if (generationCancelBtn) generationCancelBtn.disabled = false;
+  }
+}
+
+async function fetchGenerationJobState(jobId) {
+  const response = await fetch(`/api/generation-jobs/${encodeURIComponent(jobId)}`);
+  const result = await response.json();
+  if (!response.ok || !result.success || !result.job) {
+    throw new Error(result.error || 'Failed to fetch generation job state');
+  }
+  return result.job;
+}
+
+async function runGenerationJob(payload, onEvent) {
+  const response = await fetch('/api/generation-jobs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || {})
+  });
+  const result = await response.json();
+
+  let jobId = '';
+  if (response.ok && result.success && result.jobId) {
+    jobId = result.jobId;
+  } else if (response.status === 409 && result.code === 'LOCK_CONFLICT' && result.activeJobId) {
+    jobId = result.activeJobId;
+    showToast('Generation In Progress', 'Using active generation job for this shot.', 'info', 2500);
+  } else {
+    throw new Error(result.error || 'Failed to start generation job');
+  }
+
+  return trackGenerationJob(jobId, onEvent);
+}
+
+function trackGenerationJob(jobId, onEvent) {
+  const resolvedJobId = String(jobId || '').trim();
+  if (!resolvedJobId) {
+    return Promise.reject(new Error('Invalid generation job ID'));
+  }
+
+  activeGenerationJobId = resolvedJobId;
+  setGenerationControlsForActiveJob(true);
+  setGenerationJobStatus(`Generation job ${resolvedJobId.slice(0, 8)} started...`, 'running');
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timeoutId = null;
+    let source = null;
+
+    const cleanup = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      if (source) {
+        source.close();
+        if (generationJobEventSource === source) {
+          generationJobEventSource = null;
+        }
+        source = null;
+      }
+      if (activeGenerationJobId === resolvedJobId) {
+        activeGenerationJobId = null;
+        setGenerationControlsForActiveJob(false);
+      }
+      loadGenerationMetrics();
+      loadShotGenerationHistory();
+    };
+
+    const finishWithState = async () => {
+      if (settled) return;
+      try {
+        const job = await fetchGenerationJobState(resolvedJobId);
+        if (job.status === 'completed') {
+          settled = true;
+          setGenerationJobStatus(`Generation completed (${job.jobId.slice(0, 8)})`, 'success');
+          cleanup();
+          resolve(job);
+          return;
+        }
+        if (job.status === 'failed' || job.status === 'canceled') {
+          settled = true;
+          const tone = job.status === 'canceled' ? '' : 'error';
+          setGenerationJobStatus(
+            job.status === 'canceled'
+              ? `Generation canceled (${job.jobId.slice(0, 8)})`
+              : `Generation failed: ${job.error?.message || 'Unknown error'}`,
+            tone
+          );
+          cleanup();
+          reject(new Error(job.error?.message || `Generation ${job.status}`));
+          return;
+        }
+      } catch (stateErr) {
+        settled = true;
+        setGenerationJobStatus(`Generation error: ${stateErr.message || 'Unknown error'}`, 'error');
+        cleanup();
+        reject(stateErr);
+      }
+    };
+
+    closeGenerationJobStream();
+    source = new EventSource(`/api/generation-jobs/${encodeURIComponent(resolvedJobId)}/events`);
+    generationJobEventSource = source;
+
+    source.onmessage = (event) => {
+      let evt;
+      try {
+        evt = JSON.parse(event.data || '{}');
+      } catch {
+        evt = {};
+      }
+
+      if (typeof onEvent === 'function') {
+        try { onEvent(evt); } catch { /* ignore UI callback errors */ }
+      }
+
+      if (evt.event === 'job_progress') {
+        const stepLabel = String(evt.step || 'running').replace(/_/g, ' ');
+        const progress = Number(evt.progress);
+        const progressLabel = Number.isFinite(progress) ? `${Math.max(0, Math.min(100, Math.floor(progress)))}%` : '';
+        setGenerationJobStatus(`Generating: ${stepLabel}${progressLabel ? ` (${progressLabel})` : ''}`, 'running');
+      } else if (evt.event === 'job_cancel_requested') {
+        setGenerationJobStatus('Cancel requested...', 'running');
+      }
+
+      if (evt.event === 'job_completed' || evt.event === 'job_failed' || evt.event === 'job_canceled') {
+        finishWithState();
+      }
+    };
+
+    source.onerror = () => {
+      // If stream drops, fall back to authoritative job state.
+      finishWithState();
+    };
+
+    timeoutId = setTimeout(async () => {
+      if (settled) return;
+      try {
+        const job = await fetchGenerationJobState(resolvedJobId);
+        if (job.status === 'completed') {
+          settled = true;
+          cleanup();
+          resolve(job);
+          return;
+        }
+      } catch {
+        // ignore and report timeout below
+      }
+      settled = true;
+      cleanup();
+      reject(new Error('Generation job timed out'));
+    }, 330000);
+  });
+}
+
 // Shot Generation - Generate first+last frame via Replicate
 async function generateShot() {
   if (!currentShot || !currentTool || currentTool !== 'seedream') return;
@@ -3149,36 +4438,49 @@ async function generateShot() {
   );
 
   try {
-    const response = await fetch('/api/generate-shot', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const job = await runGenerationJob({
+      type: 'generate-shot',
+      projectId: currentProject.id,
+      input: {
         project: currentProject.id,
         shotId: currentShot.shotId,
         variation: currentVariation,
-        tool: 'seedream'
-      })
+        tool: 'seedream',
+        previewOnly: true
+      }
+    }, (evt) => {
+      if (!generateShotBtn) return;
+      if (evt.event !== 'job_progress') return;
+      const progress = Number(evt.progress);
+      if (!Number.isFinite(progress)) return;
+      generateShotBtn.textContent = `Generating ${Math.max(1, Math.min(99, Math.floor(progress)))}%...`;
     });
-
-    const result = await response.json();
+    const result = job.result || {};
     dismissToast(loadingToastId);
 
-    if (result.success) {
-      const refNote = result.hasReferenceImage ? ' (with reference image)' : '';
-      showToast(
-        'Frames Generated',
-        `${currentShot.shotId} ${currentVariation} - ${result.duration.toFixed(1)}s${refNote}`,
-        'success',
-        5000
-      );
-      await loadShotRenders();
-    } else {
-      showToast('Generation Failed', result.error, 'error', 6000);
-    }
+    const refNote = result.hasReferenceImage
+      ? ` (with ${result.referenceSource || 'reference image'})`
+      : '';
+    const trimNote = result.referenceTrimmed
+      ? ` · trimmed ${Number(result.trimmedReferenceCount) || 0} ref(s) for API cap`
+      : '';
+    showToast(
+      'Preview Generated',
+      `${currentShot.shotId} ${currentVariation} - ${Number(result.duration || 0).toFixed(1)}s${refNote}${trimNote}`,
+      'success',
+      3500
+    );
+    openGenerationChoiceModal({
+      shotId: currentShot.shotId,
+      variation: currentVariation,
+      tool: 'seedream',
+      images: result.images || []
+    });
   } catch (err) {
     dismissToast(loadingToastId);
     showToast('Generation Error', err.message, 'error', 6000);
   } finally {
+    closeGenerationJobStream();
     if (generateShotBtn) {
       generateShotBtn.disabled = false;
       generateShotBtn.textContent = 'Generate Reference Frames';
@@ -3187,43 +4489,496 @@ async function generateShot() {
   }
 }
 
+// Shot Generation - Generate a single image using reference input
+async function generateReferencedImage() {
+  if (!currentShot || !currentTool || currentTool !== 'seedream') return;
+
+  if (generateRefImageBtn) {
+    generateRefImageBtn.disabled = true;
+    generateRefImageBtn.textContent = 'Generating...';
+  }
+
+  const loadingToastId = showToast(
+    'Generating Referenced Image...',
+    `${currentShot.shotId} - Variation ${currentVariation}`,
+    'info',
+    0
+  );
+
+  try {
+    const job = await runGenerationJob({
+      type: 'generate-shot',
+      projectId: currentProject.id,
+      input: {
+        project: currentProject.id,
+        shotId: currentShot.shotId,
+        variation: currentVariation,
+        tool: 'seedream',
+        maxImages: 1,
+        requireReference: true,
+        previewOnly: true
+      }
+    }, (evt) => {
+      if (!generateRefImageBtn) return;
+      if (evt.event !== 'job_progress') return;
+      const progress = Number(evt.progress);
+      if (!Number.isFinite(progress)) return;
+      generateRefImageBtn.textContent = `Generating ${Math.max(1, Math.min(99, Math.floor(progress)))}%...`;
+    });
+    const result = job.result || {};
+    dismissToast(loadingToastId);
+
+    const refNote = result.referenceSource ? ` using ${result.referenceSource}` : '';
+    const trimNote = result.referenceTrimmed
+      ? ` · trimmed ${Number(result.trimmedReferenceCount) || 0} ref(s)`
+      : '';
+    showToast(
+      'Preview Generated',
+      `${currentShot.shotId} ${currentVariation} - ${Number(result.duration || 0).toFixed(1)}s${refNote}${trimNote}`,
+      'success',
+      3500
+    );
+    openGenerationChoiceModal({
+      shotId: currentShot.shotId,
+      variation: currentVariation,
+      tool: 'seedream',
+      images: result.images || []
+    });
+  } catch (err) {
+    dismissToast(loadingToastId);
+    showToast('Generation Error', err.message, 'error', 6000);
+  } finally {
+    closeGenerationJobStream();
+    if (generateRefImageBtn) {
+      generateRefImageBtn.disabled = false;
+      generateRefImageBtn.textContent = 'Generate Image (Ref)';
+    }
+  }
+}
+
+function openReplicateKeyModal() {
+  if (!replicateKeyModal) return;
+  if (replicateKeyInput) replicateKeyInput.value = '';
+  checkGenerateStatus();
+  replicateKeyModal.style.display = 'flex';
+}
+
+function closeReplicateKeyModal() {
+  if (!replicateKeyModal) return;
+  replicateKeyModal.style.display = 'none';
+}
+
+async function saveSessionReplicateKey() {
+  const token = (replicateKeyInput && replicateKeyInput.value ? replicateKeyInput.value.trim() : '');
+  if (!token) {
+    showToast('Missing key', 'Enter a Replicate API key first.', 'warning', 3000);
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/session/replicate-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Failed to update key');
+    }
+    await checkGenerateStatus();
+    showToast('Replicate key updated', result.message || 'Session key saved', 'success', 2500);
+    closeReplicateKeyModal();
+    renderPrompt();
+  } catch (err) {
+    showToast('Replicate key update failed', err.message, 'error', 5000);
+  }
+}
+
+async function clearSessionReplicateKey() {
+  try {
+    const response = await fetch('/api/session/replicate-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: '' })
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Failed to clear session key');
+    }
+    await checkGenerateStatus();
+    showToast('Replicate session key cleared', 'Now using .env key if available.', 'info', 3000);
+    renderPrompt();
+  } catch (err) {
+    showToast('Failed to clear key', err.message, 'error', 5000);
+  }
+}
+
+function closeGenerationChoiceModal() {
+  if (!generationChoiceModal) return;
+  generationChoiceModal.style.display = 'none';
+  if (generationChoiceGrid) generationChoiceGrid.innerHTML = '';
+  pendingGeneratedPreviews = null;
+}
+
+async function saveGeneratedPreview(previewPath, frame) {
+  if (!pendingGeneratedPreviews || !currentProject) return;
+  try {
+    const response = await fetch('/api/save-shot-preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project: currentProject.id,
+        shotId: pendingGeneratedPreviews.shotId,
+        variation: pendingGeneratedPreviews.variation,
+        tool: pendingGeneratedPreviews.tool || 'seedream',
+        frame,
+        previewPath,
+        deletePreview: true
+      })
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Failed to save selected image');
+    }
+
+    pendingGeneratedPreviews.paths = pendingGeneratedPreviews.paths.filter((p) => p !== previewPath);
+    showToast('Saved', `Saved as ${frame} frame`, 'success', 2500);
+    await loadShotRenders();
+    if (pendingGeneratedPreviews.paths.length === 0) {
+      closeGenerationChoiceModal();
+    } else {
+      openGenerationChoiceModal({
+        shotId: pendingGeneratedPreviews.shotId,
+        variation: pendingGeneratedPreviews.variation,
+        tool: pendingGeneratedPreviews.tool,
+        images: pendingGeneratedPreviews.paths
+      });
+    }
+  } catch (err) {
+    showToast('Save failed', err.message, 'error', 4500);
+  }
+}
+
+async function discardPendingGeneratedPreviews() {
+  if (!pendingGeneratedPreviews || !currentProject) {
+    closeGenerationChoiceModal();
+    return;
+  }
+
+  try {
+    await fetch('/api/discard-shot-preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project: currentProject.id,
+        shotId: pendingGeneratedPreviews.shotId,
+        previewPaths: pendingGeneratedPreviews.paths
+      })
+    });
+  } catch {
+    // Best effort cleanup
+  }
+
+  showToast('Discarded', 'Generated previews were not saved.', 'info', 2500);
+  closeGenerationChoiceModal();
+}
+
+function openGenerationChoiceModal(payload) {
+  if (!generationChoiceModal || !generationChoiceGrid) return;
+  const images = Array.isArray(payload.images) ? payload.images.filter(Boolean) : [];
+  if (images.length === 0) {
+    showToast('No previews', 'No generated image was returned to review.', 'warning', 3000);
+    return;
+  }
+
+  pendingGeneratedPreviews = {
+    shotId: payload.shotId,
+    variation: payload.variation,
+    tool: payload.tool || 'seedream',
+    paths: images.slice()
+  };
+
+  const projectQuery = currentProject ? `?project=${encodeURIComponent(currentProject.id)}` : '';
+  generationChoiceGrid.innerHTML = '';
+  if (generationChoiceMeta) {
+    generationChoiceMeta.textContent = `${payload.shotId} · Variation ${payload.variation} · ${images.length} option(s)`;
+  }
+
+  images.forEach((previewPath, index) => {
+    const card = document.createElement('div');
+    card.className = 'shot-render-card';
+
+    const img = document.createElement('img');
+    img.className = 'shot-render-image';
+    img.src = `/${previewPath}${projectQuery}`;
+    img.alt = `Generated Preview ${index + 1}`;
+    img.loading = 'lazy';
+    img.addEventListener('click', () => window.open(img.src, '_blank'));
+
+    const label = document.createElement('div');
+    label.className = 'shot-render-label';
+    label.innerHTML = `<span class="render-frame-label">Option ${index + 1}</span><span class="render-variation-badge variation-${escapeHtml(payload.variation)}">Var ${escapeHtml(payload.variation)}</span>`;
+
+    const actions = document.createElement('div');
+    actions.className = 'prompt-actions';
+    actions.style.padding = '8px 12px 12px';
+    actions.style.gap = '8px';
+
+    const saveFirstBtn = document.createElement('button');
+    saveFirstBtn.className = 'btn btn-primary btn-sm';
+    saveFirstBtn.textContent = 'Save as First';
+    saveFirstBtn.addEventListener('click', () => saveGeneratedPreview(previewPath, 'first'));
+
+    const saveLastBtn = document.createElement('button');
+    saveLastBtn.className = 'btn btn-secondary btn-sm';
+    saveLastBtn.textContent = 'Save as Last';
+    saveLastBtn.addEventListener('click', () => saveGeneratedPreview(previewPath, 'last'));
+
+    actions.appendChild(saveFirstBtn);
+    actions.appendChild(saveLastBtn);
+    card.appendChild(img);
+    card.appendChild(label);
+    card.appendChild(actions);
+    generationChoiceGrid.appendChild(card);
+  });
+
+  generationChoiceModal.style.display = 'flex';
+}
+
+async function autoUploadShotReferenceSet() {
+  if (!currentProject || !currentShot || currentTool !== 'seedream') return;
+
+  if (autoUploadRefSetBtn) {
+    autoUploadRefSetBtn.disabled = true;
+    autoUploadRefSetBtn.textContent = 'Uploading...';
+  }
+
+  const loadingToastId = showToast(
+    'Uploading Reference Set...',
+    `${currentShot.shotId} - Variation ${currentVariation}`,
+    'info',
+    0
+  );
+
+  try {
+    const response = await fetch('/api/upload/shot-reference-set', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project: currentProject.id,
+        shotId: currentShot.shotId,
+        variation: currentVariation,
+        tool: 'seedream',
+        limit: 14
+      })
+    });
+
+    const result = await response.json();
+    dismissToast(loadingToastId);
+
+    if (result.success) {
+      showToast(
+        'Reference Set Uploaded',
+        `${currentShot.shotId} ${currentVariation}: ${result.uploadedCount} image(s)`,
+        'success',
+        4000
+      );
+      await loadShotRenders();
+    } else {
+      showToast('Upload Failed', result.error || 'Unknown error', 'error', 5000);
+    }
+  } catch (err) {
+    dismissToast(loadingToastId);
+    showToast('Upload Failed', err.message, 'error', 5000);
+  } finally {
+    if (autoUploadRefSetBtn) {
+      autoUploadRefSetBtn.disabled = false;
+      autoUploadRefSetBtn.textContent = 'Auto-Upload Ref Set (14)';
+    }
+  }
+}
+
+async function loadPrevisMap() {
+  if (!currentProject) return {};
+  const response = await fetch(`/api/storyboard/previs-map?project=${encodeURIComponent(currentProject.id)}`);
+  if (!response.ok) {
+    throw new Error('Failed to load previs map');
+  }
+  const result = await response.json();
+  previsMapCache = result.previsMap || {};
+  return previsMapCache;
+}
+
+async function saveShotContinuityToggle(shotId, enabled) {
+  if (!currentProject || !shotId) return;
+  const entry = (previsMapCache && previsMapCache[shotId]) || {};
+  const payload = {
+    project: currentProject.id,
+    entry: {
+      sourceType: entry.sourceType || 'manual',
+      sourceRef: entry.sourceRef || '',
+      notes: entry.notes || '',
+      locked: Boolean(entry.locked),
+      continuityDisabled: !enabled
+    }
+  };
+
+  const response = await fetch(`/api/storyboard/previs-map/${encodeURIComponent(shotId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json();
+  if (!response.ok || !result.success) {
+    throw new Error(result.error || 'Failed to save continuity setting');
+  }
+  previsMapCache[shotId] = result.entry || payload.entry;
+}
+
 // Load and display existing rendered frames + upload slots for current shot
 async function loadShotRenders() {
   if (!shotRenders || !shotRendersGrid) return;
 
   if (!currentShot || (currentTool !== 'seedream' && currentTool !== 'kling')) {
     shotRenders.style.display = 'none';
+    if (shotGenerationLayout) {
+      shotGenerationLayout.style.display = currentShot ? 'grid' : 'none';
+      shotGenerationLayout.style.gridTemplateColumns = '1fr';
+    }
+    if (continuityNote) {
+      continuityNote.textContent = '';
+      continuityNote.classList.remove('warning');
+    }
+    if (refSetNote) refSetNote.textContent = '';
+    if (continuityToggle) continuityToggle.disabled = true;
+    if (!activeGenerationJobId) {
+      setGenerationControlsForActiveJob(false);
+    }
+    setGenerationHistoryAutoRefresh(false);
+    if (generationHistorySection) generationHistorySection.style.display = 'none';
+    if (generationHistoryList) generationHistoryList.innerHTML = '';
+    setGenerationJobStatus('');
+    if (generationMetrics) generationMetrics.textContent = '';
     return;
   }
 
   try {
     const projectParam = currentProject ? currentProject.id : 'default';
+    if (currentTool === 'seedream') {
+      try {
+        await loadPrevisMap();
+      } catch (mapErr) {
+        console.warn('Could not load previs map for continuity:', mapErr);
+        previsMapCache = {};
+      }
+    }
     const response = await fetch(`/api/shot-renders?project=${projectParam}&shot=${currentShot.shotId}`);
     if (!response.ok) {
       shotRenders.style.display = 'none';
+      await loadShotGenerationHistory();
       return;
     }
 
     const data = await response.json();
     const toolRenders = data.renders?.[currentTool] || {};
 
+    if (shotGenerationLayout) {
+      shotGenerationLayout.style.display = 'grid';
+      shotGenerationLayout.style.gridTemplateColumns = '';
+    }
+    if (agentRunPanel) {
+      agentRunPanel.style.display = 'block';
+    }
     shotRenders.style.display = 'block';
     shotRendersGrid.innerHTML = '';
+    if (continuityToggle) {
+      continuityToggle.disabled = currentTool !== 'seedream';
+    }
 
     const projectParam2 = currentProject ? `?project=${currentProject.id}` : '';
 
     // Current variation: always show 2 upload/display slots (first + last frame)
     const currentRenders = toolRenders[currentVariation] || { first: null, last: null };
+    let firstPath = currentRenders.first;
+    let firstSlotMeta = {
+      source: currentRenders.first ? 'direct' : 'none',
+      text: currentRenders.first ? 'Manual' : 'Missing',
+      canDelete: true
+    };
+
+    if (currentTool === 'seedream') {
+      const resolvedFirst = data.resolved?.seedream?.[currentVariation]?.first || null;
+      const continuityForVariation = data.continuity?.seedream?.byVariation?.[currentVariation] || null;
+
+      firstPath = resolvedFirst?.path || null;
+
+      if (resolvedFirst?.source === 'inherited') {
+        firstSlotMeta = {
+          source: 'inherited',
+          text: `Inherited ${resolvedFirst.inheritedFromShotId || ''} A last`,
+          canDelete: false
+        };
+      } else if (resolvedFirst?.source === 'direct') {
+        firstSlotMeta = {
+          source: 'direct',
+          text: 'Manual',
+          canDelete: true
+        };
+      } else {
+        firstSlotMeta = {
+          source: 'none',
+          text: 'Missing',
+          canDelete: true
+        };
+      }
+
+      if (continuityToggle) {
+        continuityToggle.checked = !Boolean(previsMapCache?.[currentShot.shotId]?.continuityDisabled);
+      }
+
+      if (continuityNote) {
+        const reason = continuityForVariation?.reason || '';
+        continuityNote.classList.remove('warning');
+        if (reason === 'disabled_by_shot') {
+          continuityNote.textContent = 'Auto continuity disabled for this shot.';
+        } else if (resolvedFirst?.source === 'inherited') {
+          continuityNote.textContent = `Using ${resolvedFirst.inheritedFromShotId || 'previous shot'} variation A last frame.`;
+        } else if (resolvedFirst?.source === 'direct') {
+          continuityNote.textContent = 'Manual first frame override is active.';
+        } else if (reason === 'missing_previous_last') {
+          continuityNote.textContent = 'Missing continuity source: previous shot has no variation A last frame.';
+          continuityNote.classList.add('warning');
+        } else if (reason === 'no_previous_shot') {
+          continuityNote.textContent = 'No previous shot found in order.';
+        } else {
+          continuityNote.textContent = '';
+        }
+      }
+      if (refSetNote) {
+        const refCount = Array.isArray(currentRenders.refs) ? currentRenders.refs.length : 0;
+        refSetNote.textContent = refCount > 0
+          ? `First-frame reference set: ${refCount}/14 image(s) attached.`
+          : 'First-frame reference set: 0/14. Click "Auto-Upload Ref Set (14)" to attach references.';
+      }
+    } else if (continuityNote) {
+      continuityNote.textContent = '';
+      continuityNote.classList.remove('warning');
+      if (refSetNote) refSetNote.textContent = '';
+    }
 
     const firstSlot = createFrameUploadSlot(
       currentShot.shotId, currentVariation, 'first', currentTool,
-      currentRenders.first, projectParam2
+      firstPath, projectParam2, firstSlotMeta
     );
     shotRendersGrid.appendChild(firstSlot);
 
     const lastSlot = createFrameUploadSlot(
       currentShot.shotId, currentVariation, 'last', currentTool,
-      currentRenders.last, projectParam2
+      currentRenders.last, projectParam2, {
+        source: currentRenders.last ? 'direct' : 'none',
+        text: currentRenders.last ? 'Manual' : 'Missing',
+        canDelete: true
+      }
     );
     shotRendersGrid.appendChild(lastSlot);
 
@@ -3243,18 +4998,37 @@ async function loadShotRenders() {
       }
     }
 
+    await loadShotGenerationHistory();
+    loadGenerationMetrics();
+
   } catch (err) {
     console.error('Failed to load shot renders:', err);
     shotRenders.style.display = 'none';
+    if (shotGenerationLayout) {
+      shotGenerationLayout.style.display = currentShot ? 'grid' : 'none';
+      shotGenerationLayout.style.gridTemplateColumns = '1fr';
+    }
+    if (continuityNote) {
+      continuityNote.textContent = '';
+      continuityNote.classList.remove('warning');
+    }
+    if (refSetNote) refSetNote.textContent = '';
+    await loadShotGenerationHistory();
+    loadGenerationMetrics();
   }
 }
 
 /**
  * Create a frame upload slot (with image preview or empty upload placeholder)
  */
-function createFrameUploadSlot(shotId, variation, frame, tool, existingPath, projectParam) {
+function createFrameUploadSlot(shotId, variation, frame, tool, existingPath, projectParam, meta = null) {
   const slot = document.createElement('div');
   slot.className = 'frame-upload-slot' + (existingPath ? ' has-image' : '');
+  const slotMeta = meta || {
+    source: existingPath ? 'direct' : 'none',
+    text: existingPath ? 'Manual' : 'Missing',
+    canDelete: true
+  };
 
   if (existingPath) {
     // Show existing image with delete overlay
@@ -3272,14 +5046,6 @@ function createFrameUploadSlot(shotId, variation, frame, tool, existingPath, pro
     const overlay = document.createElement('div');
     overlay.className = 'frame-slot-overlay';
 
-    const delBtn = document.createElement('button');
-    delBtn.className = 'btn btn-secondary btn-sm';
-    delBtn.textContent = 'Delete';
-    delBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      deleteShotRender(shotId, variation, frame, tool);
-    });
-
     const replaceBtn = document.createElement('button');
     replaceBtn.className = 'btn btn-primary btn-sm';
     replaceBtn.textContent = 'Replace';
@@ -3288,7 +5054,16 @@ function createFrameUploadSlot(shotId, variation, frame, tool, existingPath, pro
       triggerFrameUpload(shotId, variation, frame, tool);
     });
 
-    overlay.appendChild(delBtn);
+    if (slotMeta.canDelete !== false) {
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn btn-secondary btn-sm';
+      delBtn.textContent = 'Delete';
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteShotRender(shotId, variation, frame, tool);
+      });
+      overlay.appendChild(delBtn);
+    }
     overlay.appendChild(replaceBtn);
     slot.appendChild(overlay);
   } else {
@@ -3337,7 +5112,7 @@ function createFrameUploadSlot(shotId, variation, frame, tool, existingPath, pro
   const labelBar = document.createElement('div');
   labelBar.className = 'shot-render-label';
   const frameLabel = frame === 'first' ? 'First Frame' : 'Last Frame';
-  labelBar.innerHTML = `<span class="render-frame-label">${frameLabel}</span><span class="render-variation-badge variation-${variation}">Var ${variation}</span>`;
+  labelBar.innerHTML = `<span class="render-frame-label">${frameLabel}<span class="render-frame-source source-${escapeHtml(slotMeta.source || 'none')}">${escapeHtml(slotMeta.text || '')}</span></span><span class="render-variation-badge variation-${variation}">Var ${variation}</span>`;
   slot.appendChild(labelBar);
 
   // Hidden file input
@@ -3518,7 +5293,7 @@ async function openContextDrawer() {
     renderContextDrawer(latestContextBundle);
     contextDrawerOverlay.style.display = 'block';
     contextDrawer.classList.add('open');
-    contextDrawer.setAttribute('aria-hidden', 'false');
+    contextDrawer.removeAttribute('inert');
   } catch (err) {
     showToast('Preview failed', err.message, 'error', 3500);
   }
@@ -3528,12 +5303,87 @@ function closeContextDrawer() {
   if (!contextDrawer || !contextDrawerOverlay) return;
   contextDrawer.classList.remove('open');
   contextDrawerOverlay.style.display = 'none';
-  contextDrawer.setAttribute('aria-hidden', 'true');
+  contextDrawer.setAttribute('inert', '');
 }
 
 // Wire up generate shot button
 if (generateShotBtn) {
   generateShotBtn.addEventListener('click', generateShot);
+}
+if (generateRefImageBtn) {
+  generateRefImageBtn.addEventListener('click', generateReferencedImage);
+}
+if (autoUploadRefSetBtn) {
+  autoUploadRefSetBtn.addEventListener('click', autoUploadShotReferenceSet);
+}
+if (generationCancelBtn) {
+  generationCancelBtn.addEventListener('click', cancelActiveGenerationJob);
+}
+if (refreshGenerationHistoryBtn) {
+  refreshGenerationHistoryBtn.addEventListener('click', () => {
+    loadShotGenerationHistory();
+  });
+}
+if (agentGeneratePromptBtn) {
+  agentGeneratePromptBtn.addEventListener('click', startAgentPromptRun);
+}
+if (replicateKeyBtn) {
+  replicateKeyBtn.addEventListener('click', openReplicateKeyModal);
+}
+if (githubConnectBtn) {
+  githubConnectBtn.addEventListener('click', startGitHubOAuth);
+}
+if (githubLogoutBtn) {
+  githubLogoutBtn.addEventListener('click', logoutGitHubOAuth);
+}
+if (agentCancelRunBtn) {
+  agentCancelRunBtn.addEventListener('click', cancelAgentRun);
+}
+if (agentRevertRunBtn) {
+  agentRevertRunBtn.addEventListener('click', revertAgentRun);
+}
+if (replicateKeyModalClose) {
+  replicateKeyModalClose.addEventListener('click', closeReplicateKeyModal);
+}
+if (replicateKeyModalOverlay) {
+  replicateKeyModalOverlay.addEventListener('click', closeReplicateKeyModal);
+}
+if (saveReplicateKeyBtn) {
+  saveReplicateKeyBtn.addEventListener('click', saveSessionReplicateKey);
+}
+if (clearReplicateKeyBtn) {
+  clearReplicateKeyBtn.addEventListener('click', clearSessionReplicateKey);
+}
+if (generationChoiceModalClose) {
+  generationChoiceModalClose.addEventListener('click', closeGenerationChoiceModal);
+}
+if (generationChoiceModalOverlay) {
+  generationChoiceModalOverlay.addEventListener('click', closeGenerationChoiceModal);
+}
+if (closeGenerationChoiceBtn) {
+  closeGenerationChoiceBtn.addEventListener('click', closeGenerationChoiceModal);
+}
+if (discardGeneratedBtn) {
+  discardGeneratedBtn.addEventListener('click', discardPendingGeneratedPreviews);
+}
+if (generationJobDetailsModalClose) {
+  generationJobDetailsModalClose.addEventListener('click', closeGenerationJobDetailsModal);
+}
+if (generationJobDetailsModalOverlay) {
+  generationJobDetailsModalOverlay.addEventListener('click', closeGenerationJobDetailsModal);
+}
+if (generationJobDetailsCancelBtn) {
+  generationJobDetailsCancelBtn.addEventListener('click', closeGenerationJobDetailsModal);
+}
+if (generationJobRetryDefaultBtn) {
+  generationJobRetryDefaultBtn.addEventListener('click', () => {
+    retryGenerationJobFromDetails(false);
+  });
+}
+if (generationJobRetryOverrideBtn) {
+  generationJobRetryOverrideBtn.addEventListener('click', () => {
+    retryGenerationJobFromDetails(true);
+  });
 }
 
 if (previewContextBtn) {
@@ -3564,6 +5414,12 @@ if (downloadContextJsonBtn) {
   });
 }
 
+window.addEventListener('beforeunload', () => {
+  closeAgentEventStream();
+  closeGenerationJobStream();
+  stopGenerationHistoryAutoRefresh();
+});
+
 // Initialize character references
 async function initializeReferences() {
   if (document.getElementById('charactersReferenceList')) {
@@ -3581,6 +5437,10 @@ async function initializeReferences() {
   if (isHomePage) {
     return;
   }
+
+  handleGitHubOAuthQueryFeedback();
+  await refreshGitHubAuthStatus({ silent: true });
+  updateAgentControlsForShot();
 
   updateToolbarContext('prompts');
   const projectsLoaded = await loadProjects();
@@ -3601,4 +5461,3 @@ async function initializeReferences() {
     showToast('No projects found', 'Run npm run migrate to initialize multi-project support', 'info', 0);
   }
 })();
-

@@ -6,13 +6,23 @@
  */
 
 const http = require('http');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const Busboy = require('busboy');
 const projectManager = require('./project_manager');
 const replicate = require('./replicate_client');
+const {
+  buildAuthorizeUrl,
+  exchangeCodeForToken,
+  fetchUserProfile
+} = require('./services/github_auth_service');
+const { AgentRuntimeService } = require('./services/agent_runtime_service');
+const { GenerationJobsService } = require('./services/generation_jobs_service');
+const { resolveTimedTranscriptForShot } = require('./services/timed_context_service');
 
-const PORT = Number(process.env.PORT || 8000);
+const parsedPort = Number(process.env.PORT);
+const PORT = Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 8000;
 const HOST = process.env.HOST || '0.0.0.0';
 const UI_DIR = path.join(__dirname, '..', 'ui');
 const ROOT_DIR = path.join(__dirname, '..');
@@ -55,10 +65,15 @@ const ALLOWED_IMAGE_TYPES = ['.png', '.jpg', '.jpeg'];
 const MAX_MUSIC_SIZE = 50 * 1024 * 1024;  // 50MB
 const MAX_VIDEO_SIZE = 500 * 1024 * 1024; // 500MB
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;  // 10MB
+const MAX_REFERENCE_IMAGES = 14;
 const REVIEW_STATUSES = new Set(['draft', 'in_review', 'approved', 'changes_requested']);
 const MAX_COMMENT_AUTHOR_LENGTH = 60;
 const MAX_COMMENT_TEXT_LENGTH = 1000;
 const MAX_ASSIGNEE_LENGTH = 80;
+const AGENT_MODES = new Set(['generate', 'revise']);
+const AGENT_TOOLS = new Set(['seedream', 'kling', 'nanobanana', 'suno']);
+const SESSION_COOKIE_NAME = 'amv_sid';
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PREVIS_SOURCE_TYPES = new Set([
   'character_ref',
   'location_ref',
@@ -68,6 +83,10 @@ const PREVIS_SOURCE_TYPES = new Set([
   'rendered_last_frame',
   'manual'
 ]);
+
+const sessionStore = new Map();
+const agentRuntime = new AgentRuntimeService();
+const generationJobs = new GenerationJobsService({ projectManager });
 
 function isPathInside(basePath, targetPath) {
   const base = path.resolve(basePath);
@@ -186,16 +205,41 @@ function buildContextBundle(projectId) {
   const analysis = safeReadJson(path.join(projectPath, 'music', 'analysis.json'), {});
   const songInfo = safeReadText(path.join(projectPath, 'music', 'song_info.txt'), '');
 
-  const selectionOrder = (sequence.selections || [])
-    .slice()
-    .sort((a, b) => (a.shotNumber || 0) - (b.shotNumber || 0))
-    .map((shot, index) => ({
-      order: index + 1,
+  const selections = Array.isArray(sequence.selections) ? sequence.selections : [];
+  const selectionByShotId = new Map(
+    selections
+      .filter((shot) => shot && shot.shotId)
+      .map((shot) => [shot.shotId, shot])
+  );
+
+  const editorialOrder = Array.isArray(sequence.editorialOrder) && sequence.editorialOrder.length > 0
+    ? sequence.editorialOrder.filter(Boolean)
+    : selections.map((shot) => shot && shot.shotId).filter(Boolean);
+
+  const selectionOrder = [];
+  const seenSelectionIds = new Set();
+  editorialOrder.forEach((shotId, index) => {
+    const shot = selectionByShotId.get(shotId) || { shotId, selectedVariation: 'none', shotNumber: index + 1, timing: {} };
+    selectionOrder.push({
+      order: selectionOrder.length + 1,
+      shotId,
+      selectedVariation: shot.selectedVariation || 'none',
+      shotNumber: shot.shotNumber,
+      timing: shot.timing || {}
+    });
+    seenSelectionIds.add(shotId);
+  });
+
+  selections.forEach((shot) => {
+    if (!shot || !shot.shotId || seenSelectionIds.has(shot.shotId)) return;
+    selectionOrder.push({
+      order: selectionOrder.length + 1,
       shotId: shot.shotId,
       selectedVariation: shot.selectedVariation || 'none',
       shotNumber: shot.shotNumber,
       timing: shot.timing || {}
-    }));
+    });
+  });
 
   const scriptShots = Array.isArray(shotList.shots) ? shotList.shots : [];
   const scriptByShotId = new Map(scriptShots.map((shot) => [shot.id || shot.shotId, shot]));
@@ -246,7 +290,12 @@ function buildContextBundle(projectId) {
         why: scriptShot.intent?.why || '',
         notes: scriptShot.notes || ''
       },
-      transcriptSnippet: transcriptLines.find(Boolean) || '',
+      transcriptSnippet: resolveTimedTranscriptForShot({
+        shot: scriptShot?.timing ? scriptShot : { timing: selection.timing || {} },
+        analysis,
+        songInfo,
+        preferredSectionId: scriptShot?.timing?.musicSection || selection.timing?.musicSection || ''
+      }).snippet,
       references
     };
   });
@@ -262,6 +311,9 @@ function buildContextBundle(projectId) {
     }
     if (!shot.references.length) {
       warnings.push(`${shot.shotId}: No active references mapped.`);
+    }
+    if (!shot.transcriptSnippet) {
+      warnings.push(`${shot.shotId}: No timed transcript context matched.`);
     }
     shot.references.forEach((ref) => {
       if (ref.type === 'character' && ref.assets.length === 0) {
@@ -439,6 +491,137 @@ function corsHeadersForRequest(req) {
   return {};
 }
 
+function parseCookieHeader(headerValue = '') {
+  const out = {};
+  String(headerValue || '')
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .forEach((part) => {
+      const idx = part.indexOf('=');
+      if (idx <= 0) return;
+      const key = part.slice(0, idx).trim();
+      const value = part.slice(idx + 1).trim();
+      if (!key) return;
+      try {
+        out[key] = decodeURIComponent(value);
+      } catch {
+        out[key] = value;
+      }
+    });
+  return out;
+}
+
+function generateSessionId() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return `sess_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function getRequestOrigin(req) {
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  const proto = typeof forwardedProto === 'string' && forwardedProto.trim()
+    ? forwardedProto.split(',')[0].trim()
+    : 'http';
+  const host = req.headers.host || `${HOST}:${PORT}`;
+  return `${proto}://${host}`;
+}
+
+function getSession(req) {
+  const cookies = parseCookieHeader(req.headers.cookie || '');
+  const sessionId = cookies[SESSION_COOKIE_NAME];
+  if (!sessionId) {
+    return null;
+  }
+  const session = sessionStore.get(sessionId);
+  if (!session) {
+    return null;
+  }
+  if ((Date.now() - session.updatedAtMs) > SESSION_TTL_MS) {
+    sessionStore.delete(sessionId);
+    return null;
+  }
+  session.updatedAtMs = Date.now();
+  return session;
+}
+
+function ensureSession(req, res) {
+  const existing = getSession(req);
+  if (existing) {
+    return existing;
+  }
+
+  const sessionId = generateSessionId();
+  const session = {
+    id: sessionId,
+    createdAtMs: Date.now(),
+    updatedAtMs: Date.now(),
+    githubAuth: null,
+    githubOAuthState: null,
+    githubOAuthReturnTo: '/index.html'
+  };
+  sessionStore.set(sessionId, session);
+  res.setHeader(
+    'Set-Cookie',
+    `${SESSION_COOKIE_NAME}=${encodeURIComponent(sessionId)}; HttpOnly; SameSite=Lax; Path=/`
+  );
+  return session;
+}
+
+function resolveGitHubOAuthRedirectUri(req) {
+  const explicit = (process.env.GITHUB_OAUTH_REDIRECT_URI || '').trim();
+  if (explicit) {
+    return explicit;
+  }
+  return `${getRequestOrigin(req)}/api/auth/github/callback`;
+}
+
+function normalizeReturnToPath(value) {
+  const fallback = '/index.html';
+  const str = typeof value === 'string' ? value.trim() : '';
+  if (!str) return fallback;
+  if (!str.startsWith('/')) return fallback;
+  if (str.startsWith('//')) return fallback;
+  return str;
+}
+
+function appendQueryParam(urlPath, key, value) {
+  const base = String(urlPath || '/index.html');
+  const separator = base.includes('?') ? '&' : '?';
+  return `${base}${separator}${encodeURIComponent(key)}=${encodeURIComponent(String(value || ''))}`;
+}
+
+function clearGitHubSessionAuth(session) {
+  if (!session) return;
+  session.githubAuth = null;
+  session.githubOAuthState = null;
+  session.githubOAuthReturnTo = '/index.html';
+  session.updatedAtMs = Date.now();
+}
+
+function getGitHubAuthPayload(session) {
+  const auth = session && session.githubAuth ? session.githubAuth : null;
+  return {
+    connected: Boolean(auth && auth.accessToken),
+    username: auth?.username || '',
+    scopes: Array.isArray(auth?.scopes) ? auth.scopes : [],
+    tokenSource: auth && auth.accessToken ? 'oauth_session' : 'none'
+  };
+}
+
+function sendSseEvent(res, eventPayload) {
+  const payload = JSON.stringify(eventPayload || {});
+  res.write(`data: ${payload}\n\n`);
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [sessionId, session] of sessionStore.entries()) {
+    if (!session || (now - session.updatedAtMs) > SESSION_TTL_MS) {
+      sessionStore.delete(sessionId);
+    }
+  }
+}, 10 * 60 * 1000).unref();
+
 
 function getStoryboardPersistencePath(projectId = 'default') {
   const base = path.join(projectManager.getProjectPath(projectId, 'rendered'), 'storyboard');
@@ -567,12 +750,748 @@ function validatePrevisEntry(entry) {
   const sourceRef = typeof entry.sourceRef === 'string' ? entry.sourceRef.trim() : '';
   const notes = typeof entry.notes === 'string' ? entry.notes.trim().slice(0, 500) : '';
   const locked = Boolean(entry.locked);
+  const continuityDisabled = Boolean(entry.continuityDisabled);
 
   return {
     sourceType,
     sourceRef,
     notes,
-    locked
+    locked,
+    continuityDisabled
+  };
+}
+
+function parseShotSortValue(shotId) {
+  const match = String(shotId || '').match(/^SHOT_(\d{1,4})$/i);
+  if (!match) return null;
+  return Number(match[1]);
+}
+
+function sortShotIds(ids = []) {
+  return ids.slice().sort((a, b) => {
+    const aNum = parseShotSortValue(a);
+    const bNum = parseShotSortValue(b);
+    if (aNum != null && bNum != null) return aNum - bNum;
+    if (aNum != null) return -1;
+    if (bNum != null) return 1;
+    return String(a).localeCompare(String(b));
+  });
+}
+
+function ensureVariationEntry(entries, tool, variation) {
+  if (!entries[tool][variation]) {
+    entries[tool][variation] = { first: null, last: null, refs: [] };
+  } else if (!Array.isArray(entries[tool][variation].refs)) {
+    entries[tool][variation].refs = [];
+  }
+  return entries[tool][variation];
+}
+
+function listShotRenderEntries(projectId, shotId) {
+  const entries = { seedream: {}, kling: {} };
+  const shotDir = safeResolve(projectManager.getProjectPath(projectId), 'rendered', 'shots', shotId);
+  if (!fs.existsSync(shotDir)) {
+    return entries;
+  }
+
+  try {
+    const files = fs.readdirSync(shotDir);
+    const refsByVariation = {};
+    for (const file of files) {
+      const match = file.match(/^(seedream|kling)_([A-D])_(first|last)\.(png|jpg|jpeg|webp)$/);
+      if (match) {
+        const [, tool, variation, frame] = match;
+        const slot = ensureVariationEntry(entries, tool, variation);
+        slot[frame] = `rendered/shots/${shotId}/${file}`;
+        continue;
+      }
+
+      const refMatch = file.match(/^(seedream|kling)_([A-D])_first_ref_(\d{2})\.(png|jpg|jpeg|webp)$/);
+      if (!refMatch) continue;
+
+      const [, tool, variation, orderRaw] = refMatch;
+      const order = Number(orderRaw);
+      const slot = ensureVariationEntry(entries, tool, variation);
+      if (!refsByVariation[tool]) refsByVariation[tool] = {};
+      if (!refsByVariation[tool][variation]) refsByVariation[tool][variation] = [];
+      refsByVariation[tool][variation].push({
+        order,
+        path: `rendered/shots/${shotId}/${file}`
+      });
+      slot.refs = [];
+    }
+
+    Object.keys(refsByVariation).forEach((tool) => {
+      Object.keys(refsByVariation[tool]).forEach((variation) => {
+        const slot = ensureVariationEntry(entries, tool, variation);
+        slot.refs = refsByVariation[tool][variation]
+          .sort((a, b) => a.order - b.order)
+          .map((entry) => entry.path);
+      });
+    });
+    // Ensure refs array is present for parsed variations.
+    ['seedream', 'kling'].forEach((tool) => {
+      Object.keys(entries[tool]).forEach((variation) => {
+        ensureVariationEntry(entries, tool, variation);
+      });
+    });
+  } catch (readErr) {
+    console.warn(`[Shot Renders] Error reading ${shotDir}: ${readErr.message}`);
+  }
+
+  return entries;
+}
+
+function getOrderedReferenceFiles(referenceDir) {
+  if (!fs.existsSync(referenceDir)) return [];
+  const files = fs.readdirSync(referenceDir).filter((file) => {
+    const ext = path.extname(file).toLowerCase();
+    if (!IMAGE_EXTENSIONS.has(ext)) return false;
+    return /^(ref_\d+|generated_\d+)\.(png|jpg|jpeg|webp)$/i.test(file);
+  });
+
+  return files.sort((a, b) => {
+    const aRef = a.match(/^ref_(\d+)/i);
+    const bRef = b.match(/^ref_(\d+)/i);
+    if (aRef && bRef) return Number(aRef[1]) - Number(bRef[1]);
+    if (aRef) return -1;
+    if (bRef) return 1;
+    return a.localeCompare(b);
+  });
+}
+
+function collectShotReferenceImagePaths(projectPath, shotId, maxCount = MAX_REFERENCE_IMAGES) {
+  const shotListPath = path.join(projectPath, 'bible', 'shot_list.json');
+  const shotList = safeReadJson(shotListPath, {});
+  const shots = Array.isArray(shotList.shots) ? shotList.shots : [];
+  const shot = shots.find((item) => item?.shotId === shotId || item?.id === shotId);
+  if (!shot) return [];
+
+  const selected = [];
+  const seen = new Set();
+  const addCandidate = (absPath) => {
+    if (!absPath || seen.has(absPath) || selected.length >= maxCount) return;
+    seen.add(absPath);
+    selected.push(absPath);
+  };
+
+  const characters = Array.isArray(shot.characters) ? shot.characters.slice() : [];
+  characters.sort((a, b) => (a?.prominence === 'primary' ? -1 : 0) - (b?.prominence === 'primary' ? -1 : 0));
+  for (const charRef of characters) {
+    if (selected.length >= maxCount) break;
+    const charId = charRef?.id;
+    if (!charId) continue;
+    const charDir = path.join(projectPath, 'reference', 'characters', charId);
+    const files = getOrderedReferenceFiles(charDir);
+    files.forEach((file) => addCandidate(path.join(charDir, file)));
+  }
+
+  if (selected.length < maxCount) {
+    const locationId = shot?.location?.id;
+    if (locationId) {
+      const locationDir = path.join(projectPath, 'reference', 'locations', locationId);
+      const files = getOrderedReferenceFiles(locationDir);
+      files.forEach((file) => addCandidate(path.join(locationDir, file)));
+    }
+  }
+
+  return selected.slice(0, maxCount);
+}
+
+function syncShotReferenceSetFiles(projectPath, shotId, tool, variation, sourcePaths, maxCount = MAX_REFERENCE_IMAGES) {
+  const shotDir = path.join(projectPath, 'rendered', 'shots', shotId);
+  if (!fs.existsSync(shotDir)) {
+    fs.mkdirSync(shotDir, { recursive: true });
+  }
+
+  const prefix = `${tool}_${variation}_first_ref_`;
+  fs.readdirSync(shotDir).forEach((file) => {
+    if (file.startsWith(prefix)) {
+      fs.unlinkSync(path.join(shotDir, file));
+    }
+  });
+
+  const saved = [];
+  sourcePaths.slice(0, maxCount).forEach((sourcePath, index) => {
+    const ext = path.extname(sourcePath).toLowerCase() || '.png';
+    const filename = `${tool}_${variation}_first_ref_${String(index + 1).padStart(2, '0')}${ext}`;
+    const targetPath = path.join(shotDir, filename);
+    fs.copyFileSync(sourcePath, targetPath);
+    saved.push(`rendered/shots/${shotId}/${filename}`);
+  });
+
+  return saved;
+}
+
+function normalizeRelativeProjectPath(projectPath, absPath) {
+  return path.relative(projectPath, absPath).replace(/\\/g, '/');
+}
+
+function addReferenceDataUriIfPossible(refList, dataUri, sourceTag) {
+  if (!dataUri || refList.inputs.length >= MAX_REFERENCE_IMAGES) return;
+  if (refList.inputs.includes(dataUri)) return;
+  refList.inputs.push(dataUri);
+  refList.sources.push(sourceTag);
+}
+
+function getOrderedShotIds(projectId) {
+  const ordered = [];
+  const seen = new Set();
+  const sequence = readSequenceFile(projectId);
+
+  const sequenceIds = Array.isArray(sequence.editorialOrder) && sequence.editorialOrder.length > 0
+    ? sequence.editorialOrder
+    : Array.isArray(sequence.selections) ? sequence.selections.map((shot) => shot && shot.shotId).filter(Boolean) : [];
+
+  sequenceIds.forEach((shotId) => {
+    if (seen.has(shotId)) return;
+    seen.add(shotId);
+    ordered.push(shotId);
+  });
+
+  if (ordered.length > 0) {
+    return ordered;
+  }
+
+  const promptsIndexPath = path.join(projectManager.getProjectPath(projectId), 'prompts_index.json');
+  const promptsIndex = safeReadJson(promptsIndexPath, {});
+  const idsFromIndex = Array.isArray(promptsIndex.shots)
+    ? promptsIndex.shots.map((shot) => shot && shot.shotId).filter(Boolean)
+    : [];
+
+  return sortShotIds(idsFromIndex);
+}
+
+function getPreviousShotId(currentShotId, orderedShotIds) {
+  if (!Array.isArray(orderedShotIds) || !currentShotId) return null;
+  const idx = orderedShotIds.indexOf(currentShotId);
+  if (idx <= 0) return null;
+  return orderedShotIds[idx - 1] || null;
+}
+
+function resolveSeedreamContinuityForShot(projectId, shotId, renders, previsMap) {
+  const orderedShotIds = getOrderedShotIds(projectId);
+  const previousShotId = getPreviousShotId(shotId, orderedShotIds);
+  const previousRenders = previousShotId ? listShotRenderEntries(projectId, previousShotId) : { seedream: {} };
+  const previousLastA = previousRenders.seedream?.A?.last || null;
+  const continuityDisabled = Boolean(previsMap?.[shotId]?.continuityDisabled);
+
+  const resolvedSeedream = {};
+  const continuityByVariation = {};
+
+  ['A', 'B', 'C', 'D'].forEach((variation) => {
+    const directFirst = renders.seedream?.[variation]?.first || null;
+    const directLast = renders.seedream?.[variation]?.last || null;
+
+    let firstPath = null;
+    let firstSource = 'none';
+    let reason = null;
+    let inheritedFromShotId = null;
+
+    if (directFirst) {
+      firstPath = directFirst;
+      firstSource = 'direct';
+      reason = 'manual_override';
+    } else if (continuityDisabled) {
+      reason = 'disabled_by_shot';
+    } else if (!previousShotId) {
+      reason = 'no_previous_shot';
+    } else if (!previousLastA) {
+      reason = 'missing_previous_last';
+    } else {
+      firstPath = previousLastA;
+      firstSource = 'inherited';
+      inheritedFromShotId = previousShotId;
+      reason = 'inherited_from_previous_last';
+    }
+
+    resolvedSeedream[variation] = {
+      first: {
+        path: firstPath,
+        source: firstSource,
+        inheritedFromShotId,
+        inheritedFromVariation: inheritedFromShotId ? 'A' : null,
+        inheritedFromFrame: inheritedFromShotId ? 'last' : null
+      },
+      last: {
+        path: directLast,
+        source: directLast ? 'direct' : 'none'
+      }
+    };
+
+    continuityByVariation[variation] = {
+      enabled: !continuityDisabled,
+      disabledByShot: continuityDisabled,
+      sourceShotId: inheritedFromShotId,
+      sourceVariation: inheritedFromShotId ? 'A' : null,
+      sourceFrame: inheritedFromShotId ? 'last' : null,
+      reason
+    };
+  });
+
+  return {
+    resolved: resolvedSeedream,
+    continuity: {
+      enabled: !continuityDisabled,
+      disabledByShot: continuityDisabled,
+      sourceShotId: previousShotId,
+      sourceFrame: previousLastA ? 'last' : null,
+      reason: continuityDisabled
+        ? 'disabled_by_shot'
+        : (!previousShotId ? 'no_previous_shot' : (previousLastA ? 'source_available' : 'missing_previous_last')),
+      byVariation: continuityByVariation
+    }
+  };
+}
+
+function imagePathToDataUri(projectId, relativeImagePath) {
+  if (!relativeImagePath) return null;
+  const absolutePath = safeResolve(projectManager.getProjectPath(projectId), relativeImagePath);
+  if (!fs.existsSync(absolutePath)) return null;
+
+  const imgData = fs.readFileSync(absolutePath);
+  const ext = path.extname(absolutePath).toLowerCase().replace('.', '');
+  const mime = ext === 'jpg' ? 'jpeg' : ext;
+  return `data:image/${mime};base64,${imgData.toString('base64')}`;
+}
+
+function getShotPreviewDir(projectPath, shotId) {
+  return path.join(projectPath, 'rendered', 'shots', shotId, 'preview');
+}
+
+function isPreviewPathForShot(shotId, relativePath) {
+  const normalized = String(relativePath || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  const expectedPrefix = `rendered/shots/${shotId}/preview/`;
+  return normalized.startsWith(expectedPrefix);
+}
+
+function createHttpError(message, statusCode = 400, code = '') {
+  const err = new Error(message);
+  err.statusCode = statusCode;
+  if (code) err.code = code;
+  return err;
+}
+
+function createCanceledError(message = 'Generation canceled') {
+  const err = new Error(message);
+  err.code = 'CANCELED';
+  return err;
+}
+
+function ensureNotCanceled(isCanceled, message = 'Generation canceled') {
+  if (typeof isCanceled === 'function' && isCanceled()) {
+    throw createCanceledError(message);
+  }
+}
+
+function reportGenerationProgress(onProgress, step, progress, payload = {}) {
+  if (typeof onProgress !== 'function') return;
+  try {
+    onProgress(step, progress, payload);
+  } catch {
+    // ignore progress callback errors
+  }
+}
+
+function mapReplicateStatusToProgress(status) {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'sending') return 56;
+  if (normalized === 'starting') return 63;
+  if (normalized === 'processing') return 72;
+  if (normalized === 'succeeded') return 84;
+  if (normalized === 'failed') return 84;
+  if (normalized === 'canceled') return 84;
+  return 68;
+}
+
+function buildGenerationJobLockKey(projectId, type, input = {}) {
+  const normalizedType = String(type || '').trim();
+  if (normalizedType === 'generate-shot') {
+    const shotId = String(input.shotId || '').trim();
+    const variation = String(input.variation || 'A').toUpperCase().trim();
+    if (shotId) {
+      return `${projectId}:generate-shot:${shotId}:${variation}`;
+    }
+  }
+  if (normalizedType === 'generate-image') {
+    const mode = String(input.mode || '').trim();
+    if (mode === 'character') {
+      const character = String(input.character || '').trim();
+      const slot = String(input.slot || '').trim();
+      if (character && slot) {
+        return `${projectId}:generate-image:character:${character}:${slot}`;
+      }
+    }
+  }
+  return '';
+}
+
+function startGenerationJob(projectId, type, input) {
+  const lockKey = buildGenerationJobLockKey(projectId, type, input);
+  const created = generationJobs.createJob({
+    projectId,
+    type,
+    lockKey,
+    input
+  });
+
+  generationJobs.runJob(created.jobId, async ({ emit, setStep, isCanceled }) => {
+    emit('tool_call', { tool: type, step: 'job_dispatch', progress: 5 });
+    const controls = {
+      isCanceled,
+      onProgress: (step, progress, progressPayload = {}) => {
+        setStep(step, progress, progressPayload);
+      }
+    };
+
+    if (type === 'generate-shot') {
+      return executeGenerateShotTask(input, controls);
+    }
+    if (type === 'generate-image') {
+      return executeGenerateImageTask(input, controls);
+    }
+
+    throw createHttpError(`Unsupported generation job type: ${type}`, 400);
+  });
+
+  return created;
+}
+
+function parseGenerateShotPrompt(projectPath, shotId, variation) {
+  const shotNum = String(shotId || '').replace(/^SHOT_/i, '');
+  const promptPath = path.join(projectPath, 'prompts', 'seedream', `shot_${shotNum}_${variation}.txt`);
+  if (!fs.existsSync(promptPath)) {
+    throw createHttpError(`Prompt file not found: prompts/seedream/shot_${shotNum}_${variation}.txt`, 404);
+  }
+
+  const promptContent = fs.readFileSync(promptPath, 'utf-8');
+  const promptStart = promptContent.indexOf('--- SEEDREAM PROMPT ---');
+  const negStart = promptContent.indexOf('--- NEGATIVE PROMPT');
+  let prompt = promptContent;
+  if (promptStart !== -1 && negStart !== -1) {
+    prompt = promptContent.substring(promptStart + '--- SEEDREAM PROMPT ---'.length, negStart).trim();
+  } else if (promptStart !== -1) {
+    prompt = promptContent.substring(promptStart + '--- SEEDREAM PROMPT ---'.length).trim();
+  }
+
+  if (!prompt) {
+    throw createHttpError('Could not extract prompt text from file.', 400);
+  }
+
+  return { promptPath, prompt };
+}
+
+async function executeGenerateImageTask(data, controls = {}) {
+  const onProgress = typeof controls.onProgress === 'function' ? controls.onProgress : null;
+  const isCanceled = typeof controls.isCanceled === 'function' ? controls.isCanceled : () => false;
+
+  reportGenerationProgress(onProgress, 'validate_request', 5);
+  const projectId = resolveProjectId(data.project || data.projectId || projectManager.getActiveProject(), { required: true });
+  ensureNotCanceled(isCanceled);
+
+  const mode = String(data.mode || 'character');
+  const character = data.character;
+  const slot = Number(data.slot);
+  const size = data.size || '2K';
+  const aspectRatio = data.aspect_ratio || (mode === 'character' ? '3:4' : '16:9');
+
+  if (!replicate.isConfigured()) {
+    throw createHttpError('Replicate API token not configured. Add REPLICATE_API_TOKEN to .env file.', 500);
+  }
+
+  let prompt = '';
+  let savePath = '';
+  let relativePath = '';
+
+  if (mode === 'character') {
+    if (!character || !slot) {
+      throw createHttpError('Character and slot are required for character mode.', 400);
+    }
+
+    const charDir = safeResolve(projectManager.getProjectPath(projectId), 'reference', 'characters', String(character));
+    if (!fs.existsSync(charDir)) {
+      throw createHttpError(`Character '${character}' not found.`, 404);
+    }
+
+    const promptPath = path.join(charDir, `prompt_0${slot}.txt`);
+    if (!fs.existsSync(promptPath)) {
+      throw createHttpError(`No prompt_0${slot}.txt found for ${character}.`, 404);
+    }
+
+    prompt = fs.readFileSync(promptPath, 'utf-8').trim();
+    savePath = path.join(charDir, `generated_0${slot}.png`);
+    relativePath = `reference/characters/${character}/generated_0${slot}.png`;
+  } else {
+    prompt = String(data.prompt || '').trim();
+    if (!prompt) {
+      throw createHttpError('Prompt text is required for arbitrary mode.', 400);
+    }
+
+    const genDir = safeResolve(projectManager.getProjectPath(projectId), 'rendered', 'generated');
+    if (!fs.existsSync(genDir)) {
+      fs.mkdirSync(genDir, { recursive: true });
+    }
+    const filename = `gen_${Date.now()}.png`;
+    savePath = path.join(genDir, filename);
+    relativePath = `rendered/generated/${filename}`;
+  }
+
+  reportGenerationProgress(onProgress, 'create_prediction', 50, { mode });
+  ensureNotCanceled(isCanceled);
+
+  const genOptions = {
+    size,
+    aspect_ratio: aspectRatio,
+    max_images: data.max_images || 1
+  };
+  if (data.sequential_image_generation) genOptions.sequential_image_generation = data.sequential_image_generation;
+  if (data.image_input) genOptions.image_input = data.image_input;
+  if (data.width) genOptions.width = data.width;
+  if (data.height) genOptions.height = data.height;
+
+  const result = await replicate.createPrediction(
+    prompt,
+    genOptions,
+    (status) => reportGenerationProgress(onProgress, 'prediction_status', mapReplicateStatusToProgress(status), { status }),
+    isCanceled
+  );
+
+  reportGenerationProgress(onProgress, 'download_outputs', 88);
+  ensureNotCanceled(isCanceled);
+
+  const outputs = Array.isArray(result.output) ? result.output : [result.output];
+  const savedImages = [];
+
+  for (let i = 0; i < outputs.length; i++) {
+    ensureNotCanceled(isCanceled);
+
+    let imgPath = savePath;
+    let imgRelative = relativePath;
+    if (i > 0) {
+      const ext = path.extname(savePath);
+      const base = savePath.slice(0, -ext.length);
+      imgPath = `${base}_${String.fromCharCode(98 + i)}${ext}`;
+      const relExt = path.extname(relativePath);
+      const relBase = relativePath.slice(0, -relExt.length);
+      imgRelative = `${relBase}_${String.fromCharCode(98 + i)}${relExt}`;
+    }
+
+    await replicate.downloadImage(outputs[i], imgPath);
+    savedImages.push(imgRelative);
+    reportGenerationProgress(onProgress, 'download_outputs', 88 + Math.min(8, Math.floor(((i + 1) / outputs.length) * 8)));
+  }
+
+  return {
+    images: savedImages,
+    predictionId: result.predictionId,
+    duration: result.duration
+  };
+}
+
+async function executeGenerateShotTask(data, controls = {}) {
+  const onProgress = typeof controls.onProgress === 'function' ? controls.onProgress : null;
+  const isCanceled = typeof controls.isCanceled === 'function' ? controls.isCanceled : () => false;
+
+  reportGenerationProgress(onProgress, 'validate_request', 5);
+  const projectId = resolveProjectId(data.project || data.projectId || projectManager.getActiveProject(), { required: true });
+  const shotId = sanitizePathSegment(String(data.shotId || ''), SHOT_ID_REGEX, 'shot');
+  const variation = sanitizePathSegment(String(data.variation || 'A').toUpperCase(), VARIATION_REGEX, 'variation');
+  const requestedMaxImages = Number(data.maxImages);
+  const maxImages = Number.isFinite(requestedMaxImages)
+    ? Math.max(1, Math.min(2, Math.floor(requestedMaxImages)))
+    : 2;
+  const requireReference = Boolean(data.requireReference);
+  const previewOnly = Boolean(data.previewOnly);
+
+  if (!replicate.isConfigured()) {
+    throw createHttpError('Replicate API token not configured. Add REPLICATE_API_TOKEN to .env file.', 500);
+  }
+  ensureNotCanceled(isCanceled);
+
+  const projectPath = projectManager.getProjectPath(projectId);
+
+  reportGenerationProgress(onProgress, 'load_prompt', 18);
+  const { prompt } = parseGenerateShotPrompt(projectPath, shotId, variation);
+  ensureNotCanceled(isCanceled);
+
+  // Find continuity reference first (manual current first frame wins, then inherited previous A last).
+  reportGenerationProgress(onProgress, 'resolve_continuity', 28);
+  const previewMap = readPrevisMapFile(projectId);
+  const currentShotRenders = listShotRenderEntries(projectId, shotId);
+  const continuityResolution = resolveSeedreamContinuityForShot(projectId, shotId, currentShotRenders, previewMap);
+  const resolvedFirst = continuityResolution.resolved?.[variation]?.first || null;
+
+  // Build multi-reference inputs for image_input (continuity first, then uploaded ref set, then canon refs).
+  reportGenerationProgress(onProgress, 'collect_references', 40);
+  const refList = { inputs: [], sources: [] };
+  if (resolvedFirst && resolvedFirst.path) {
+    const continuityRef = imagePathToDataUri(projectId, resolvedFirst.path);
+    addReferenceDataUriIfPossible(
+      refList,
+      continuityRef,
+      resolvedFirst.source === 'inherited'
+        ? `continuity:${resolvedFirst.inheritedFromShotId || 'unknown'}`
+        : 'continuity:manual'
+    );
+  }
+
+  const uploadedFirstRefs = currentShotRenders.seedream?.[variation]?.refs || [];
+  uploadedFirstRefs.forEach((refPath, idx) => {
+    const refDataUri = imagePathToDataUri(projectId, refPath);
+    addReferenceDataUriIfPossible(refList, refDataUri, `uploaded_ref_set:${idx + 1}`);
+  });
+
+  const shotListPath = path.join(projectPath, 'bible', 'shot_list.json');
+  if (fs.existsSync(shotListPath)) {
+    try {
+      const shotList = JSON.parse(fs.readFileSync(shotListPath, 'utf-8'));
+      const shot = shotList.shots
+        ? shotList.shots.find((s) => s.shotId === shotId || s.id === shotId)
+        : null;
+
+      if (shot && shot.characters && shot.characters.length > 0) {
+        const prioritizedCharacters = shot.characters
+          .slice()
+          .sort((a, b) => (a.prominence === 'primary' ? -1 : 0) - (b.prominence === 'primary' ? -1 : 0));
+
+        for (const characterRef of prioritizedCharacters) {
+          ensureNotCanceled(isCanceled);
+          const charId = characterRef.id;
+          if (!charId) continue;
+          const charDir = path.join(projectPath, 'reference', 'characters', charId);
+          if (!fs.existsSync(charDir)) continue;
+
+          const candidates = [
+            'ref_1.png', 'ref_1.jpg', 'ref_1.jpeg', 'ref_1.webp',
+            'ref_2.png', 'ref_2.jpg', 'ref_2.jpeg', 'ref_2.webp',
+            'generated_01.png'
+          ];
+
+          for (const candidate of candidates) {
+            if (refList.inputs.length >= MAX_REFERENCE_IMAGES) break;
+            const refPath = path.join(charDir, candidate);
+            if (!fs.existsSync(refPath)) continue;
+
+            const relativeRefPath = normalizeRelativeProjectPath(projectPath, refPath);
+            const refDataUri = imagePathToDataUri(projectId, relativeRefPath);
+            if (!refDataUri) continue;
+            addReferenceDataUriIfPossible(refList, refDataUri, `character:${charId}/${candidate}`);
+          }
+          if (refList.inputs.length >= MAX_REFERENCE_IMAGES) break;
+        }
+      }
+
+      if (shot && shot.location && shot.location.id && refList.inputs.length < MAX_REFERENCE_IMAGES) {
+        const locationId = String(shot.location.id).trim();
+        if (locationId) {
+          const locationDir = path.join(projectPath, 'reference', 'locations', locationId);
+          const locationFiles = getOrderedReferenceFiles(locationDir);
+          for (const file of locationFiles) {
+            if (refList.inputs.length >= MAX_REFERENCE_IMAGES) break;
+            ensureNotCanceled(isCanceled);
+
+            const refPath = path.join(locationDir, file);
+            const relativeRefPath = normalizeRelativeProjectPath(projectPath, refPath);
+            const refDataUri = imagePathToDataUri(projectId, relativeRefPath);
+            if (!refDataUri) continue;
+            addReferenceDataUriIfPossible(refList, refDataUri, `location:${locationId}/${file}`);
+          }
+        }
+      }
+    } catch (shotListErr) {
+      console.warn(`[Generate Shot] Could not read shot_list.json: ${shotListErr.message}`);
+    }
+  }
+
+  const maxInputForRequestedOutput = Math.max(0, 15 - maxImages);
+  let trimmedReferenceCount = 0;
+  if (refList.inputs.length > maxInputForRequestedOutput) {
+    trimmedReferenceCount = refList.inputs.length - maxInputForRequestedOutput;
+    refList.inputs = refList.inputs.slice(0, maxInputForRequestedOutput);
+    refList.sources = refList.sources.slice(0, maxInputForRequestedOutput);
+  }
+
+  if (requireReference && refList.inputs.length === 0) {
+    throw createHttpError('Reference image is required for this action, but none was found for this shot.', 400);
+  }
+
+  reportGenerationProgress(onProgress, 'create_prediction', 56, { referenceCount: refList.inputs.length });
+  ensureNotCanceled(isCanceled);
+
+  const requestedAspectRatio = typeof data.aspect_ratio === 'string'
+    ? data.aspect_ratio.trim()
+    : '';
+  const genOptions = {
+    aspect_ratio: requestedAspectRatio || (refList.inputs.length > 0 ? 'match_input_image' : '16:9'),
+    max_images: maxImages
+  };
+  if (maxImages > 1) {
+    genOptions.sequential_image_generation = 'auto';
+  }
+  if (typeof data.size === 'string' && data.size.trim()) {
+    genOptions.size = data.size.trim();
+  }
+  if (data.width) genOptions.width = data.width;
+  if (data.height) genOptions.height = data.height;
+  if (refList.inputs.length > 0) {
+    genOptions.image_input = refList.inputs;
+  }
+
+  const result = await replicate.createPrediction(
+    prompt,
+    genOptions,
+    (status) => reportGenerationProgress(onProgress, 'prediction_status', mapReplicateStatusToProgress(status), { status }),
+    isCanceled
+  );
+
+  ensureNotCanceled(isCanceled);
+  reportGenerationProgress(onProgress, 'download_outputs', 88);
+
+  const outputs = Array.isArray(result.output) ? result.output : [result.output];
+  const savedImages = [];
+  const labels = ['first', 'last'];
+
+  if (previewOnly) {
+    const previewDir = getShotPreviewDir(projectPath, shotId);
+    if (!fs.existsSync(previewDir)) {
+      fs.mkdirSync(previewDir, { recursive: true });
+    }
+
+    const stamp = Date.now();
+    for (let i = 0; i < outputs.length && i < 2; i++) {
+      ensureNotCanceled(isCanceled);
+      const filename = `seedream_${variation}_preview_${stamp}_${labels[i]}.png`;
+      const savePath = path.join(previewDir, filename);
+      await replicate.downloadImage(outputs[i], savePath);
+      savedImages.push(`rendered/shots/${shotId}/preview/${filename}`);
+      reportGenerationProgress(onProgress, 'download_outputs', 88 + Math.min(8, Math.floor(((i + 1) / Math.min(outputs.length, 2)) * 8)));
+    }
+  } else {
+    const shotDir = path.join(projectPath, 'rendered', 'shots', shotId);
+    if (!fs.existsSync(shotDir)) {
+      fs.mkdirSync(shotDir, { recursive: true });
+    }
+
+    for (let i = 0; i < outputs.length && i < 2; i++) {
+      ensureNotCanceled(isCanceled);
+      const filename = `seedream_${variation}_${labels[i]}.png`;
+      const savePath = path.join(shotDir, filename);
+      await replicate.downloadImage(outputs[i], savePath);
+      savedImages.push(`rendered/shots/${shotId}/${filename}`);
+      reportGenerationProgress(onProgress, 'download_outputs', 88 + Math.min(8, Math.floor(((i + 1) / Math.min(outputs.length, 2)) * 8)));
+    }
+  }
+
+  return {
+    images: savedImages,
+    predictionId: result.predictionId,
+    duration: result.duration,
+    hasReferenceImage: refList.inputs.length > 0,
+    referenceSource: refList.sources.join(', '),
+    referenceCount: refList.inputs.length,
+    referenceTrimmed: trimmedReferenceCount > 0,
+    trimmedReferenceCount,
+    previewOnly
   };
 }
 
@@ -657,6 +1576,641 @@ const server = http.createServer((req, res) => {
   const requestPath = requestUrl.pathname;
   const projectPathMatch = requestPath.match(/^\/api\/projects\/([^\/]+)$/);
   const previsMapPathMatch = requestPath.match(/^\/api\/storyboard\/previs-map\/([^\/]+)$/);
+  const agentRunPathMatch = requestPath.match(/^\/api\/agents\/prompt-runs\/([^\/]+)$/);
+  const agentRunEventsPathMatch = requestPath.match(/^\/api\/agents\/prompt-runs\/([^\/]+)\/events$/);
+  const agentRunCancelPathMatch = requestPath.match(/^\/api\/agents\/prompt-runs\/([^\/]+)\/cancel$/);
+  const agentRunRevertPathMatch = requestPath.match(/^\/api\/agents\/prompt-runs\/([^\/]+)\/revert$/);
+  const generationJobPathMatch = requestPath.match(/^\/api\/generation-jobs\/([^\/]+)$/);
+  const generationJobEventsPathMatch = requestPath.match(/^\/api\/generation-jobs\/([^\/]+)\/events$/);
+  const generationJobCancelPathMatch = requestPath.match(/^\/api\/generation-jobs\/([^\/]+)\/cancel$/);
+  const generationJobRetryPathMatch = requestPath.match(/^\/api\/generation-jobs\/([^\/]+)\/retry$/);
+
+  // ===== GITHUB AUTH ENDPOINTS =====
+
+  // GET /api/auth/github/status
+  if (req.method === 'GET' && requestPath === '/api/auth/github/status') {
+    const session = ensureSession(req, res);
+    sendJSON(res, 200, getGitHubAuthPayload(session));
+    return;
+  }
+
+  // GET /api/auth/github/start
+  if (req.method === 'GET' && requestPath === '/api/auth/github/start') {
+    const clientId = String(process.env.GITHUB_CLIENT_ID || '').trim();
+    if (!clientId) {
+      sendJSON(res, 500, { success: false, error: 'GITHUB_CLIENT_ID is not configured' });
+      return;
+    }
+
+    try {
+      const session = ensureSession(req, res);
+      const state = crypto.randomBytes(16).toString('hex');
+      const redirectUri = resolveGitHubOAuthRedirectUri(req);
+      const returnTo = normalizeReturnToPath(requestUrl.searchParams.get('returnTo') || '/index.html');
+      session.githubOAuthState = state;
+      session.githubOAuthReturnTo = returnTo;
+      session.updatedAtMs = Date.now();
+
+      const authorizeUrl = buildAuthorizeUrl({
+        clientId,
+        redirectUri,
+        state
+      });
+
+      const headers = { Location: authorizeUrl };
+      const corsHeaders = corsHeadersForRequest(req);
+      Object.assign(headers, corsHeaders);
+      res.writeHead(302, headers);
+      res.end();
+    } catch (authStartErr) {
+      sendJSON(res, 500, { success: false, error: authStartErr.message || 'Failed to start GitHub OAuth flow' });
+    }
+    return;
+  }
+
+  // GET /api/auth/github/callback
+  if (req.method === 'GET' && requestPath === '/api/auth/github/callback') {
+    const session = ensureSession(req, res);
+    const expectedState = session.githubOAuthState || '';
+    const returnTo = normalizeReturnToPath(session.githubOAuthReturnTo || '/index.html');
+    const code = requestUrl.searchParams.get('code') || '';
+    const state = requestUrl.searchParams.get('state') || '';
+    const oauthError = requestUrl.searchParams.get('error') || '';
+
+    const redirectWithStatus = (statusValue, message = '') => {
+      let location = appendQueryParam(returnTo, 'gh_oauth', statusValue);
+      if (message) {
+        location = appendQueryParam(location, 'gh_oauth_message', message);
+      }
+      const headers = { Location: location };
+      const corsHeaders = corsHeadersForRequest(req);
+      Object.assign(headers, corsHeaders);
+      res.writeHead(302, headers);
+      res.end();
+    };
+
+    if (oauthError) {
+      clearGitHubSessionAuth(session);
+      redirectWithStatus('error', oauthError);
+      return;
+    }
+
+    if (!code || !state || !expectedState || state !== expectedState) {
+      clearGitHubSessionAuth(session);
+      redirectWithStatus('error', 'Invalid OAuth callback state');
+      return;
+    }
+
+    const clientId = String(process.env.GITHUB_CLIENT_ID || '').trim();
+    const clientSecret = String(process.env.GITHUB_CLIENT_SECRET || '').trim();
+    if (!clientId || !clientSecret) {
+      clearGitHubSessionAuth(session);
+      redirectWithStatus('error', 'GitHub OAuth is not configured on server');
+      return;
+    }
+
+    (async () => {
+      try {
+        const tokenResult = await exchangeCodeForToken({
+          clientId,
+          clientSecret,
+          code,
+          redirectUri: resolveGitHubOAuthRedirectUri(req)
+        });
+        const profile = await fetchUserProfile(tokenResult.accessToken);
+        session.githubAuth = {
+          accessToken: tokenResult.accessToken,
+          username: profile.username || '',
+          scopes: Array.isArray(profile.scopes) ? profile.scopes : [],
+          connectedAt: new Date().toISOString()
+        };
+        session.githubOAuthState = null;
+        session.githubOAuthReturnTo = '/index.html';
+        session.updatedAtMs = Date.now();
+        redirectWithStatus('connected');
+      } catch (oauthErr) {
+        clearGitHubSessionAuth(session);
+        redirectWithStatus('error', oauthErr.message || 'GitHub OAuth failed');
+      }
+    })();
+    return;
+  }
+
+  // POST /api/auth/github/logout
+  if (req.method === 'POST' && requestPath === '/api/auth/github/logout') {
+    const session = ensureSession(req, res);
+    clearGitHubSessionAuth(session);
+    sendJSON(res, 200, { success: true, ...getGitHubAuthPayload(session) });
+    return;
+  }
+
+  // ===== AGENT ENDPOINTS =====
+
+  // GET /api/agents/locks?projectId=...
+  if (req.method === 'GET' && requestPath === '/api/agents/locks') {
+    try {
+      const rawProjectId = requestUrl.searchParams.get('projectId') || '';
+      const projectId = rawProjectId
+        ? resolveProjectId(rawProjectId, { required: true })
+        : '';
+      sendJSON(res, 200, {
+        success: true,
+        locks: agentRuntime.listLocks(projectId)
+      });
+    } catch (lockErr) {
+      sendJSON(res, 400, { success: false, error: lockErr.message || 'Failed to list locks' });
+    }
+    return;
+  }
+
+  // POST /api/agents/prompt-runs
+  if (req.method === 'POST' && requestPath === '/api/agents/prompt-runs') {
+    readBody(req, MAX_BODY_SIZE, (err, body) => {
+      if (err) {
+        sendJSON(res, 400, { success: false, error: err.message });
+        return;
+      }
+
+      try {
+        const payload = JSON.parse(body || '{}');
+        const projectId = resolveProjectId(
+          payload.projectId || payload.project || projectManager.getActiveProject(),
+          { required: true }
+        );
+        const shotId = sanitizePathSegment(String(payload.shotId || ''), SHOT_ID_REGEX, 'shotId');
+        const variation = sanitizePathSegment(String(payload.variation || 'A').toUpperCase(), VARIATION_REGEX, 'variation');
+        const mode = sanitizePathSegment(String(payload.mode || 'generate').toLowerCase(), /^(generate|revise)$/, 'mode');
+        const tool = String(payload.tool || 'seedream').toLowerCase();
+        if (!AGENT_MODES.has(mode)) {
+          throw new Error('mode must be generate or revise');
+        }
+        if (!AGENT_TOOLS.has(tool)) {
+          throw new Error('tool must be seedream, kling, nanobanana, or suno');
+        }
+        const instruction = typeof payload.instruction === 'string' ? payload.instruction.slice(0, 2000) : '';
+
+        const session = ensureSession(req, res);
+        if (!session.githubAuth || !session.githubAuth.accessToken) {
+          sendJSON(res, 401, {
+            success: false,
+            error: 'GitHub OAuth session required',
+            code: 'AUTH_REQUIRED'
+          });
+          return;
+        }
+
+        let run;
+        try {
+          run = agentRuntime.createRun(
+            {
+              projectId,
+              shotId,
+              variation,
+              mode,
+              tool,
+              instruction
+            },
+            {
+              accessToken: session.githubAuth.accessToken,
+              username: session.githubAuth.username || ''
+            }
+          );
+        } catch (createErr) {
+          if (createErr && createErr.code === 'LOCK_CONFLICT') {
+            sendJSON(res, 409, {
+              success: false,
+              error: createErr.message || 'Shot is currently locked',
+              code: 'LOCK_CONFLICT',
+              activeRunId: createErr.activeRunId || null
+            });
+            return;
+          }
+          throw createErr;
+        }
+
+        sendJSON(res, 200, {
+          success: true,
+          runId: run.runId,
+          lockAcquired: true,
+          startedAt: run.startedAt
+        });
+      } catch (parseErr) {
+        sendJSON(res, 400, { success: false, error: parseErr.message || 'Invalid request payload' });
+      }
+    });
+    return;
+  }
+
+  // GET /api/agents/prompt-runs/:runId
+  if (req.method === 'GET' && agentRunPathMatch) {
+    const runId = decodeURIComponent(agentRunPathMatch[1]);
+    const run = agentRuntime.getRun(runId);
+    if (!run) {
+      sendJSON(res, 404, { success: false, error: 'Run not found' });
+      return;
+    }
+    sendJSON(res, 200, { success: true, ...agentRuntime.serializeRun(run) });
+    return;
+  }
+
+  // GET /api/agents/prompt-runs/:runId/events
+  if (req.method === 'GET' && agentRunEventsPathMatch) {
+    const runId = decodeURIComponent(agentRunEventsPathMatch[1]);
+    const run = agentRuntime.getRun(runId);
+    if (!run) {
+      sendJSON(res, 404, { success: false, error: 'Run not found' });
+      return;
+    }
+
+    const headers = {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive'
+    };
+    const corsHeaders = corsHeadersForRequest(req);
+    Object.assign(headers, corsHeaders);
+    res.writeHead(200, headers);
+
+    sendSseEvent(res, {
+      event: 'stream_open',
+      runId,
+      status: run.status,
+      timestamp: new Date().toISOString()
+    });
+    (run.events || []).forEach((evt) => sendSseEvent(res, evt));
+
+    const unsubscribe = agentRuntime.subscribe(runId, (evt) => {
+      sendSseEvent(res, evt);
+      if (evt.event === 'run_completed' || evt.event === 'run_failed' || evt.event === 'run_reverted') {
+        res.write(': done\n\n');
+      }
+    });
+
+    const heartbeatId = setInterval(() => {
+      res.write(': ping\n\n');
+    }, 15000);
+
+    req.on('close', () => {
+      clearInterval(heartbeatId);
+      unsubscribe();
+    });
+    return;
+  }
+
+  // POST /api/agents/prompt-runs/:runId/cancel
+  if (req.method === 'POST' && agentRunCancelPathMatch) {
+    const runId = decodeURIComponent(agentRunCancelPathMatch[1]);
+    const run = agentRuntime.getRun(runId);
+    if (!run) {
+      sendJSON(res, 404, { success: false, error: 'Run not found' });
+      return;
+    }
+    const canceled = agentRuntime.cancelRun(runId);
+    if (!canceled) {
+      sendJSON(res, 409, { success: false, error: 'Run is already finished and cannot be canceled' });
+      return;
+    }
+    sendJSON(res, 200, { success: true, runId, status: 'cancel_requested' });
+    return;
+  }
+
+  // POST /api/agents/prompt-runs/:runId/revert
+  if (req.method === 'POST' && agentRunRevertPathMatch) {
+    const runId = decodeURIComponent(agentRunRevertPathMatch[1]);
+    const run = agentRuntime.getRun(runId);
+    if (!run) {
+      sendJSON(res, 404, { success: false, error: 'Run not found' });
+      return;
+    }
+    if (run.status === 'queued' || run.status === 'running') {
+      sendJSON(res, 409, { success: false, error: 'Cannot revert while run is active' });
+      return;
+    }
+
+    try {
+      const result = agentRuntime.revertRun(runId);
+      sendJSON(res, 200, {
+        success: true,
+        runId,
+        revertedCount: result.revertedCount
+      });
+    } catch (revertErr) {
+      sendJSON(res, 400, { success: false, error: revertErr.message || 'Failed to revert run' });
+    }
+    return;
+  }
+
+  // ===== GENERATION JOB ENDPOINTS =====
+
+  // GET /api/generation-jobs?project=...&limit=...
+  if (req.method === 'GET' && requestPath === '/api/generation-jobs') {
+    try {
+      const rawProjectId = requestUrl.searchParams.get('project')
+        || requestUrl.searchParams.get('projectId')
+        || '';
+      const projectId = rawProjectId
+        ? resolveProjectId(rawProjectId, { required: true })
+        : '';
+      const limitRaw = Number(requestUrl.searchParams.get('limit'));
+      const limit = Number.isFinite(limitRaw)
+        ? Math.max(1, Math.min(200, Math.floor(limitRaw)))
+        : 50;
+      const filterType = String(requestUrl.searchParams.get('type') || '').trim();
+      const filterShotId = String(requestUrl.searchParams.get('shotId') || '').trim();
+      const filterVariation = String(requestUrl.searchParams.get('variation') || '').toUpperCase().trim();
+      const statusRaw = String(requestUrl.searchParams.get('status') || '').trim();
+      const statusFilter = statusRaw
+        ? new Set(statusRaw.split(',').map((item) => item.trim().toLowerCase()).filter(Boolean))
+        : null;
+
+      if (filterShotId) sanitizePathSegment(filterShotId, SHOT_ID_REGEX, 'shotId');
+      if (filterVariation) sanitizePathSegment(filterVariation, VARIATION_REGEX, 'variation');
+
+      let jobs = generationJobs.listJobs(projectId, limit);
+      if (filterType) {
+        jobs = jobs.filter((job) => String(job.type || '').toLowerCase() === filterType.toLowerCase());
+      }
+      if (filterShotId) {
+        jobs = jobs.filter((job) => String(job.input?.shotId || '') === filterShotId);
+      }
+      if (filterVariation) {
+        jobs = jobs.filter((job) => String(job.input?.variation || 'A').toUpperCase() === filterVariation);
+      }
+      if (statusFilter && statusFilter.size > 0) {
+        jobs = jobs.filter((job) => statusFilter.has(String(job.status || '').toLowerCase()));
+      }
+
+      sendJSON(res, 200, { success: true, jobs });
+    } catch (listErr) {
+      sendJSON(res, 400, { success: false, error: listErr.message || 'Failed to list generation jobs' });
+    }
+    return;
+  }
+
+  // GET /api/generation-jobs/metrics?project=...&limit=...
+  if (req.method === 'GET' && requestPath === '/api/generation-jobs/metrics') {
+    try {
+      const rawProjectId = requestUrl.searchParams.get('project')
+        || requestUrl.searchParams.get('projectId')
+        || '';
+      const projectId = rawProjectId
+        ? resolveProjectId(rawProjectId, { required: true })
+        : '';
+      const limitRaw = Number(requestUrl.searchParams.get('limit'));
+      const limit = Number.isFinite(limitRaw)
+        ? Math.max(1, Math.min(1000, Math.floor(limitRaw)))
+        : 200;
+      const metrics = generationJobs.getMetrics(projectId, limit);
+      sendJSON(res, 200, { success: true, metrics });
+    } catch (metricsErr) {
+      sendJSON(res, 400, { success: false, error: metricsErr.message || 'Failed to load generation metrics' });
+    }
+    return;
+  }
+
+  // POST /api/generation-jobs
+  if (req.method === 'POST' && requestPath === '/api/generation-jobs') {
+    readBody(req, MAX_BODY_SIZE, (err, body) => {
+      if (err) {
+        sendJSON(res, 400, { success: false, error: err.message });
+        return;
+      }
+
+      try {
+        const payload = JSON.parse(body || '{}');
+        const type = String(payload.type || '').trim();
+        if (!['generate-shot', 'generate-image'].includes(type)) {
+          throw new Error('type must be "generate-shot" or "generate-image"');
+        }
+
+        const baseInput = payload.input && typeof payload.input === 'object' && !Array.isArray(payload.input)
+          ? { ...payload.input }
+          : { ...payload };
+        delete baseInput.type;
+
+        const projectId = resolveProjectId(
+          payload.projectId
+            || payload.project
+            || baseInput.projectId
+            || baseInput.project
+            || projectManager.getActiveProject(),
+          { required: true }
+        );
+
+        const input = {
+          ...baseInput,
+          project: projectId
+        };
+        delete input.projectId;
+        const created = startGenerationJob(projectId, type, input);
+
+        sendJSON(res, 200, {
+          success: true,
+          jobId: created.jobId,
+          lockKey: created.lockKey || '',
+          status: created.status,
+          startedAt: created.createdAt
+        });
+      } catch (createErr) {
+        if (createErr && createErr.code === 'LOCK_CONFLICT') {
+          const activeJob = generationJobs.getJob(createErr.activeJobId);
+          sendJSON(res, 409, {
+            success: false,
+            error: createErr.message || 'Generation target is currently locked',
+            code: 'LOCK_CONFLICT',
+            activeJobId: createErr.activeJobId || null,
+            activeJob: activeJob || null
+          });
+          return;
+        }
+        sendJSON(res, 400, { success: false, error: createErr.message || 'Invalid generation job request' });
+      }
+    });
+    return;
+  }
+
+  // GET /api/generation-jobs/:jobId
+  if (req.method === 'GET' && generationJobPathMatch) {
+    const jobId = decodeURIComponent(generationJobPathMatch[1]);
+    const job = generationJobs.getJob(jobId);
+    if (!job) {
+      sendJSON(res, 404, { success: false, error: 'Job not found' });
+      return;
+    }
+    sendJSON(res, 200, { success: true, job });
+    return;
+  }
+
+  // GET /api/generation-jobs/:jobId/events
+  if (req.method === 'GET' && generationJobEventsPathMatch) {
+    const jobId = decodeURIComponent(generationJobEventsPathMatch[1]);
+    const job = generationJobs.getJob(jobId);
+    if (!job) {
+      sendJSON(res, 404, { success: false, error: 'Job not found' });
+      return;
+    }
+
+    const headers = {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive'
+    };
+    const corsHeaders = corsHeadersForRequest(req);
+    Object.assign(headers, corsHeaders);
+    res.writeHead(200, headers);
+
+    sendSseEvent(res, {
+      event: 'stream_open',
+      jobId,
+      status: job.status,
+      timestamp: new Date().toISOString()
+    });
+
+    (job.events || []).forEach((evt) => sendSseEvent(res, evt));
+    const unsubscribe = generationJobs.subscribe(jobId, (evt) => {
+      sendSseEvent(res, evt);
+      if (evt.event === 'job_completed' || evt.event === 'job_failed' || evt.event === 'job_canceled') {
+        res.write(': done\n\n');
+      }
+    });
+
+    const heartbeatId = setInterval(() => {
+      res.write(': ping\n\n');
+    }, 15000);
+
+    req.on('close', () => {
+      clearInterval(heartbeatId);
+      unsubscribe();
+    });
+    return;
+  }
+
+  // POST /api/generation-jobs/:jobId/cancel
+  if (req.method === 'POST' && generationJobCancelPathMatch) {
+    const jobId = decodeURIComponent(generationJobCancelPathMatch[1]);
+    const job = generationJobs.getJob(jobId);
+    if (!job) {
+      sendJSON(res, 404, { success: false, error: 'Job not found' });
+      return;
+    }
+
+    const canceled = generationJobs.cancelJob(jobId);
+    if (!canceled) {
+      sendJSON(res, 409, { success: false, error: 'Job is already finished and cannot be canceled' });
+      return;
+    }
+    sendJSON(res, 200, { success: true, jobId, status: 'cancel_requested' });
+    return;
+  }
+
+  // POST /api/generation-jobs/:jobId/retry
+  if (req.method === 'POST' && generationJobRetryPathMatch) {
+    const sourceJobId = decodeURIComponent(generationJobRetryPathMatch[1]);
+    const sourceJob = generationJobs.getJob(sourceJobId);
+    if (!sourceJob) {
+      sendJSON(res, 404, { success: false, error: 'Source job not found' });
+      return;
+    }
+
+    if (!['completed', 'failed', 'canceled'].includes(String(sourceJob.status || ''))) {
+      sendJSON(res, 409, {
+        success: false,
+        error: 'Cannot retry while source job is still active',
+        code: 'SOURCE_JOB_ACTIVE'
+      });
+      return;
+    }
+
+    readBody(req, MAX_BODY_SIZE, (err, body) => {
+      if (err) {
+        sendJSON(res, 400, { success: false, error: err.message });
+        return;
+      }
+
+      try {
+        const payload = JSON.parse(body || '{}');
+        const projectId = resolveProjectId(
+          payload.projectId
+            || payload.project
+            || sourceJob.projectId
+            || projectManager.getActiveProject(),
+          { required: true }
+        );
+
+        const input = {
+          ...(sourceJob.input || {}),
+          project: projectId
+        };
+        delete input.projectId;
+
+        const overrides = payload.overrides && typeof payload.overrides === 'object'
+          ? payload.overrides
+          : {};
+        if (sourceJob.type === 'generate-shot') {
+          if (Object.prototype.hasOwnProperty.call(overrides, 'variation')) {
+            input.variation = sanitizePathSegment(
+              String(overrides.variation || '').toUpperCase(),
+              VARIATION_REGEX,
+              'variation'
+            );
+          }
+          if (Object.prototype.hasOwnProperty.call(overrides, 'maxImages')) {
+            const maxImagesRaw = Number(overrides.maxImages);
+            if (!Number.isFinite(maxImagesRaw)) {
+              throw new Error('maxImages must be a number');
+            }
+            input.maxImages = Math.max(1, Math.min(2, Math.floor(maxImagesRaw)));
+          }
+          if (Object.prototype.hasOwnProperty.call(overrides, 'requireReference')) {
+            input.requireReference = Boolean(overrides.requireReference);
+          }
+          if (Object.prototype.hasOwnProperty.call(overrides, 'aspect_ratio')) {
+            const aspect = String(overrides.aspect_ratio || '').trim();
+            input.aspect_ratio = aspect;
+          }
+          if (Object.prototype.hasOwnProperty.call(overrides, 'size')) {
+            input.size = String(overrides.size || '').trim();
+          }
+          if (Object.prototype.hasOwnProperty.call(overrides, 'previewOnly')) {
+            input.previewOnly = Boolean(overrides.previewOnly);
+          }
+          if (Object.prototype.hasOwnProperty.call(overrides, 'width')) {
+            const width = Number(overrides.width);
+            input.width = Number.isFinite(width) && width > 0 ? Math.floor(width) : undefined;
+          }
+          if (Object.prototype.hasOwnProperty.call(overrides, 'height')) {
+            const height = Number(overrides.height);
+            input.height = Number.isFinite(height) && height > 0 ? Math.floor(height) : undefined;
+          }
+          if (Object.prototype.hasOwnProperty.call(input, 'width') && input.width === undefined) delete input.width;
+          if (Object.prototype.hasOwnProperty.call(input, 'height') && input.height === undefined) delete input.height;
+        }
+
+        const created = startGenerationJob(projectId, sourceJob.type, input);
+        sendJSON(res, 200, {
+          success: true,
+          retriedFrom: sourceJobId,
+          jobId: created.jobId,
+          status: created.status,
+          startedAt: created.createdAt
+        });
+      } catch (retryErr) {
+        if (retryErr && retryErr.code === 'LOCK_CONFLICT') {
+          const activeJob = generationJobs.getJob(retryErr.activeJobId);
+          sendJSON(res, 409, {
+            success: false,
+            error: retryErr.message || 'Generation target is currently locked',
+            code: 'LOCK_CONFLICT',
+            activeJobId: retryErr.activeJobId || null,
+            activeJob: activeJob || null
+          });
+          return;
+        }
+        sendJSON(res, 400, { success: false, error: retryErr.message || 'Failed to retry generation job' });
+      }
+    });
+    return;
+  }
 
   // ===== PROJECT MANAGEMENT ENDPOINTS =====
 
@@ -2108,7 +3662,48 @@ const server = http.createServer((req, res) => {
 
   // GET /api/generate-status - Check if Replicate API is configured
   if (req.method === 'GET' && req.url.startsWith('/api/generate-status')) {
-    sendJSON(res, 200, { configured: replicate.isConfigured() });
+    sendJSON(res, 200, {
+      configured: replicate.isConfigured(),
+      tokenSource: replicate.getTokenSource()
+    });
+    return;
+  }
+
+  // POST /api/session/replicate-key - Update Replicate token for this server session
+  if (req.method === 'POST' && req.url.startsWith('/api/session/replicate-key')) {
+    readBody(req, MAX_BODY_SIZE, (err, body) => {
+      if (err) {
+        sendJSON(res, 400, { success: false, error: err.message });
+        return;
+      }
+
+      try {
+        const data = JSON.parse(body || '{}');
+        const token = typeof data.token === 'string' ? data.token.trim() : '';
+        if (!token) {
+          replicate.clearSessionToken();
+          sendJSON(res, 200, {
+            success: true,
+            configured: replicate.isConfigured(),
+            tokenSource: replicate.getTokenSource(),
+            message: 'Session token cleared'
+          });
+          return;
+        }
+
+        replicate.setSessionToken(token);
+        // Validate immediately so bad tokens fail fast.
+        const configured = replicate.isConfigured();
+        sendJSON(res, 200, {
+          success: true,
+          configured,
+          tokenSource: replicate.getTokenSource(),
+          message: 'Session token updated'
+        });
+      } catch (parseErr) {
+        sendJSON(res, 400, { success: false, error: parseErr.message || 'Invalid JSON' });
+      }
+    });
     return;
   }
 
@@ -2248,6 +3843,12 @@ const server = http.createServer((req, res) => {
         const projId = resolveProjectId(data.project || projectManager.getActiveProject(), { required: true });
         const shotId = data.shotId;
         const variation = data.variation || 'A';
+        const requestedMaxImages = Number(data.maxImages);
+        const maxImages = Number.isFinite(requestedMaxImages)
+          ? Math.max(1, Math.min(2, Math.floor(requestedMaxImages)))
+          : 2;
+        const requireReference = Boolean(data.requireReference);
+        const previewOnly = Boolean(data.previewOnly);
 
         if (!shotId) {
           sendJSON(res, 400, { success: false, error: 'shotId is required.' });
@@ -2289,34 +3890,77 @@ const server = http.createServer((req, res) => {
 
         console.log(`[Generate Shot] ${shotId} variation ${variation} — ${prompt.substring(0, 80)}...`);
 
-        // Find character reference images for image_input
-        let imageInput = null;
+        // Find continuity reference first (manual current first frame wins, then inherited previous A last).
+        const previewMap = readPrevisMapFile(projId);
+        const currentShotRenders = listShotRenderEntries(projId, shotId);
+        const continuityResolution = resolveSeedreamContinuityForShot(projId, shotId, currentShotRenders, previewMap);
+        const resolvedFirst = continuityResolution.resolved?.[variation]?.first || null;
+
+        // Build multi-reference inputs for image_input (continuity first, then uploaded ref set, then canon refs).
+        const refList = { inputs: [], sources: [] };
+        if (resolvedFirst && resolvedFirst.path) {
+          const continuityRef = imagePathToDataUri(projId, resolvedFirst.path);
+          addReferenceDataUriIfPossible(
+            refList,
+            continuityRef,
+            resolvedFirst.source === 'inherited'
+              ? `continuity:${resolvedFirst.inheritedFromShotId || 'unknown'}`
+              : 'continuity:manual'
+          );
+          if (continuityRef) console.log(`[Generate Shot] Using continuity frame: ${resolvedFirst.path}`);
+        }
+
+        const uploadedFirstRefs = currentShotRenders.seedream?.[variation]?.refs || [];
+        uploadedFirstRefs.forEach((refPath, idx) => {
+          const refDataUri = imagePathToDataUri(projId, refPath);
+          addReferenceDataUriIfPossible(refList, refDataUri, `uploaded_ref_set:${idx + 1}`);
+        });
+        if (uploadedFirstRefs.length > 0) {
+          console.log(`[Generate Shot] Added ${uploadedFirstRefs.length} uploaded first-frame refs`);
+        }
+
         const shotListPath = path.join(projectPath, 'bible', 'shot_list.json');
         if (fs.existsSync(shotListPath)) {
           try {
             const shotList = JSON.parse(fs.readFileSync(shotListPath, 'utf-8'));
-            const shot = shotList.shots ? shotList.shots.find(s => s.shotId === shotId) : null;
+            const shot = shotList.shots
+              ? shotList.shots.find(s => s.shotId === shotId || s.id === shotId)
+              : null;
 
             if (shot && shot.characters && shot.characters.length > 0) {
-              // Find primary character, or fallback to first
-              const primaryChar = shot.characters.find(c => c.prominence === 'primary') || shot.characters[0];
-              const charId = primaryChar.id;
-              const charDir = path.join(projectPath, 'reference', 'characters', charId);
+              const prioritizedCharacters = shot.characters
+                .slice()
+                .sort((a, b) => (a.prominence === 'primary' ? -1 : 0) - (b.prominence === 'primary' ? -1 : 0));
 
-              if (fs.existsSync(charDir)) {
-                // Try ref_1 (uploaded) first, then generated_01 (AI-generated)
-                const candidates = ['ref_1.png', 'ref_1.jpg', 'ref_1.jpeg', 'ref_1.webp', 'generated_01.png'];
+              for (const characterRef of prioritizedCharacters) {
+                const charId = characterRef.id;
+                if (!charId) continue;
+                const charDir = path.join(projectPath, 'reference', 'characters', charId);
+                if (!fs.existsSync(charDir)) continue;
+
+                // Prefer user refs, then generated fallback.
+                const candidates = [
+                  'ref_1.png', 'ref_1.jpg', 'ref_1.jpeg', 'ref_1.webp',
+                  'ref_2.png', 'ref_2.jpg', 'ref_2.jpeg', 'ref_2.webp',
+                  'generated_01.png'
+                ];
+
                 for (const candidate of candidates) {
+                  if (refList.inputs.length >= MAX_REFERENCE_IMAGES) break;
                   const refPath = path.join(charDir, candidate);
-                  if (fs.existsSync(refPath)) {
-                    const imgData = fs.readFileSync(refPath);
-                    const ext = path.extname(candidate).slice(1);
-                    const mimeType = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
-                    imageInput = `data:${mimeType};base64,${imgData.toString('base64')}`;
-                    console.log(`[Generate Shot] Using ref image: ${charId}/${candidate}`);
-                    break;
+                  if (!fs.existsSync(refPath)) continue;
+
+                  const relativeRefPath = normalizeRelativeProjectPath(projectPath, refPath);
+                  const refDataUri = imagePathToDataUri(projId, relativeRefPath);
+                  if (!refDataUri) continue;
+
+                  const beforeCount = refList.inputs.length;
+                  addReferenceDataUriIfPossible(refList, refDataUri, `character:${charId}/${candidate}`);
+                  if (refList.inputs.length > beforeCount) {
+                    console.log(`[Generate Shot] Added ref image: ${charId}/${candidate}`);
                   }
                 }
+                if (refList.inputs.length >= MAX_REFERENCE_IMAGES) break;
               }
             }
           } catch (shotListErr) {
@@ -2324,32 +3968,76 @@ const server = http.createServer((req, res) => {
           }
         }
 
+        // SeedDream supports up to 15 total images (reference inputs + generated outputs).
+        const maxInputForRequestedOutput = Math.max(0, 15 - maxImages);
+        let trimmedReferenceCount = 0;
+        if (refList.inputs.length > maxInputForRequestedOutput) {
+          trimmedReferenceCount = refList.inputs.length - maxInputForRequestedOutput;
+          refList.inputs = refList.inputs.slice(0, maxInputForRequestedOutput);
+          refList.sources = refList.sources.slice(0, maxInputForRequestedOutput);
+          console.log(
+            `[Generate Shot] Trimmed ${trimmedReferenceCount} reference image(s) to satisfy total image cap (15)`
+          );
+        }
+
+        if (requireReference && refList.inputs.length === 0) {
+          sendJSON(res, 400, {
+            success: false,
+            error: 'Reference image is required for this action, but none was found for this shot.'
+          });
+          return;
+        }
+
+        const requestedAspectRatio = typeof data.aspect_ratio === 'string'
+          ? data.aspect_ratio.trim()
+          : '';
         const genOptions = {
-          aspect_ratio: '16:9',
-          sequential_image_generation: 'auto',
-          max_images: 2
+          aspect_ratio: requestedAspectRatio || (refList.inputs.length > 0 ? 'match_input_image' : '16:9'),
+          max_images: maxImages
         };
-        if (imageInput) {
-          genOptions.image_input = imageInput;
+        if (maxImages > 1) {
+          genOptions.sequential_image_generation = 'auto';
+        }
+        if (typeof data.size === 'string' && data.size.trim()) {
+          genOptions.size = data.size.trim();
+        }
+        if (data.width) genOptions.width = data.width;
+        if (data.height) genOptions.height = data.height;
+        if (refList.inputs.length > 0) {
+          genOptions.image_input = refList.inputs;
         }
 
         const result = await replicate.createPrediction(prompt, genOptions);
-
-        // Save output images
-        const shotDir = path.join(projectPath, 'rendered', 'shots', shotId);
-        if (!fs.existsSync(shotDir)) {
-          fs.mkdirSync(shotDir, { recursive: true });
-        }
 
         const outputs = Array.isArray(result.output) ? result.output : [result.output];
         const savedImages = [];
         const labels = ['first', 'last'];
 
-        for (let i = 0; i < outputs.length && i < 2; i++) {
-          const filename = `seedream_${variation}_${labels[i]}.png`;
-          const savePath = path.join(shotDir, filename);
-          await replicate.downloadImage(outputs[i], savePath);
-          savedImages.push(`rendered/shots/${shotId}/${filename}`);
+        if (previewOnly) {
+          const previewDir = getShotPreviewDir(projectPath, shotId);
+          if (!fs.existsSync(previewDir)) {
+            fs.mkdirSync(previewDir, { recursive: true });
+          }
+
+          const stamp = Date.now();
+          for (let i = 0; i < outputs.length && i < 2; i++) {
+            const filename = `seedream_${variation}_preview_${stamp}_${labels[i]}.png`;
+            const savePath = path.join(previewDir, filename);
+            await replicate.downloadImage(outputs[i], savePath);
+            savedImages.push(`rendered/shots/${shotId}/preview/${filename}`);
+          }
+        } else {
+          const shotDir = path.join(projectPath, 'rendered', 'shots', shotId);
+          if (!fs.existsSync(shotDir)) {
+            fs.mkdirSync(shotDir, { recursive: true });
+          }
+
+          for (let i = 0; i < outputs.length && i < 2; i++) {
+            const filename = `seedream_${variation}_${labels[i]}.png`;
+            const savePath = path.join(shotDir, filename);
+            await replicate.downloadImage(outputs[i], savePath);
+            savedImages.push(`rendered/shots/${shotId}/${filename}`);
+          }
         }
 
         console.log(`[Generate Shot] Success — ${result.duration.toFixed(1)}s — ${savedImages.join(', ')}`);
@@ -2359,13 +4047,138 @@ const server = http.createServer((req, res) => {
           images: savedImages,
           predictionId: result.predictionId,
           duration: result.duration,
-          hasReferenceImage: !!imageInput
+          hasReferenceImage: refList.inputs.length > 0,
+          referenceSource: refList.sources.join(', '),
+          referenceCount: refList.inputs.length,
+          referenceTrimmed: trimmedReferenceCount > 0,
+          trimmedReferenceCount,
+          previewOnly
         });
 
       } catch (genErr) {
         console.error(`[Generate Shot] Error: ${genErr.message}`);
-        const statusCode = genErr.statusCode || 500;
+        if (genErr.body) console.error(`[Generate Shot] Replicate response:`, JSON.stringify(genErr.body, null, 2));
+        // Upstream API errors (4xx from Replicate) become 502 for the client
+        const statusCode = genErr.statusCode && genErr.statusCode >= 400 && genErr.statusCode < 500
+          ? 502
+          : (genErr.statusCode || 500);
         sendJSON(res, statusCode, { success: false, error: genErr.message });
+      }
+    });
+    return;
+  }
+
+  // POST /api/save-shot-preview - Save selected preview image into a shot frame slot
+  if (req.method === 'POST' && req.url.startsWith('/api/save-shot-preview')) {
+    readBody(req, MAX_BODY_SIZE, (err, body) => {
+      if (err) {
+        sendJSON(res, 400, { success: false, error: err.message });
+        return;
+      }
+
+      try {
+        const data = JSON.parse(body || '{}');
+        const projectId = resolveProjectId(data.project || projectManager.getActiveProject(), { required: true });
+        const shotId = sanitizePathSegment(data.shotId, SHOT_ID_REGEX, 'shot');
+        const variation = sanitizePathSegment((data.variation || 'A').toUpperCase(), VARIATION_REGEX, 'variation');
+        const tool = sanitizePathSegment((data.tool || 'seedream').toLowerCase(), /^(seedream|kling)$/, 'tool');
+        const frame = sanitizePathSegment((data.frame || '').toLowerCase(), /^(first|last)$/, 'frame');
+        const previewPath = String(data.previewPath || '').trim();
+        if (!previewPath) {
+          throw new Error('previewPath is required');
+        }
+        if (!isPreviewPathForShot(shotId, previewPath)) {
+          throw new Error('previewPath must point to this shot preview folder');
+        }
+
+        const projectPath = projectManager.getProjectPath(projectId);
+        const cleanPreviewPath = previewPath.replace(/^\/+/, '');
+        const previewAbs = safeResolve(projectPath, cleanPreviewPath);
+        if (!fs.existsSync(previewAbs)) {
+          throw new Error('Preview image not found');
+        }
+
+        const ext = path.extname(previewAbs).toLowerCase();
+        if (!IMAGE_EXTENSIONS.has(ext)) {
+          throw new Error('Invalid preview image format');
+        }
+
+        const shotDir = safeResolve(projectPath, 'rendered', 'shots', shotId);
+        if (!fs.existsSync(shotDir)) {
+          fs.mkdirSync(shotDir, { recursive: true });
+        }
+
+        fs.readdirSync(shotDir).forEach((file) => {
+          if (file.startsWith(`${tool}_${variation}_${frame}.`)) {
+            fs.unlinkSync(path.join(shotDir, file));
+          }
+        });
+
+        const newFilename = `${tool}_${variation}_${frame}${ext}`;
+        const saveAbs = path.join(shotDir, newFilename);
+        fs.copyFileSync(previewAbs, saveAbs);
+
+        if (data.deletePreview !== false) {
+          try { fs.unlinkSync(previewAbs); } catch { /* ignore */ }
+        }
+
+        const relativePath = `rendered/shots/${shotId}/${newFilename}`;
+        sendJSON(res, 200, {
+          success: true,
+          projectId,
+          shotId,
+          variation,
+          frame,
+          tool,
+          path: relativePath
+        });
+      } catch (saveErr) {
+        sendJSON(res, 400, { success: false, error: saveErr.message || 'Failed to save preview image' });
+      }
+    });
+    return;
+  }
+
+  // POST /api/discard-shot-preview - Remove preview image files
+  if (req.method === 'POST' && req.url.startsWith('/api/discard-shot-preview')) {
+    readBody(req, MAX_BODY_SIZE, (err, body) => {
+      if (err) {
+        sendJSON(res, 400, { success: false, error: err.message });
+        return;
+      }
+
+      try {
+        const data = JSON.parse(body || '{}');
+        const projectId = resolveProjectId(data.project || projectManager.getActiveProject(), { required: true });
+        const shotId = sanitizePathSegment(data.shotId, SHOT_ID_REGEX, 'shot');
+        const projectPath = projectManager.getProjectPath(projectId);
+        const paths = Array.isArray(data.previewPaths) ? data.previewPaths : [];
+
+        let deleted = 0;
+        paths.forEach((previewPathRaw) => {
+          const previewPath = String(previewPathRaw || '').trim();
+          if (!previewPath) return;
+          if (!isPreviewPathForShot(shotId, previewPath)) return;
+          const cleanPath = previewPath.replace(/^\/+/, '');
+          let abs;
+          try {
+            abs = safeResolve(projectPath, cleanPath);
+          } catch {
+            return;
+          }
+          if (fs.existsSync(abs)) {
+            try {
+              fs.unlinkSync(abs);
+              deleted += 1;
+            } catch {
+              // ignore per-file failure
+            }
+          }
+        });
+
+        sendJSON(res, 200, { success: true, deleted });
+      } catch (discardErr) {
+        sendJSON(res, 400, { success: false, error: discardErr.message || 'Failed to discard previews' });
       }
     });
     return;
@@ -2390,29 +4203,20 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    const shotDir = safeResolve(projectManager.getProjectPath(projId), 'rendered', 'shots', shotId);
-    const renders = { seedream: {}, kling: {} };
+    const renders = listShotRenderEntries(projId, shotId);
+    const previsMap = readPrevisMapFile(projId);
+    const seedreamResolved = resolveSeedreamContinuityForShot(projId, shotId, renders, previsMap);
 
-    if (fs.existsSync(shotDir)) {
-      try {
-        const files = fs.readdirSync(shotDir);
-        for (const file of files) {
-          // Match pattern: {tool}_{variation}_{first|last}.{ext}
-          const match = file.match(/^(seedream|kling)_([A-D])_(first|last)\.(png|jpg|jpeg|webp)$/);
-          if (match) {
-            const [, tool, variation, frame] = match;
-            if (!renders[tool][variation]) {
-              renders[tool][variation] = { first: null, last: null };
-            }
-            renders[tool][variation][frame] = `rendered/shots/${shotId}/${file}`;
-          }
-        }
-      } catch (readErr) {
-        console.warn(`[Shot Renders] Error reading ${shotDir}: ${readErr.message}`);
+    sendJSON(res, 200, {
+      success: true,
+      renders,
+      resolved: {
+        seedream: seedreamResolved.resolved
+      },
+      continuity: {
+        seedream: seedreamResolved.continuity
       }
-    }
-
-    sendJSON(res, 200, { success: true, renders });
+    });
     return;
   }
 
@@ -2496,6 +4300,46 @@ const server = http.createServer((req, res) => {
     });
 
     req.pipe(busboy);
+    return;
+  }
+
+  // POST /api/upload/shot-reference-set - Copy canon reference images into shot first-frame ref set
+  if (req.method === 'POST' && req.url.startsWith('/api/upload/shot-reference-set')) {
+    readBody(req, MAX_BODY_SIZE, (err, body) => {
+      if (err) {
+        sendJSON(res, 400, { success: false, error: err.message });
+        return;
+      }
+
+      try {
+        const data = JSON.parse(body || '{}');
+        const projectId = resolveProjectId(data.project || projectManager.getActiveProject(), { required: true });
+        const shotId = sanitizePathSegment(data.shotId, SHOT_ID_REGEX, 'shot');
+        const variation = sanitizePathSegment((data.variation || 'A').toUpperCase(), VARIATION_REGEX, 'variation');
+        const tool = sanitizePathSegment((data.tool || 'seedream').toLowerCase(), /^(seedream|kling)$/, 'tool');
+        const requestedLimit = Number(data.limit);
+        const limit = Number.isFinite(requestedLimit)
+          ? Math.max(1, Math.min(MAX_REFERENCE_IMAGES, Math.floor(requestedLimit)))
+          : MAX_REFERENCE_IMAGES;
+
+        const projectPath = projectManager.getProjectPath(projectId);
+        const sourcePaths = collectShotReferenceImagePaths(projectPath, shotId, limit);
+        const uploadedPaths = syncShotReferenceSetFiles(projectPath, shotId, tool, variation, sourcePaths, limit);
+
+        sendJSON(res, 200, {
+          success: true,
+          projectId,
+          shotId,
+          variation,
+          tool,
+          limit,
+          uploadedCount: uploadedPaths.length,
+          uploadedPaths
+        });
+      } catch (uploadErr) {
+        sendJSON(res, 400, { success: false, error: uploadErr.message || 'Failed to upload shot reference set' });
+      }
+    });
     return;
   }
 

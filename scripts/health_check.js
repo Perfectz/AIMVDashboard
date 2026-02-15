@@ -155,6 +155,13 @@ async function checkProjectScopedEndpoints() {
   const status = await requestJSON(`/api/upload-status?project=${encodeURIComponent(project)}`);
   assert(status.response.ok, 'GET /api/upload-status failed');
 
+  const githubStatus = await requestJSON('/api/auth/github/status');
+  assert(githubStatus.response.ok, 'GET /api/auth/github/status failed');
+  assert(typeof githubStatus.json.connected === 'boolean', 'GitHub status payload missing connected flag');
+
+  const agentLocks = await requestJSON(`/api/agents/locks?projectId=${encodeURIComponent(project)}`);
+  assert(agentLocks.response.ok && agentLocks.json.success, 'GET /api/agents/locks failed');
+
   const charRefs = await requestJSON(`/api/references/characters?project=${encodeURIComponent(project)}`);
   assert(charRefs.response.ok && charRefs.json.success, 'GET /api/references/characters failed');
 
@@ -184,6 +191,65 @@ async function checkProjectScopedEndpoints() {
     })
   });
   assert(saveSequence.response.ok && saveSequence.json.success, 'POST /api/storyboard/sequence failed');
+
+  const createGenerationJob = await requestJSON('/api/generation-jobs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'generate-shot',
+      projectId: project,
+      input: {
+        project,
+        shotId,
+        variation: 'A',
+        previewOnly: true,
+        maxImages: 1
+      }
+    })
+  });
+  assert(createGenerationJob.response.ok && createGenerationJob.json.success, 'POST /api/generation-jobs failed');
+  assert(createGenerationJob.json.jobId, 'Generation job ID missing from create response');
+
+  const generationJobId = createGenerationJob.json.jobId;
+  const listGenerationJobs = await requestJSON(`/api/generation-jobs?project=${encodeURIComponent(project)}&limit=10`);
+  assert(listGenerationJobs.response.ok && listGenerationJobs.json.success, 'GET /api/generation-jobs failed');
+  assert(Array.isArray(listGenerationJobs.json.jobs), 'Generation jobs payload missing jobs array');
+  assert(
+    listGenerationJobs.json.jobs.some((job) => job.jobId === generationJobId),
+    'Created generation job was not returned by list endpoint'
+  );
+
+  const getGenerationJob = await requestJSON(`/api/generation-jobs/${encodeURIComponent(generationJobId)}`);
+  assert(getGenerationJob.response.ok && getGenerationJob.json.success, 'GET /api/generation-jobs/:jobId failed');
+  assert(
+    getGenerationJob.json.job && getGenerationJob.json.job.jobId === generationJobId,
+    'Generation job status payload is missing expected job'
+  );
+
+  const generationMetrics = await requestJSON(`/api/generation-jobs/metrics?project=${encodeURIComponent(project)}&limit=25`);
+  assert(generationMetrics.response.ok && generationMetrics.json.success, 'GET /api/generation-jobs/metrics failed');
+  assert(
+    generationMetrics.json.metrics && generationMetrics.json.metrics.counts && Number.isFinite(generationMetrics.json.metrics.successRate),
+    'Generation metrics payload missing expected fields'
+  );
+
+  const cancelGenerationJob = await requestJSON(`/api/generation-jobs/${encodeURIComponent(generationJobId)}/cancel`, {
+    method: 'POST'
+  });
+  assert(
+    cancelGenerationJob.response.ok || cancelGenerationJob.response.status === 409,
+    'POST /api/generation-jobs/:jobId/cancel failed'
+  );
+
+  const retryGenerationJob = await requestJSON(`/api/generation-jobs/${encodeURIComponent(generationJobId)}/retry`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId: project })
+  });
+  assert(
+    retryGenerationJob.response.ok || retryGenerationJob.response.status === 409,
+    'POST /api/generation-jobs/:jobId/retry failed'
+  );
 
   const invalidMusicForm = new FormData();
   invalidMusicForm.set('project', project);
@@ -239,6 +305,26 @@ async function checkProjectScopedEndpoints() {
       shotRenders.json.renders.seedream.A.first.includes('seedream_A_first'),
     'Uploaded shot render was not discoverable via /api/shot-renders'
   );
+  assert(
+    shotRenders.json.resolved?.seedream?.A?.first?.source === 'direct',
+    'Resolved continuity metadata missing direct first-frame source'
+  );
+
+  const startAgentWithoutAuth = await requestJSON('/api/agents/prompt-runs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      projectId: project,
+      shotId,
+      variation: 'A',
+      mode: 'generate',
+      tool: 'seedream'
+    })
+  });
+  assert(
+    startAgentWithoutAuth.response.status === 401 && startAgentWithoutAuth.json.code === 'AUTH_REQUIRED',
+    'Agent run without OAuth should return AUTH_REQUIRED'
+  );
 
   const loadSequence = await requestJSON(`/api/review/sequence?project=${encodeURIComponent(project)}`);
   const shot = (loadSequence.json.selections || []).find((s) => s.shotId === shotId);
@@ -270,11 +356,13 @@ async function checkProjectScopedEndpoints() {
         sourceType: 'manual',
         sourceRef: 'HEALTH',
         notes: 'Health check previs override',
-        locked: false
+        locked: false,
+        continuityDisabled: true
       }
     })
   });
   assert(savePrevis.response.ok && savePrevis.json.success, 'PUT /api/storyboard/previs-map/:shotId failed');
+  assert(savePrevis.json.entry?.continuityDisabled === true, 'continuityDisabled was not persisted in previs map');
 
   const deletePrevis = await requestJSON(`/api/storyboard/previs-map/${encodeURIComponent(shotId)}?project=${encodeURIComponent(project)}`, {
     method: 'DELETE'

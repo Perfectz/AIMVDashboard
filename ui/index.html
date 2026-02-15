@@ -117,15 +117,57 @@
           <div class="prompt-actions">
             <button id="copyBtn" class="btn btn-primary">Copy to Clipboard</button>
             <button id="generateShotBtn" class="btn btn-generate" style="display: none;">Generate First + Last Frame</button>
+            <button id="generateRefImageBtn" class="btn btn-secondary" style="display: none;">Generate Image (Ref)</button>
+            <button id="autoUploadRefSetBtn" class="btn btn-secondary" style="display: none;">Auto-Upload Ref Set (14)</button>
+            <button id="generationCancelBtn" class="btn btn-secondary" style="display: none;" disabled>Cancel Generation</button>
+            <button id="agentGeneratePromptBtn" class="btn btn-secondary" style="display: none;">Agent Generate Prompt</button>
+            <button id="replicateKeyBtn" class="btn btn-secondary">Replicate Key</button>
             <button id="previewContextBtn" class="btn btn-secondary">Preview AI Context</button>
             <span id="copyFeedback" class="copy-feedback"></span>
+          </div>
+          <div class="generation-job-row">
+            <span id="generationJobStatus" class="generation-job-status"></span>
+            <span id="generationMetrics" class="generation-metrics"></span>
           </div>
 
           <div class="prompt-content"><pre id="promptText"></pre></div>
 
-          <div class="shot-renders" id="shotRenders" style="display: none;">
-            <div class="shot-renders-header"><h3>Generated Frames</h3></div>
+          <div class="shot-generation-layout" id="shotGenerationLayout" style="display: none;">
+            <div class="shot-renders" id="shotRenders" style="display: none;">
+              <div class="shot-renders-header">
+                <h3>Generated Frames</h3>
+                <label class="continuity-toggle">
+                  <input type="checkbox" id="continuityToggle" checked />
+                  <span>Auto continuity</span>
+                </label>
+              </div>
+            <div class="continuity-note" id="continuityNote"></div>
+            <div class="continuity-note" id="refSetNote"></div>
             <div class="shot-renders-grid" id="shotRendersGrid"></div>
+            <div class="generation-history" id="generationHistorySection">
+              <div class="generation-history-header">
+                <h4>Generation History</h4>
+                <button id="refreshGenerationHistoryBtn" class="btn btn-secondary btn-sm">Refresh</button>
+              </div>
+              <div id="generationHistoryList" class="generation-history-list"></div>
+            </div>
+          </div>
+
+            <aside class="agent-run-panel" id="agentRunPanel" style="display: none;">
+              <div class="agent-run-header">
+                <h3>Agent Run Panel</h3>
+                <span id="githubAuthPill" class="agent-auth-pill disconnected">GitHub not connected</span>
+              </div>
+              <div class="agent-run-actions">
+                <button id="githubConnectBtn" class="btn btn-secondary btn-sm">Connect GitHub</button>
+                <button id="githubLogoutBtn" class="btn btn-secondary btn-sm" style="display: none;">Logout</button>
+                <button id="agentCancelRunBtn" class="btn btn-secondary btn-sm" disabled>Cancel</button>
+                <button id="agentRevertRunBtn" class="btn btn-secondary btn-sm" disabled>Revert Run</button>
+              </div>
+              <div class="agent-run-status" id="agentRunStatus">No run started yet.</div>
+              <div class="agent-run-files" id="agentRunFiles"></div>
+              <pre class="agent-run-log" id="agentRunLog"></pre>
+            </aside>
           </div>
 
             <div class="prompt-info">
@@ -187,9 +229,108 @@
     </div>
   </div>
 
+  <div class="modal" id="replicateKeyModal" style="display: none;">
+    <div class="modal-overlay" id="replicateKeyModalOverlay"></div>
+    <div class="modal-content">
+      <div class="modal-header"><h2>Replicate Session Key</h2><button class="modal-close" id="replicateKeyModalClose">×</button></div>
+      <div class="modal-body">
+        <p class="modal-description">Set a key for this running server session. This does not edit your <code>.env</code>.</p>
+        <div class="form-group">
+          <label for="replicateKeyInput">API Token</label>
+          <input type="password" id="replicateKeyInput" placeholder="r8_..." autocomplete="off" />
+        </div>
+        <div class="info-row"><strong>Status:</strong> <span id="replicateKeyStatus">Unknown</span></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="clearReplicateKeyBtn">Clear Session Key</button>
+        <button class="btn btn-primary" id="saveReplicateKeyBtn">Save Session Key</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="generationChoiceModal" style="display: none;">
+    <div class="modal-overlay" id="generationChoiceModalOverlay"></div>
+    <div class="modal-content modal-large">
+      <div class="modal-header"><h2>Generated Preview</h2><button class="modal-close" id="generationChoiceModalClose">×</button></div>
+      <div class="modal-body">
+        <p class="modal-description" id="generationChoiceMeta">Review generated previews and choose what to keep.</p>
+        <div class="shot-renders-grid" id="generationChoiceGrid"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="discardGeneratedBtn">Discard All</button>
+        <button class="btn btn-secondary" id="closeGenerationChoiceBtn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="generationJobDetailsModal" style="display: none;">
+    <div class="modal-overlay" id="generationJobDetailsModalOverlay"></div>
+    <div class="modal-content modal-large">
+      <div class="modal-header"><h2>Generation Job Details</h2><button class="modal-close" id="generationJobDetailsModalClose">×</button></div>
+      <div class="modal-body">
+        <p class="modal-description" id="generationJobDetailsMeta">Inspect job payloads and retry with overrides.</p>
+        <div class="generation-job-details-grid">
+          <div class="generation-job-detail-block">
+            <h4>Input</h4>
+            <pre id="generationJobInputJson"></pre>
+          </div>
+          <div class="generation-job-detail-block">
+            <h4>Result / References</h4>
+            <pre id="generationJobResultJson"></pre>
+          </div>
+          <div class="generation-job-detail-block">
+            <h4>Failure Trace</h4>
+            <pre id="generationJobFailureJson"></pre>
+          </div>
+          <div class="generation-job-detail-block">
+            <h4>Recent Events</h4>
+            <pre id="generationJobEventsJson"></pre>
+          </div>
+        </div>
+        <div class="generation-retry-form">
+          <div class="form-group">
+            <label for="generationRetryVariation">Variation</label>
+            <select id="generationRetryVariation">
+              <option value="">(keep same)</option>
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="C">C</option>
+              <option value="D">D</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="generationRetryMaxImages">Max Images</label>
+            <input type="number" id="generationRetryMaxImages" min="1" max="2" step="1" placeholder="1 or 2" />
+          </div>
+          <div class="form-group">
+            <label for="generationRetryAspectRatio">Aspect Ratio</label>
+            <select id="generationRetryAspectRatio">
+              <option value="">(keep same)</option>
+              <option value="match_input_image">match_input_image</option>
+              <option value="16:9">16:9</option>
+              <option value="9:16">9:16</option>
+              <option value="1:1">1:1</option>
+              <option value="4:3">4:3</option>
+              <option value="3:4">3:4</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="continuity-toggle"><input type="checkbox" id="generationRetryRequireReference" /> <span>Require reference</span></label>
+            <label class="continuity-toggle"><input type="checkbox" id="generationRetryPreviewOnly" checked /> <span>Preview only</span></label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="generationJobDetailsCancelBtn">Close</button>
+        <button class="btn btn-secondary" id="generationJobRetryDefaultBtn">Retry (Same Settings)</button>
+        <button class="btn btn-primary" id="generationJobRetryOverrideBtn">Retry With Overrides</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast-container" id="toastContainer"></div>
   <div class="context-drawer-overlay" id="contextDrawerOverlay" style="display:none;"></div>
-  <aside class="context-drawer" id="contextDrawer" aria-hidden="true">
+  <aside class="context-drawer" id="contextDrawer" inert>
     <div class="context-drawer-header">
       <h2>AI Context Preview</h2>
       <button class="btn btn-secondary btn-sm" id="closeContextDrawerBtn">Close</button>
