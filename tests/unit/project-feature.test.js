@@ -30,6 +30,12 @@ async function run() {
           ok: true,
           data: { project: { id: 'p3', name: 'Three' } }
         };
+      },
+      async deleteProject() {
+        return {
+          ok: true,
+          data: { success: true, message: 'Project deleted' }
+        };
       }
     }
   });
@@ -46,6 +52,10 @@ async function run() {
   assert.strictEqual(createResult.ok, true);
   assert.strictEqual(createResult.project.id, 'p3');
   assert.strictEqual(feature.getActiveProjectId(), 'p3');
+
+  const deleteResult = await feature.deleteProject('p2');
+  assert.strictEqual(deleteResult.ok, true);
+  assert.strictEqual(deleteResult.data.success, true);
 
   console.log('project-feature.test.js passed');
 }

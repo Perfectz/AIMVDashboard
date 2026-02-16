@@ -55,6 +55,8 @@ npm run lint
 npm run lint:architecture
 ```
 
+All commands above are available via `package.json` scripts.
+
 ## 5) Architecture Dependency Map
 
 Use `docs/architecture/deps.json` for a machine-readable view of layer relationships.

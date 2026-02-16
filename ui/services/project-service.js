@@ -41,9 +41,25 @@
       return { ok: true, data: result.payload };
     }
 
+    async function deleteProject(projectId) {
+      var id = String(projectId || '').trim();
+      if (!id) {
+        return { ok: false, error: 'Project ID is required' };
+      }
+
+      var result = await httpClient.request('/api/projects/' + encodeURIComponent(id), {
+        method: 'DELETE'
+      });
+      if (!result.response.ok || !result.payload.success) {
+        return { ok: false, error: result.payload.error || 'Failed to delete project' };
+      }
+      return { ok: true, data: result.payload };
+    }
+
     return {
       listProjects: listProjects,
-      createProject: createProject
+      createProject: createProject,
+      deleteProject: deleteProject
     };
   }
 

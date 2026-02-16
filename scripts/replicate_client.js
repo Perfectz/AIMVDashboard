@@ -9,19 +9,27 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const MODEL_VERSION = 'cd80290b0ab8c7de300e756309eb8918208516abe394e3e427e1e760f36f8398';
+const MODEL_OWNER = process.env.REPLICATE_MODEL_OWNER || 'bytedance';
+const MODEL_NAME = process.env.REPLICATE_MODEL_NAME || 'seedream-4.5';
+const MODEL_VERSION = (process.env.REPLICATE_MODEL_VERSION || '').trim() || null;
 const API_HOST = 'api.replicate.com';
 const POLL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const INITIAL_POLL_INTERVAL_MS = 2000;
 const MAX_POLL_INTERVAL_MS = 15000;
+const MAX_TOTAL_IMAGES = 15;
+const MAX_REFERENCE_IMAGES = 14;
+const MAX_GENERATED_IMAGES = 4;
+const DEFAULT_MAX_IMAGES = 1;
 
 let cachedToken = null;
+let sessionToken = null;
 
 /**
  * Load REPLICATE_API_TOKEN from .env file at project root.
  * Parses manually — no dotenv dependency.
  */
 function loadApiToken() {
+  if (sessionToken) return sessionToken;
   if (cachedToken) return cachedToken;
 
   // Check environment variable first
@@ -140,6 +148,66 @@ function makeRequest(method, apiPath, body, extraHeaders = {}) {
   });
 }
 
+function clampInteger(value, min, max, fallback) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(num)));
+}
+
+function normalizeImageInputList(imageInput) {
+  const rawList = Array.isArray(imageInput) ? imageInput : [imageInput];
+  const filtered = rawList
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean);
+
+  if (filtered.length === 0) return [];
+  return filtered.slice(0, MAX_REFERENCE_IMAGES);
+}
+
+function normalizePredictionInput(prompt, options = {}) {
+  const input = { prompt: String(prompt || '') };
+
+  const imageInput = normalizeImageInputList(options.image_input);
+  if (imageInput.length > 0) {
+    input.image_input = imageInput;
+  }
+
+  if (options.size) input.size = options.size;
+  if (options.aspect_ratio) input.aspect_ratio = options.aspect_ratio;
+  if (options.width) input.width = options.width;
+  if (options.height) input.height = options.height;
+  if (options.sequential_image_generation) {
+    input.sequential_image_generation = options.sequential_image_generation;
+  }
+
+  const requestedMaxImages = clampInteger(options.max_images, 1, MAX_GENERATED_IMAGES, DEFAULT_MAX_IMAGES);
+  const allowedInputCount = Math.max(0, MAX_TOTAL_IMAGES - requestedMaxImages);
+
+  if (Array.isArray(input.image_input) && input.image_input.length > allowedInputCount) {
+    // Preserve output count; trim lower-priority refs at the tail.
+    input.image_input = input.image_input.slice(0, allowedInputCount);
+  }
+
+  const inputCount = Array.isArray(input.image_input) ? input.image_input.length : 0;
+  const maxImagesCap = Math.max(1, MAX_TOTAL_IMAGES - inputCount);
+  input.max_images = clampInteger(requestedMaxImages, 1, maxImagesCap, DEFAULT_MAX_IMAGES);
+
+  return input;
+}
+
+function buildPredictionRequest(input) {
+  if (MODEL_VERSION) {
+    return {
+      path: '/v1/predictions',
+      body: { version: MODEL_VERSION, input }
+    };
+  }
+  return {
+    path: `/v1/models/${MODEL_OWNER}/${MODEL_NAME}/predictions`,
+    body: { input }
+  };
+}
+
 /**
  * Create a prediction on Replicate using SeedDream v4.5.
  * Uses Prefer: wait header to hold connection for up to 60s.
@@ -148,28 +216,58 @@ function makeRequest(method, apiPath, body, extraHeaders = {}) {
  * @param {string} prompt - The text prompt
  * @param {object} options - Optional: size, aspect_ratio, width, height, max_images, sequential_image_generation, image_input
  * @param {function} onStatus - Optional callback for status updates
+ * @param {function} shouldCancel - Optional callback that returns true to cancel generation
  * @returns {object} { output: string[], predictionId: string, duration: number }
  */
-async function createPrediction(prompt, options = {}, onStatus = null) {
+async function createPrediction(prompt, options = {}, onStatus = null, shouldCancel = null) {
   const startTime = Date.now();
+  const input = normalizePredictionInput(prompt, options);
+  const isCanceled = typeof shouldCancel === 'function' ? shouldCancel : () => false;
 
-  const input = { prompt };
-  if (options.size) input.size = options.size;
-  if (options.aspect_ratio) input.aspect_ratio = options.aspect_ratio;
-  if (options.width) input.width = options.width;
-  if (options.height) input.height = options.height;
-  if (options.max_images) input.max_images = options.max_images;
-  if (options.sequential_image_generation) input.sequential_image_generation = options.sequential_image_generation;
-  if (options.image_input) input.image_input = options.image_input;
+  if (isCanceled()) {
+    const cancelErr = new Error('Generation canceled before request was sent');
+    cancelErr.code = 'CANCELED';
+    throw cancelErr;
+  }
 
   if (onStatus) onStatus('sending');
+  const request = buildPredictionRequest(input);
+  let response;
+  try {
+    response = await makeRequest(
+      'POST',
+      request.path,
+      request.body,
+      { 'Prefer': 'wait=60' }
+    );
+  } catch (err) {
+    const details = String(err?.body?.detail || err?.message || '');
+    const missingVersion = /version.*(not found|does not exist|invalid|archived)/i.test(details);
+    if (MODEL_VERSION && err.statusCode === 422 && missingVersion) {
+      // Fall back to model endpoint when a pinned version is no longer available.
+      response = await makeRequest(
+        'POST',
+        `/v1/models/${MODEL_OWNER}/${MODEL_NAME}/predictions`,
+        { input },
+        { 'Prefer': 'wait=60' }
+      );
+    } else {
+      throw err;
+    }
+  }
 
-  const response = await makeRequest(
-    'POST',
-    '/v1/predictions',
-    { version: MODEL_VERSION, input },
-    { 'Prefer': 'wait' }
-  );
+  if (isCanceled()) {
+    if (response && response.id) {
+      try {
+        await makeRequest('POST', `/v1/predictions/${response.id}/cancel`);
+      } catch {
+        // ignore cancel errors
+      }
+    }
+    const cancelErr = new Error('Generation canceled');
+    cancelErr.code = 'CANCELED';
+    throw cancelErr;
+  }
 
   if (response.status === 'succeeded') {
     return {
@@ -185,16 +283,28 @@ async function createPrediction(prompt, options = {}, onStatus = null) {
 
   // Not completed yet — poll
   if (onStatus) onStatus('processing');
-  return await pollPrediction(response.id, startTime, onStatus);
+  return await pollPrediction(response.id, startTime, onStatus, isCanceled);
 }
 
 /**
  * Poll a prediction until it completes or times out.
  */
-async function pollPrediction(predictionId, startTime = Date.now(), onStatus = null) {
+async function pollPrediction(predictionId, startTime = Date.now(), onStatus = null, shouldCancel = null) {
   let interval = INITIAL_POLL_INTERVAL_MS;
+  const isCanceled = typeof shouldCancel === 'function' ? shouldCancel : () => false;
 
   while (true) {
+    if (isCanceled()) {
+      try {
+        await makeRequest('POST', `/v1/predictions/${predictionId}/cancel`);
+      } catch {
+        // ignore cancel errors
+      }
+      const cancelErr = new Error('Generation canceled');
+      cancelErr.code = 'CANCELED';
+      throw cancelErr;
+    }
+
     const elapsed = Date.now() - startTime;
     if (elapsed > POLL_TIMEOUT_MS) {
       // Cancel the prediction
@@ -207,7 +317,30 @@ async function pollPrediction(predictionId, startTime = Date.now(), onStatus = n
     await sleep(interval);
     interval = Math.min(interval * 2, MAX_POLL_INTERVAL_MS);
 
-    const response = await makeRequest('GET', `/v1/predictions/${predictionId}`);
+    if (isCanceled()) {
+      try {
+        await makeRequest('POST', `/v1/predictions/${predictionId}/cancel`);
+      } catch {
+        // ignore cancel errors
+      }
+      const cancelErr = new Error('Generation canceled');
+      cancelErr.code = 'CANCELED';
+      throw cancelErr;
+    }
+
+    let response;
+    try {
+      response = await makeRequest('GET', `/v1/predictions/${predictionId}`);
+    } catch (pollErr) {
+      const statusCode = Number(pollErr && pollErr.statusCode);
+      const transientStatus = statusCode === 429 || (statusCode >= 500 && statusCode < 600);
+      const transientNetwork = /timeout|ECONNRESET|EAI_AGAIN|ENOTFOUND|socket hang up/i.test(String(pollErr && pollErr.message || ''));
+      if (transientStatus || transientNetwork) {
+        if (onStatus) onStatus('retrying');
+        continue;
+      }
+      throw pollErr;
+    }
 
     if (onStatus) onStatus(response.status);
 
@@ -224,7 +357,9 @@ async function pollPrediction(predictionId, startTime = Date.now(), onStatus = n
     }
 
     if (response.status === 'canceled') {
-      throw new Error('Generation was canceled');
+      const cancelErr = new Error('Generation was canceled');
+      cancelErr.code = 'CANCELED';
+      throw cancelErr;
     }
   }
 }
@@ -281,12 +416,37 @@ function clearTokenCache() {
   cachedToken = null;
 }
 
+function setSessionToken(token) {
+  const value = typeof token === 'string' ? token.trim() : '';
+  sessionToken = value || null;
+}
+
+function clearSessionToken() {
+  sessionToken = null;
+}
+
+function getTokenSource() {
+  if (sessionToken) return 'session';
+  try {
+    loadApiToken();
+    return 'env';
+  } catch {
+    return 'none';
+  }
+}
+
 module.exports = {
   loadApiToken,
   isConfigured,
   createPrediction,
+  normalizePredictionInput,
   pollPrediction,
   downloadImage,
   clearTokenCache,
-  MODEL_VERSION
+  setSessionToken,
+  clearSessionToken,
+  getTokenSource,
+  MODEL_VERSION,
+  MODEL_OWNER,
+  MODEL_NAME
 };

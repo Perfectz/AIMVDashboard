@@ -6,7 +6,7 @@
   <title>User Guide - AI Music Video</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/themes/dark.css">
   <link rel="stylesheet" href="ui-layer.css">
@@ -17,7 +17,7 @@
       height: 100vh;
       width: 100%;
       color: var(--text-primary);
-      font-family: 'Inter', sans-serif;
+      font-family: 'Outfit', sans-serif;
     }
 
     /* Guide Content */
@@ -301,13 +301,13 @@
       </ul>
 
       <!-- ========== PHASE 2: PRODUCTION ========== -->
-      <h2 id="phase2-production">Phase 2: Production Workflow <span class="badge badge-phase2">Coming Soon</span></h2>
+      <h2 id="phase2-production">Phase 2: Production Workflow <span class="badge badge-phase2">Active</span></h2>
 
       <p>This is the full workflow for creating a music video from start to finish.</p>
 
-      <div class="warning-box">
+      <div class="info-box">
         <h4>Phase 2 Status</h4>
-        <p>The prompt compiler is not yet implemented. The workflow below describes how it will work when completed. You can manually prepare canon files now to be ready for Phase 2.</p>
+        <p>The compile pipeline is available via <code>npm run compile -- &lt;project-id&gt;</code>. It generates prompts and refreshes <code>prompts_index.json</code> for the selected project.</p>
       </div>
 
       <div class="step-header">
@@ -530,9 +530,9 @@
 
       <pre><code>npm run compile</code></pre>
 
-      <div class="warning-box">
-        <h4>Not Yet Implemented</h4>
-        <p>The compiler script is planned for Phase 2. When ready, it will read your canon + shot intents and output standalone prompts.</p>
+      <div class="success-box">
+        <h4>Implemented</h4>
+        <p>Use <code>npm run compile -- &lt;project-id&gt;</code> for one project, or <code>npm run compile:all</code> to compile every project.</p>
       </div>
 
       <h4>What the Compiler Does:</h4>
@@ -762,9 +762,7 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
 
       <p><strong>Problem:</strong> UI shows "No prompts found"</p>
 
-      <p><strong>Expected in Phase 1:</strong> The prompt compiler isn't implemented yet. This is normal.</p>
-
-      <p><strong>In Phase 2:</strong> Run <code>npm run compile</code> to generate prompts, then <code>npm run index</code> to update the index.</p>
+      <p><strong>Current behavior:</strong> If prompts are missing, run <code>npm run compile -- &lt;project-id&gt;</code> (or <code>npm run compile:all</code>) to generate prompts and refresh the index.</p>
 
       <h3>File upload fails</h3>
 
@@ -910,19 +908,17 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
           <li>Create multiple projects for different music videos</li>
           <li>Start defining your canon (characters, locations, visual style)</li>
           <li>Upload music tracks to the storyboard</li>
-          <li>Prepare for Phase 2 when the prompt compiler is released</li>
+          <li>Run <code>npm run compile -- &lt;project-id&gt;</code> once your shot list and canon are ready</li>
         </ul>
       </div>
 
       <h3>Stay Updated</h3>
 
-      <p>Phase 2 will add:</p>
+      <p>Remaining Phase 2 enhancements:</p>
       <ul>
-        <li>Automatic prompt compilation from canon + shot intents</li>
         <li>Interactive canon builder (wizard interface)</li>
         <li>Visual shot intent editor with timeline</li>
         <li>Music section detection (auto-generate shot timing from MP3)</li>
-        <li>PDF storyboard export</li>
         <li>Batch rendering support</li>
       </ul>
 
@@ -948,10 +944,35 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
     })();
   </script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/shoelace-autoloader.js"></script>
+  <script src="modules/project-context.js"></script>
   <script src="services/http-client.js"></script>
+  <script src="services/service-base.js"></script>
+  <script src="services/page-chat-service.js"></script>
   <script src="services/project-service.js"></script>
   <script src="ui-layer.js"></script>
   <script>window.UILayer && window.UILayer.init();</script>
+  <script>
+    window.PageChatBridge = {
+      pageId: 'guide',
+      getProjectId: function() {
+        const selector = document.getElementById('projectSelector');
+        if (selector && selector.value) return String(selector.value);
+        try { return String(localStorage.getItem('activeProject') || 'default'); } catch { return 'default'; }
+      },
+      collectLiveState: function() {
+        return {
+          pageId: 'guide',
+          url: window.location.pathname + (window.location.search || ''),
+          title: document.title
+        };
+      },
+      onAppliedChanges: async function() {
+        return;
+      }
+    };
+  </script>
+  <script src="modules/page-chat-adapters.js"></script>
+  <script src="modules/page-chat.js"></script>
 </body>
 </html>
 

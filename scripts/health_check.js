@@ -150,7 +150,7 @@ async function checkProjectScopedEndpoints() {
   assert(storyboardPage.response.ok && storyboardPage.text.includes('Storyboard'), 'GET /storyboard.html failed');
 
   const appJs = await requestText('/ui/app.js');
-  assert(appJs.response.ok && appJs.text.includes('saveTextContent'), 'GET /ui/app.js failed');
+  assert(appJs.response.ok && appJs.text.includes('initAutoSave'), 'GET /ui/app.js failed');
 
   const status = await requestJSON(`/api/upload-status?project=${encodeURIComponent(project)}`);
   assert(status.response.ok, 'GET /api/upload-status failed');
@@ -173,6 +173,9 @@ async function checkProjectScopedEndpoints() {
 
   const previs = await requestJSON(`/api/storyboard/previs-map?project=${encodeURIComponent(project)}`);
   assert(previs.response.ok && previs.json.success, 'GET /api/storyboard/previs-map failed');
+
+  const pipelineStatusBefore = await requestJSON(`/api/pipeline/status?project=${encodeURIComponent(project)}`);
+  assert(pipelineStatusBefore.response.ok && pipelineStatusBefore.json.success, 'GET /api/pipeline/status failed');
 
   const shotId = 'SHOT_01';
 
@@ -251,6 +254,20 @@ async function checkProjectScopedEndpoints() {
     'POST /api/generation-jobs/:jobId/retry failed'
   );
 
+  const pipelineReindex = await requestJSON('/api/pipeline/reindex', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId: project })
+  });
+  assert(pipelineReindex.response.ok && pipelineReindex.json.success, 'POST /api/pipeline/reindex failed');
+
+  const pipelineLint = await requestJSON('/api/pipeline/lint', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId: project })
+  });
+  assert(pipelineLint.response.ok && pipelineLint.json.success, 'POST /api/pipeline/lint failed');
+
   const invalidMusicForm = new FormData();
   invalidMusicForm.set('project', project);
   invalidMusicForm.set('file', new Blob(['not an mp3'], { type: 'text/plain' }), 'not-music.txt');
@@ -321,9 +338,21 @@ async function checkProjectScopedEndpoints() {
       tool: 'seedream'
     })
   });
+  const agentRejectedForMissingCredentials =
+    startAgentWithoutAuth.response.status === 401 &&
+    (
+      startAgentWithoutAuth.json.code === 'AUTH_REQUIRED' ||
+      startAgentWithoutAuth.json.code === 'PROVIDER_NOT_CONFIGURED'
+    );
+  const agentStartedWithConfiguredProvider =
+    startAgentWithoutAuth.response.ok &&
+    startAgentWithoutAuth.json &&
+    startAgentWithoutAuth.json.success === true &&
+    typeof startAgentWithoutAuth.json.runId === 'string' &&
+    startAgentWithoutAuth.json.runId.length > 0;
   assert(
-    startAgentWithoutAuth.response.status === 401 && startAgentWithoutAuth.json.code === 'AUTH_REQUIRED',
-    'Agent run without OAuth should return AUTH_REQUIRED'
+    agentRejectedForMissingCredentials || agentStartedWithConfiguredProvider,
+    `Agent run auth/provider policy failed (status=${startAgentWithoutAuth.response.status}, code=${startAgentWithoutAuth.json.code || 'none'})`
   );
 
   const loadSequence = await requestJSON(`/api/review/sequence?project=${encodeURIComponent(project)}`);

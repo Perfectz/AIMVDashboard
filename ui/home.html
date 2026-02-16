@@ -6,7 +6,7 @@
   <title>Project Home - AI Music Video</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/themes/dark.css">
   <link rel="stylesheet" href="ui-layer.css">
@@ -33,6 +33,12 @@
       margin-bottom: 1rem;
     }
 
+    .home-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
     .home-header h1 {
       margin: 0;
       font-size: 1.85rem;
@@ -47,6 +53,14 @@
       display: grid;
       gap: 0.9rem;
       grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    }
+
+    .home-grid-primary {
+      margin-bottom: 0.9rem;
+    }
+
+    .home-grid-secondary .ui-stat-tile {
+      opacity: 0.92;
     }
 
     .home-card {
@@ -131,7 +145,11 @@
       <nav class="left-nav">
         <div class="nav-brand" data-ui-nav-brand data-ui-mode="basic"></div>
 
-        <div class="project-selector-section" data-ui-project-selector data-ui-mode="basic"></div>
+        <div class="project-selector-section" data-ui-project-selector data-ui-mode="standard"></div>
+
+        <div class="nav-divider"></div>
+
+        <div class="nav-stats" data-ui-nav-stats data-ui-mode="standard"></div>
 
         <div class="nav-divider"></div>
 
@@ -151,9 +169,18 @@
             <h1>Project Home</h1>
             <div class="home-subtitle" id="projectSummary">Loading project health...</div>
           </div>
+          <div class="home-header-actions">
+            <button id="homeRunPipelineBtn" class="btn btn-primary" type="button">Compile &amp; Validate</button>
+          </div>
         </div>
 
-        <section class="home-grid ui-stat-grid" id="homeStatsGrid"></section>
+        <section class="home-grid home-grid-primary ui-stat-grid" id="homePrimaryStatsGrid"></section>
+        <section class="home-grid home-grid-secondary ui-stat-grid" id="homeSecondaryStatsGrid"></section>
+
+        <section class="home-card">
+          <div class="home-label">Pipeline Status</div>
+          <div class="home-meta" id="homePipelineStatus">Pipeline status pending...</div>
+        </section>
 
         <section class="home-sections">
           <div class="home-card">
@@ -168,10 +195,32 @@
       </main>
     </div>
   </div>
+  <div data-ui-new-project-modal></div>
 
   <script>
     function safeCount(value) {
       return Number.isFinite(value) ? value : 0;
+    }
+
+    function requireProjectContext() {
+      if (!window.ProjectContext || typeof window.ProjectContext.getProjectIdFromQuery !== 'function') {
+        throw new Error('ProjectContext is unavailable. Ensure ui/modules/project-context.js is loaded before home page scripts.');
+      }
+      return window.ProjectContext;
+    }
+
+    function requireProjectActions() {
+      if (!window.ProjectActions || typeof window.ProjectActions.bindProjectActions !== 'function') {
+        throw new Error('ProjectActions is unavailable. Ensure ui/modules/project-actions.js is loaded before home page scripts.');
+      }
+      return window.ProjectActions;
+    }
+
+    function getBootstrapService() {
+      if (!window.BootstrapService || typeof window.BootstrapService.createBootstrapService !== 'function') {
+        return null;
+      }
+      return window.BootstrapService.createBootstrapService();
     }
 
     async function fetchJson(url) {
@@ -201,6 +250,10 @@
       if (selection.previewPath || selection.previewImage || selection.previewVideo) return true;
       const renderFiles = selection.renderFiles || {};
       return Object.keys(renderFiles).length > 0;
+    }
+
+    function hasSelectedVariation(selection) {
+      return Boolean(selection && selection.selectedVariation && selection.selectedVariation !== 'none');
     }
 
     function buildActions(report) {
@@ -255,7 +308,14 @@
 
       const totalShots = scriptShots.length || safeCount(indexData?.totalShots) || selections.length;
       const coveredShots = selections.filter(hasStoryboardPreview).length;
+      const readyShots = selections.filter((shot) => hasStoryboardPreview(shot) && hasSelectedVariation(shot)).length;
       const coveragePercent = totalShots > 0 ? Math.round((coveredShots / totalShots) * 100) : 0;
+      const passedPrompts = Array.isArray(indexData?.allPrompts)
+        ? indexData.allPrompts.filter((prompt) => prompt && prompt.lintStatus === 'PASS').length
+        : 0;
+      const failedPrompts = Array.isArray(indexData?.allPrompts)
+        ? indexData.allPrompts.filter((prompt) => prompt && prompt.lintStatus === 'FAIL').length
+        : 0;
 
       const transcriptByShot = new Map();
       transcriptShots.forEach((shot, idx) => {
@@ -287,7 +347,6 @@
         return status.includes('missing') || status.includes('todo');
       }).length;
 
-      const readyShots = totalShots - Math.min(totalShots, missingCharacters + missingLocations + missingTranscriptSegments);
       const blockedShots = Math.max(0, totalShots - Math.max(0, readyShots));
 
       const report = {
@@ -296,6 +355,10 @@
           total: totalShots,
           ready: Math.max(0, readyShots),
           blocked: blockedShots
+        },
+        lint: {
+          passed: passedPrompts,
+          failed: failedPrompts
         },
         missingReferences: {
           total: missingCharacters + missingLocations,
@@ -316,19 +379,28 @@
     }
 
     function renderReport(report) {
-      const statsGrid = document.getElementById('homeStatsGrid');
-      const stats = [
-        { label: 'Shots Total', value: String(report.shots.total) },
-        { label: 'Shots Ready', value: String(report.shots.ready), tone: 'good' },
-        { label: 'Shots Blocked', value: String(report.shots.blocked), tone: 'bad' },
+      const projectContext = requireProjectContext();
+      const withProjectHref = (href) => projectContext.buildProjectUrl(href, report.projectId);
+      const primaryStatsGrid = document.getElementById('homePrimaryStatsGrid');
+      const secondaryStatsGrid = document.getElementById('homeSecondaryStatsGrid');
+      const primaryStats = [
+        { label: 'Total Shots', value: String(report.shots.total) },
+        { label: 'Ready', value: String(report.shots.ready), tone: 'good' },
+        { label: 'Validated', value: String(report.lint.passed), tone: 'good' },
+        { label: 'Errors', value: String(report.lint.failed), tone: 'bad' }
+      ];
+      const secondaryStats = [
         {
-          label: 'Missing References',
+          label: 'Missing Refs',
           value: String(report.missingReferences.total),
           tone: 'warn',
           meta: `${report.missingReferences.characters} character, ${report.missingReferences.locations} location`
         },
-        { label: 'Missing Transcript Segments', value: String(report.missingTranscriptSegments), tone: 'warn' },
-        { label: 'Missing Assets (Manifest)', value: String(report.missingAssets), tone: 'warn' },
+        {
+          label: 'Missing Transcript',
+          value: String(report.missingTranscriptSegments),
+          tone: 'warn'
+        },
         {
           label: 'Storyboard Coverage',
           value: `${report.storyboard.coveragePercent}%`,
@@ -337,13 +409,27 @@
       ];
 
       if (window.UILayer) {
-        window.UILayer.renderStatGrid(statsGrid, stats);
+        window.UILayer.renderStatGrid(primaryStatsGrid, primaryStats);
+        window.UILayer.renderStatGrid(secondaryStatsGrid, secondaryStats);
       }
       document.getElementById('projectSummary').textContent =
         `${report.projectId} - ${report.nextBestActions.length} prioritized action${report.nextBestActions.length === 1 ? '' : 's'}`;
 
+      const navTotal = document.getElementById('stat-shots');
+      const navReady = document.getElementById('stat-ready');
+      const navPassed = document.getElementById('stat-passed');
+      const navFailed = document.getElementById('stat-failed');
+      if (navTotal) navTotal.textContent = String(report.shots.total);
+      if (navReady) navReady.textContent = String(report.shots.ready);
+      if (navPassed) navPassed.textContent = String(report.lint.passed);
+      if (navFailed) navFailed.textContent = String(report.lint.failed);
+
       const actionsRoot = document.getElementById('actions');
-      const actionItems = report.nextBestActions.map((action) => ({ text: action.text, href: action.href, linkText: 'Open' }));
+      const actionItems = report.nextBestActions.map((action) => ({
+        text: action.text,
+        href: withProjectHref(action.href),
+        linkText: 'Open'
+      }));
       if (window.UILayer) {
         window.UILayer.renderList(actionsRoot, actionItems, null);
       }
@@ -352,7 +438,7 @@
       const shotGapItems = report.shotReferenceGaps.slice(0, 8).map((gap) => ({
         code: gap.shotId,
         text: gap.missing.join(', '),
-        href: `step4.html?shot=${gap.shotId}`,
+        href: withProjectHref(`step4.html?shot=${gap.shotId}`),
         linkText: 'Step 4'
       }));
 
@@ -360,26 +446,50 @@
         window.UILayer.renderList(
           shotGapsRoot,
           shotGapItems,
-          { text: 'No missing per-shot references.', href: 'step4.html', linkText: 'Step 4' }
+          { text: 'No missing per-shot references.', href: withProjectHref('step4.html'), linkText: 'Step 4' }
         );
       }
     }
 
     async function initializeProjects() {
-      const response = await fetch('/api/projects');
-      const data = await response.json();
-      if (!data.success || !Array.isArray(data.projects) || data.projects.length === 0) {
-        throw new Error('No projects found');
+      const projectContext = requireProjectContext();
+      const projectFromQuery = projectContext.getProjectIdFromQuery();
+      const storedProject = projectContext.getStoredProjectId();
+
+      let projects = [];
+      let current = null;
+
+      const bootstrapService = getBootstrapService();
+      if (bootstrapService) {
+        const bootstrapResult = await bootstrapService.loadBootstrap({
+          projectId: projectFromQuery || storedProject,
+          pageId: 'home'
+        });
+        if (bootstrapResult.ok && bootstrapResult.data && Array.isArray(bootstrapResult.data.projects) && bootstrapResult.data.projects.length > 0) {
+          projects = bootstrapResult.data.projects;
+          current = bootstrapResult.data.currentProject || projects[0];
+        }
       }
 
-      let activeProject;
-      try { activeProject = localStorage.getItem('activeProject'); } catch { activeProject = null; }
-      activeProject = activeProject || data.projects[0].id;
-      const current = data.projects.find((p) => p.id === activeProject) || data.projects[0];
+      if (!current || projects.length === 0) {
+        const response = await fetch('/api/projects');
+        const data = await response.json();
+        if (!data.success || !Array.isArray(data.projects) || data.projects.length === 0) {
+          throw new Error('No projects found');
+        }
+        projects = data.projects;
+        const activeProject = projectFromQuery || storedProject || projects[0].id;
+        current = projects.find((p) => p.id === activeProject) || projects[0];
+      }
+
+      projectContext.setStoredProjectId(current.id);
 
       const selector = document.getElementById('projectSelector');
+      if (!selector) {
+        throw new Error('Project selector is unavailable');
+      }
       selector.innerHTML = '';
-      data.projects.forEach((p) => {
+      projects.forEach((p) => {
         const opt = document.createElement('option');
         opt.value = p.id;
         opt.textContent = p.name;
@@ -387,16 +497,79 @@
         selector.appendChild(opt);
       });
 
-      selector.addEventListener('change', () => {
-        try { localStorage.setItem('activeProject', selector.value); } catch { /* ignore */ }
-        window.location.reload();
-      });
+      if (!selector.dataset.homeProjectChangeBound) {
+        selector.dataset.homeProjectChangeBound = '1';
+        selector.addEventListener('change', () => {
+          const nextProjectId = String(selector.value || '').trim();
+          projectContext.setStoredProjectId(nextProjectId);
+          projectContext.navigateWithProject(nextProjectId);
+        });
+      }
 
       return current.id;
     }
 
+    function bindProjectActionButtons() {
+      const selector = document.getElementById('projectSelector');
+      if (!selector) return;
+
+      const projectContext = requireProjectContext();
+      const projectActions = requireProjectActions();
+      projectActions.bindProjectActions({
+        getCurrentProject: () => {
+          const projectId = String(selector.value || '').trim();
+          if (!projectId) return null;
+          const selectedOption = selector.options[selector.selectedIndex];
+          return {
+            id: projectId,
+            name: selectedOption ? String(selectedOption.textContent || projectId) : projectId
+          };
+        },
+        createProject: async ({ name, description }) => {
+          const formData = new FormData();
+          formData.append('name', String(name || '').trim());
+          formData.append('description', String(description || '').trim());
+          const response = await fetch('/api/projects', { method: 'POST', body: formData });
+          const result = await response.json();
+          if (!response.ok || !result.success || !result.project || !result.project.id) {
+            throw new Error(result && result.error ? result.error : 'Failed to create project.');
+          }
+          projectContext.setStoredProjectId(result.project.id);
+          projectContext.navigateWithProject(result.project.id);
+          return { ok: true };
+        },
+        deleteProject: async ({ projectId }) => {
+          const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+            method: 'DELETE'
+          });
+          const result = await response.json();
+          if (!response.ok || !result.success) {
+            throw new Error(result && result.error ? result.error : 'Failed to delete project.');
+          }
+
+          projectContext.clearStoredProjectId();
+          const refreshed = await fetch('/api/projects');
+          const refreshedData = await refreshed.json();
+          if (refreshed.ok && refreshedData && refreshedData.success && Array.isArray(refreshedData.projects) && refreshedData.projects.length > 0) {
+            const nextProject = refreshedData.projects[0].id;
+            projectContext.setStoredProjectId(nextProject);
+            projectContext.navigateWithProject(nextProject);
+            return { ok: true };
+          }
+          projectContext.navigateWithProject('');
+          return { ok: true };
+        },
+        confirmDeleteMessage: (project) => {
+          const projectId = project && project.id ? project.id : '';
+          const projectName = project && project.name ? project.name : projectId;
+          return `Delete project "${projectName}"? This cannot be undone.`;
+        }
+      });
+    }
+
     async function initHome() {
       window.UILayer && window.UILayer.wireDataNav(document);
+      bindProjectActionButtons();
       const projectId = await initializeProjects();
       const report = await aggregateHomeData(projectId);
       renderReport(report);
@@ -410,18 +583,46 @@
     }
   </script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/shoelace-autoloader.js"></script>
+  <script src="modules/project-context.js"></script>
+  <script src="modules/project-actions.js"></script>
   <script src="ui-layer.js"></script>
   <script>window.UILayer && window.UILayer.init();</script>
+  <script src="services/http-client.js"></script>
+  <script src="services/service-base.js"></script>
+  <script src="services/bootstrap-service.js"></script>
+  <script src="services/pipeline-service.js"></script>
+  <script src="services/page-chat-service.js"></script>
+  <script src="modules/pipeline.js"></script>
   <script>if (typeof runHomeInit === 'function') { runHomeInit(); }</script>
+  <script>
+    window.PageChatBridge = {
+      pageId: 'home',
+      getProjectId: function() {
+        const selector = document.getElementById('projectSelector');
+        if (selector && selector.value) return String(selector.value);
+        try {
+          const projectContext = requireProjectContext();
+          return String(projectContext.getStoredProjectId() || 'default');
+        } catch {
+          return 'default';
+        }
+      },
+      collectLiveState: function() {
+        const summary = document.getElementById('projectSummary');
+        const pipelineStatus = document.getElementById('homePipelineStatus');
+        return {
+          pageId: 'home',
+          url: window.location.pathname + (window.location.search || ''),
+          summary: summary ? String(summary.textContent || '') : '',
+          pipelineStatus: pipelineStatus ? String(pipelineStatus.textContent || '') : ''
+        };
+      },
+      onAppliedChanges: async function() {
+        return;
+      }
+    };
+  </script>
+  <script src="modules/page-chat-adapters.js"></script>
+  <script src="modules/page-chat.js"></script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-

@@ -9,34 +9,12 @@
 
 const fs = require('fs');
 const path = require('path');
+const { isPathInside, writeJsonPreserveEol } = require('./shared');
 
 const ROOT_DIR = path.join(__dirname, '..');
 const PROJECTS_DIR = path.join(ROOT_DIR, 'projects');
 const INDEX_FILE = path.join(PROJECTS_DIR, 'projects_index.json');
 const PROJECT_ID_REGEX = /^[a-z0-9-]{1,50}$/;
-
-function detectEol(filePath) {
-  try {
-    if (!fs.existsSync(filePath)) return '\n';
-    const content = fs.readFileSync(filePath, 'utf8');
-    return content.includes('\r\n') ? '\r\n' : '\n';
-  } catch {
-    return '\n';
-  }
-}
-
-function writeJsonPreserveEol(filePath, data) {
-  const eol = detectEol(filePath);
-  const serialized = JSON.stringify(data, null, 2);
-  const normalized = eol === '\r\n' ? serialized.replace(/\n/g, '\r\n') : serialized;
-  fs.writeFileSync(filePath, normalized, 'utf8');
-}
-
-function isPathInside(basePath, targetPath) {
-  const base = path.resolve(basePath);
-  const target = path.resolve(targetPath);
-  return target === base || target.startsWith(base + path.sep);
-}
 
 class ProjectManager {
   getDiskProjectIds() {

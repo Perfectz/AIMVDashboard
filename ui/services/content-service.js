@@ -11,27 +11,32 @@
     'genre': true
   };
 
-  function resolveDependency(name, directValue) {
-    if (directValue) return directValue;
-    if (root && root[name]) return root[name];
+  function resolveServiceBase(opts) {
+    if (opts && opts.serviceBase) return opts.serviceBase;
+    if (root && root.ServiceBase) return root.ServiceBase;
+    if (typeof require === 'function') {
+      try {
+        return require('./service-base.js');
+      } catch (_) {
+        return null;
+      }
+    }
     return null;
   }
 
   function createContentService(options) {
     var opts = options || {};
-    var domain = resolveDependency('ContentDomain', opts.domain);
-    var httpClientFactory = resolveDependency('HttpClient', opts.httpClientFactory);
-    var fetchImpl = opts.fetchImpl || (typeof fetch !== 'undefined' ? fetch.bind(root) : null);
+    var serviceBase = resolveServiceBase(opts);
+    if (!serviceBase || !serviceBase.resolveDependency || !serviceBase.resolveHttpClient) {
+      throw new Error('ServiceBase.resolveDependency and ServiceBase.resolveHttpClient are required');
+    }
+
+    var domain = serviceBase.resolveDependency('ContentDomain', opts.domain);
 
     if (!domain || !domain.validateContentType) {
       throw new Error('ContentDomain.validateContentType is required');
     }
-
-    if (!httpClientFactory || !httpClientFactory.createHttpClient) {
-      throw new Error('HttpClient.createHttpClient is required');
-    }
-
-    var httpClient = httpClientFactory.createHttpClient({ fetchImpl: fetchImpl });
+    var httpClient = serviceBase.resolveHttpClient(opts);
 
     function ensureType(contentType) {
       var validation = domain.validateContentType(contentType);

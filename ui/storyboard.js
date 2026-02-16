@@ -21,6 +21,11 @@ let storyboardUploadService = null;
 let projectService = null;
 let reviewService = null;
 let storyboardPageService = null;
+let bootstrapService = null;
+let lintReportService = null;
+let promptLintSummary = { passed: 0, failed: 0, totalShots: 0 };
+const projectContext = window.ProjectContext || null;
+const projectActions = window.ProjectActions || null;
 const PREVIS_REF_SLOT = '1';
 const REVIEW_STATUSES = ['draft', 'in_review', 'approved', 'changes_requested'];
 const REVIEW_STATUS_OPTIONS = REVIEW_STATUSES;
@@ -31,6 +36,13 @@ const REVIEW_STATUS_LABELS = {
   changes_requested: 'Changes Requested'
 };
 const activeReviewFilters = new Set(REVIEW_STATUSES);
+
+function requireProjectContext() {
+  if (!projectContext || typeof projectContext.getProjectIdFromQuery !== 'function' || typeof projectContext.navigateWithProject !== 'function') {
+    throw new Error('ProjectContext is unavailable. Ensure ui/modules/project-context.js is loaded before storyboard.js');
+  }
+  return projectContext;
+}
 
 function getStoryboardUploadService() {
   if (storyboardUploadService) return storyboardUploadService;
@@ -71,97 +83,18 @@ function getStoryboardPageService() {
   return storyboardPageService;
 }
 
-// Toast notification system
-const toastContainer = document.getElementById('toastContainer');
-let toastIdCounter = 0;
-
-/**
- * Show a toast notification
- * @param {string} title - Toast title
- * @param {string} message - Toast message
- * @param {string} type - Type: 'success', 'error', 'warning', 'info'
- * @param {number} duration - Duration in ms (0 = no auto-dismiss)
- */
-function showToast(title, message = '', type = 'info', duration = 3000) {
-  const toastId = `toast-${toastIdCounter++}`;
-
-  const icons = {
-    success: '\u2713',
-    error: '\u2717',
-    warning: '\u26A0',
-    info: 'i'
-  };
-
-  const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  toast.id = toastId;
-
-  const iconEl = document.createElement('div');
-  iconEl.className = 'toast-icon';
-  iconEl.textContent = icons[type] || icons.info;
-
-  const contentEl = document.createElement('div');
-  contentEl.className = 'toast-content';
-
-  const titleEl = document.createElement('div');
-  titleEl.className = 'toast-title';
-  titleEl.textContent = title;
-  contentEl.appendChild(titleEl);
-
-  if (message) {
-    const msgEl = document.createElement('div');
-    msgEl.className = 'toast-message';
-    msgEl.textContent = message;
-    contentEl.appendChild(msgEl);
-  }
-
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'toast-close';
-  closeBtn.setAttribute('aria-label', 'Close');
-  closeBtn.textContent = '\u00d7';
-  closeBtn.addEventListener('click', () => dismissToast(toastId));
-
-  toast.appendChild(iconEl);
-  toast.appendChild(contentEl);
-  toast.appendChild(closeBtn);
-
-  if (duration > 0) {
-    const progress = document.createElement('div');
-    progress.className = 'toast-progress';
-    toast.appendChild(progress);
-  }
-
-  toastContainer.appendChild(toast);
-
-  if (duration > 0) {
-    setTimeout(() => dismissToast(toastId), duration);
-  }
-
-  return toastId;
-}
-
-/**
- * Dismiss a toast notification
- * @param {string} toastId - ID of toast to dismiss
- */
-function dismissToast(toastId) {
-  const toast = document.getElementById(toastId);
-  if (!toast) return;
-
-  toast.classList.add('toast-dismissing');
-  setTimeout(() => {
-    toast.remove();
-  }, 200);
-}
+// Shared utilities (from modules/shared-utils.js)
+const { escapeHtml, copyText, showToast, dismissToast, showLoading, hideLoading, renderContextDrawer, bundleToMarkdown, downloadJson } = window.SharedUtils;
 
 // DOM Elements (will be accessed via document.getElementById when needed)
 // These are kept as variables for functions that use them repeatedly
 let emptyState, gridView, timelineView, shotGrid, timelineTrack, timelineFilmstrip;
 let shotModal, modalTitle, variationGrid, shotDetails;
-let statTotalShots, statRendered, statSelected, statDuration;
+let statShots, statReady, statPassed, statFailed;
 let assetTypeFilter, assetStatusFilter, assetShotFilter, assetTableBody, assetCount, assetEmptyState;
 let reviewFilterChips, readinessPanel, readinessCounts, readinessLists, readinessRecommendations, clearReadinessFilterBtn;
 let timelineRuler, timelineCurrentIndicator, storyboardAudio;
+let readinessBar, readinessSummary, readinessBarToggle, manifestToggleBtn, manifestBody, musicStatusPill, musicStatusAction;
 
 /**
  * Initialize DOM element references
@@ -177,10 +110,10 @@ function initializeDOMElements() {
   modalTitle = document.getElementById('modalTitle');
   variationGrid = document.getElementById('variationGrid');
   shotDetails = document.getElementById('shotDetails');
-  statTotalShots = document.getElementById('stat-total-shots');
-  statRendered = document.getElementById('stat-rendered');
-  statSelected = document.getElementById('stat-selected');
-  statDuration = document.getElementById('stat-duration');
+  statShots = document.getElementById('stat-shots');
+  statReady = document.getElementById('stat-ready');
+  statPassed = document.getElementById('stat-passed');
+  statFailed = document.getElementById('stat-failed');
   assetTypeFilter = document.getElementById('assetTypeFilter');
   assetStatusFilter = document.getElementById('assetStatusFilter');
   assetShotFilter = document.getElementById('assetShotFilter');
@@ -196,6 +129,13 @@ function initializeDOMElements() {
   timelineRuler = document.getElementById('timelineRuler');
   timelineCurrentIndicator = document.getElementById('timelineCurrentIndicator');
   storyboardAudio = document.getElementById('storyboardAudio');
+  readinessBar = document.getElementById('readinessBar');
+  readinessSummary = document.getElementById('readinessSummary');
+  readinessBarToggle = document.getElementById('readinessBarToggle');
+  manifestToggleBtn = document.getElementById('manifestToggleBtn');
+  manifestBody = document.getElementById('manifestBody');
+  musicStatusPill = document.getElementById('musicStatusPill');
+  musicStatusAction = document.getElementById('musicStatusAction');
 }
 
 function normalizeAssetManifest(data) {
@@ -395,116 +335,6 @@ function jumpToShot(shotId) {
   openShotModal(shot);
 }
 
-/**
- * Show loading state
- * @param {HTMLElement} container - Container to show loading in
- * @param {string} message - Loading message
- */
-function showLoading(container, message = 'Loading...') {
-  const overlay = document.createElement('div');
-  overlay.className = 'loading-overlay';
-  const spinner = document.createElement('div');
-  spinner.className = 'loading-spinner';
-  const text = document.createElement('div');
-  text.className = 'loading-text';
-  text.textContent = message;
-  overlay.appendChild(spinner);
-  overlay.appendChild(text);
-  container.style.position = 'relative';
-  container.appendChild(overlay);
-  return overlay;
-}
-
-/**
- * Hide loading state
- * @param {HTMLElement} overlay - The loading overlay to remove
- */
-function hideLoading(overlay) {
-  if (overlay && overlay.parentNode) {
-    overlay.remove();
-  }
-}
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-async function copyText(text) {
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    return navigator.clipboard.writeText(text);
-  }
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand('copy');
-  document.body.removeChild(textarea);
-}
-
-function renderContextDrawer(bundle) {
-  const content = document.getElementById('contextDrawerContent');
-  if (!content) return;
-
-  const orderList = (bundle.selectedShotOrder || [])
-    .map((s) => `<li>${escapeHtml(s.shotId)} - Variation ${escapeHtml(s.selectedVariation || 'none')}</li>`)
-    .join('');
-
-  const shotsHtml = (bundle.shots || []).map((shot) => {
-    const refs = (shot.references || []).map((ref) => {
-      const assets = ref.assets?.length ? ` (${ref.assets.length} asset${ref.assets.length > 1 ? 's' : ''})` : '';
-      return `<li>${escapeHtml(ref.type)}: ${escapeHtml(ref.name || ref.id || 'Unknown')}${escapeHtml(assets)}</li>`;
-    }).join('');
-    return `
-      <div class="context-block">
-        <h3>${escapeHtml(shot.shotId)}</h3>
-        <p><strong>Script:</strong> ${escapeHtml(shot.scriptSnippet?.what || shot.scriptSnippet?.why || 'N/A')}</p>
-        <p><strong>Transcript:</strong> ${escapeHtml(shot.transcriptSnippet || 'N/A')}</p>
-        <ul>${refs || '<li>No references</li>'}</ul>
-      </div>`;
-  }).join('');
-
-  const warnings = (bundle.warnings || []).map((w) => `<div class="context-warning">⚠ ${escapeHtml(w)}</div>`).join('');
-
-  content.innerHTML = `
-    <div class="context-block">
-      <h3>Selected Shot Order</h3>
-      <ul>${orderList || '<li>No selected shots</li>'}</ul>
-    </div>
-    <div class="context-block">
-      <h3>Missing Context Warnings</h3>
-      ${warnings || '<div>No warnings</div>'}
-    </div>
-    ${shotsHtml}
-  `;
-}
-
-function bundleToMarkdown(bundle) {
-  const order = (bundle.selectedShotOrder || []).map((s) => `- ${s.shotId}: Variation ${s.selectedVariation || 'none'}`).join('\n');
-  const warnings = (bundle.warnings || []).map((w) => `- ⚠️ ${w}`).join('\n');
-  const shots = (bundle.shots || []).map((shot) => {
-    const refs = (shot.references || []).map((ref) => `- ${ref.type}: ${ref.name || ref.id}`).join('\n') || '- none';
-    return `### ${shot.shotId}\n- Script: ${shot.scriptSnippet?.what || shot.scriptSnippet?.why || 'N/A'}\n- Transcript: ${shot.transcriptSnippet || 'N/A'}\n- Active references:\n${refs}`;
-  }).join('\n\n');
-
-  return `## AI Context Preview\n\n### Selected shot order\n${order || '- none'}\n\n### Missing context warnings\n${warnings || '- none'}\n\n${shots}`;
-}
-
-function downloadJson(filename, data) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
 async function openContextDrawer() {
   if (!currentProject) return;
   try {
@@ -518,7 +348,7 @@ async function openContextDrawer() {
     if (overlay) overlay.style.display = 'block';
     if (drawer) {
       drawer.classList.add('open');
-      drawer.setAttribute('aria-hidden', 'false');
+      drawer.removeAttribute('inert');
     }
   } catch (err) {
     showToast('Preview failed', err.message, 'error', 3500);
@@ -531,7 +361,7 @@ function closeContextDrawer() {
   if (overlay) overlay.style.display = 'none';
   if (drawer) {
     drawer.classList.remove('open');
-    drawer.setAttribute('aria-hidden', 'true');
+    drawer.setAttribute('inert', '');
   }
 }
 
@@ -587,6 +417,8 @@ function initMusicUpload() {
     currentMusicFile = sequenceData.musicFile;
     updateMusicDisplay(sequenceData.musicFile);
     updateMusicPreview();
+  } else {
+    updateMusicDisplay('');
   }
 }
 
@@ -638,14 +470,22 @@ async function uploadMusicFile(file) {
 function updateMusicDisplay(filePath) {
   const dropZone = document.getElementById('musicDropZone');
   const filenameDisplay = document.getElementById('musicFilename');
+  const filename = filePath ? filePath.split('/').pop() : '';
 
   if (filePath) {
-    const filename = filePath.split('/').pop();
     filenameDisplay.textContent = filename;
     dropZone.dataset.hasFile = 'true';
   } else {
     filenameDisplay.textContent = '';
     dropZone.dataset.hasFile = 'false';
+  }
+
+  if (musicStatusPill) {
+    musicStatusPill.textContent = filename ? `Music: ${filename}` : 'No music uploaded';
+    musicStatusPill.classList.toggle('has-music', Boolean(filename));
+  }
+  if (musicStatusAction) {
+    musicStatusAction.textContent = filename ? 'Replace' : 'Upload';
   }
 }
 
@@ -733,24 +573,52 @@ function updateMusicPreview() {
  */
 async function loadProjects() {
   try {
-    const service = getProjectService();
-    const result = await service.listProjects();
-    if (!result.ok) {
+    const queryProjectId = requireProjectContext().getProjectIdFromQuery();
+    const storedProjectId = (() => {
+      try { return localStorage.getItem('activeProject') || ''; } catch { return ''; }
+    })();
+
+    let projects = [];
+    let resolvedCurrentProject = null;
+
+    const bootstrap = getBootstrapService();
+    if (bootstrap) {
+      const boot = await bootstrap.loadBootstrap({
+        projectId: queryProjectId || storedProjectId,
+        pageId: 'storyboard'
+      });
+      if (boot.ok && boot.data && Array.isArray(boot.data.projects) && boot.data.projects.length > 0) {
+        projects = boot.data.projects;
+        resolvedCurrentProject = boot.data.currentProject || projects[0];
+      }
+    }
+
+    if (projects.length === 0) {
+      const service = getProjectService();
+      const result = await service.listProjects();
+      if (!result.ok) {
+        return false;
+      }
+      const data = result.data || {};
+      if (!data.success || !Array.isArray(data.projects) || data.projects.length === 0) {
+        return false;
+      }
+      projects = data.projects;
+      const activeId = queryProjectId || storedProjectId || projects[0].id;
+      resolvedCurrentProject = projects.find((p) => p.id === activeId) || projects[0];
+    }
+
+    if (!resolvedCurrentProject || !resolvedCurrentProject.id) {
       return false;
     }
-    const data = result.data;
 
-    if (!data.success || data.projects.length === 0) {
-      return false;
-    }
-
-    const activeId = localStorage.getItem('activeProject') || data.projects[0].id;
-    currentProject = data.projects.find(p => p.id === activeId) || data.projects[0];
+    currentProject = resolvedCurrentProject;
+    try { localStorage.setItem('activeProject', currentProject.id); } catch {}
 
     const selector = document.getElementById('projectSelector');
     if (selector) {
       selector.innerHTML = '';
-      data.projects.forEach(p => {
+      projects.forEach(p => {
         const opt = document.createElement('option');
         opt.value = p.id;
         opt.textContent = p.name;
@@ -770,8 +638,28 @@ async function loadProjects() {
  * Switch to a different project
  */
 async function switchProject(projectId) {
-  localStorage.setItem('activeProject', projectId);
-  location.reload();
+  const nextProjectId = String(projectId || '').trim();
+  if (!nextProjectId) return;
+  try { localStorage.setItem('activeProject', nextProjectId); } catch {}
+  requireProjectContext().navigateWithProject(nextProjectId);
+}
+
+function getBootstrapService() {
+  if (bootstrapService) return bootstrapService;
+  if (!window.BootstrapService || !window.BootstrapService.createBootstrapService) {
+    return null;
+  }
+  bootstrapService = window.BootstrapService.createBootstrapService();
+  return bootstrapService;
+}
+
+function getLintReportService() {
+  if (lintReportService) return lintReportService;
+  if (!window.LintReportService || !window.LintReportService.createLintReportService) {
+    throw new Error('Lint report service is unavailable');
+  }
+  lintReportService = window.LintReportService.createLintReportService();
+  return lintReportService;
 }
 
 /**
@@ -785,10 +673,33 @@ async function createNewProject(name, description) {
       throw new Error(result.error || 'Failed to create project');
     }
 
-    localStorage.setItem('activeProject', result.data.project.id);
-    location.reload();
+    try { localStorage.setItem('activeProject', result.data.project.id); } catch {}
+    requireProjectContext().navigateWithProject(result.data.project.id);
   } catch (err) {
     console.error('Failed to create project:', err);
+    throw err;
+  }
+}
+
+async function deleteActiveProject(projectId) {
+  try {
+    const service = getProjectService();
+    const result = await service.deleteProject(projectId);
+    if (!result.ok) {
+      throw new Error(result.error || 'Failed to delete project');
+    }
+
+    const projectsResult = await service.listProjects();
+    if (projectsResult.ok && projectsResult.data && Array.isArray(projectsResult.data.projects) && projectsResult.data.projects.length > 0) {
+      const nextProjectId = projectsResult.data.projects[0].id;
+      try { localStorage.setItem('activeProject', nextProjectId); } catch {}
+      requireProjectContext().navigateWithProject(nextProjectId);
+    } else {
+      try { localStorage.removeItem('activeProject'); } catch {}
+      requireProjectContext().navigateWithProject('');
+    }
+  } catch (err) {
+    console.error('Failed to delete project:', err);
     throw err;
   }
 }
@@ -808,6 +719,27 @@ async function loadPrevisMap() {
   }
 }
 
+async function loadPromptLintSummary() {
+  promptLintSummary = { passed: 0, failed: 0, totalShots: 0 };
+  if (!currentProject?.id) return;
+
+  try {
+    const result = await getLintReportService().loadPromptsIndex(currentProject.id);
+    if (!result.ok || !result.data) return;
+    const data = result.data;
+
+    const allPrompts = Array.isArray(data.allPrompts) ? data.allPrompts : [];
+    promptLintSummary = {
+      passed: allPrompts.filter((prompt) => prompt && prompt.lintStatus === 'PASS').length,
+      failed: allPrompts.filter((prompt) => prompt && prompt.lintStatus === 'FAIL').length,
+      totalShots: Number.isFinite(data.totalShots) ? data.totalShots : 0
+    };
+  } catch (err) {
+    console.error('[Storyboard] Failed to load prompt lint summary', err);
+    promptLintSummary = { passed: 0, failed: 0, totalShots: 0 };
+  }
+}
+
 function getShotPrevisOverride(shotId) {
   if (!shotId || !previsMap || typeof previsMap !== 'object') {
     return null;
@@ -815,18 +747,6 @@ function getShotPrevisOverride(shotId) {
 
   const entry = previsMap[shotId];
   return entry && typeof entry === 'object' ? entry : null;
-}
-
-function getDefaultCharacterRef(shot) {
-  const characterId = shot?.characterId || shot?.characterRef;
-  if (!characterId) return null;
-  return `${characterId}:${PREVIS_REF_SLOT}`;
-}
-
-function getDefaultLocationRef(shot) {
-  const locationId = shot?.locationId || shot?.locationRef;
-  if (!locationId) return null;
-  return `${locationId}:${PREVIS_REF_SLOT}`;
 }
 
 function resolveRefSourcePath(sourceType, sourceRef) {
@@ -904,33 +824,6 @@ function applyPreviewNode(container, shot) {
   return preview;
 }
 
-async function saveShotPrevisOverride(shotId, entry) {
-  const service = getReviewService();
-  const result = await service.savePrevisMapEntry({
-    projectId: currentProject?.id,
-    shotId,
-    entry
-  });
-  if (!result.ok) {
-    throw new Error(result.error || 'Failed to save previs override');
-  }
-
-  previsMap[shotId] = result.data.entry;
-}
-
-async function resetShotPrevisOverride(shotId) {
-  const service = getReviewService();
-  const result = await service.resetPrevisMapEntry({
-    projectId: currentProject ? currentProject.id : '',
-    shotId
-  });
-  if (!result.ok) {
-    throw new Error(result.error || 'Failed to reset previs override');
-  }
-
-  delete previsMap[shotId];
-}
-
 async function loadSequence() {
   const loadingOverlay = showLoading(document.body, 'Loading storyboard...');
 
@@ -943,6 +836,8 @@ async function loadSequence() {
     sequenceData = result.data;
     normalizeSequenceReviewData(sequenceData);
     orderedStoryboardShots = Array.isArray(sequenceData.selections) ? sequenceData.selections : [];
+    updateMusicDisplay(sequenceData.musicFile || '');
+    await loadPromptLintSummary();
     await loadReviewMetadata();
     updateStats();
     renderReviewFilterChips();
@@ -1019,27 +914,15 @@ function renderReviewFilterChips() {
  * Update header stats
  */
 function updateStats() {
-  if (!orderedStoryboardShots || orderedStoryboardShots.length === 0) {
-    statTotalShots.textContent = 0;
-    statRendered.textContent = 0;
-    statSelected.textContent = 0;
-    statDuration.textContent = '0s';
-    return;
-  }
+  const totalShots = Array.isArray(orderedStoryboardShots) ? orderedStoryboardShots.length : 0;
+  const readyShots = Array.isArray(orderedStoryboardShots)
+    ? orderedStoryboardShots.filter((shot) => shotIsReadyForReview(shot)).length
+    : 0;
 
-  const totalShots = orderedStoryboardShots.length;
-  const rendered = orderedStoryboardShots.filter(s => (
-    s.renderFiles?.thumbnail || s.renderFiles?.kling || s.renderFiles?.nanobanana
-  )).length;
-  const selected = orderedStoryboardShots.filter(s =>
-    s.selectedVariation && s.selectedVariation !== 'none'
-  ).length;
-  const duration = sequenceData.totalDuration || 0;
-
-  statTotalShots.textContent = totalShots;
-  statRendered.textContent = rendered;
-  statSelected.textContent = selected;
-  statDuration.textContent = `${duration}s`;
+  if (statShots) statShots.textContent = String(totalShots);
+  if (statReady) statReady.textContent = String(readyShots);
+  if (statPassed) statPassed.textContent = String(promptLintSummary.passed || 0);
+  if (statFailed) statFailed.textContent = String(promptLintSummary.failed || 0);
 }
 
 
@@ -1074,6 +957,10 @@ function shotHasLocationRefs(shot) {
 
 function shotHasSelectedVariation(shot) {
   return Boolean(shot?.selectedVariation && shot.selectedVariation !== 'none');
+}
+
+function shotIsReadyForReview(shot) {
+  return shotHasPreviewSource(shot) && shotHasSelectedVariation(shot);
 }
 
 function computeReadinessData() {
@@ -1121,12 +1008,25 @@ function renderReadinessPanel() {
 
   if (!sequenceData?.selections?.length) {
     readinessPanel.style.display = 'none';
+    if (readinessBar) readinessBar.style.display = 'none';
     return;
   }
 
   const data = computeReadinessData();
   currentReadinessData = data;
-  readinessPanel.style.display = 'block';
+  if (readinessBar) readinessBar.style.display = 'flex';
+  if (readinessSummary) {
+    const missingRenders = data.categories.missingPreview.length;
+    const missingSelection = data.categories.missingSelection.length;
+    readinessSummary.textContent = `${data.ready}/${data.total} shots ready | ${missingRenders} missing renders | ${missingSelection} not selected`;
+  }
+  if (readinessBarToggle) {
+    const expanded = readinessPanel.style.display !== 'none';
+    readinessBarToggle.textContent = expanded ? 'Hide Details' : 'Show Details';
+  }
+  if (readinessPanel.style.display === '') {
+    readinessPanel.style.display = 'none';
+  }
 
   readinessCounts.innerHTML = '';
   readinessLists.innerHTML = '';
@@ -1276,16 +1176,6 @@ function hideEmptyState() {
   emptyState.style.display = 'none';
 }
 
-
-function ensureStoryboardMetadata(shot) {
-  if (!shot) return;
-  if (typeof shot.locked !== 'boolean') {
-    shot.locked = false;
-  }
-  if (!shot.sourceType) {
-    shot.sourceType = inferShotSource(shot);
-  }
-}
 
 function inferShotSource(shot) {
   if (shot.status && shot.status !== 'not_rendered') return 'Rendered';
@@ -1652,10 +1542,6 @@ function formatTimeLabel(totalSeconds) {
   const mins = Math.floor(safe / 60);
   const secs = Math.floor(safe % 60).toString().padStart(2, '0');
   return `${mins}:${secs}`;
-}
-
-function getProjectQueryParam() {
-  return currentProject ? `?project=${encodeURIComponent(currentProject.id)}` : '';
 }
 
 async function loadShotListTiming() {
@@ -2594,6 +2480,29 @@ function initializeButtons() {
       renderView();
     });
   }
+  if (readinessBarToggle && readinessPanel) {
+    readinessBarToggle.addEventListener('click', () => {
+      const expanded = readinessPanel.style.display !== 'none';
+      readinessPanel.style.display = expanded ? 'none' : 'block';
+      readinessBarToggle.textContent = expanded ? 'Show Details' : 'Hide Details';
+    });
+  }
+  if (manifestToggleBtn && manifestBody) {
+    manifestToggleBtn.addEventListener('click', () => {
+      const isOpen = manifestBody.style.display !== 'none';
+      manifestBody.style.display = isOpen ? 'none' : 'block';
+      manifestToggleBtn.textContent = isOpen ? 'Show Manifest' : 'Hide Manifest';
+    });
+  }
+  if (musicStatusAction) {
+    musicStatusAction.addEventListener('click', () => {
+      const section = document.getElementById('musicUploadSection');
+      if (!section) return;
+      const expanded = section.style.display !== 'none';
+      section.style.display = expanded ? 'none' : 'block';
+      musicStatusAction.textContent = expanded ? 'Upload' : 'Hide Upload';
+    });
+  }
   if (copyContextMarkdownBtn) {
     copyContextMarkdownBtn.addEventListener('click', async () => {
       if (!latestContextBundle) return;
@@ -2608,6 +2517,17 @@ function initializeButtons() {
       showToast('Downloaded', 'Context bundle JSON saved', 'success', 2000);
     });
   }
+
+  if (manifestBody) {
+    manifestBody.style.display = 'none';
+  }
+  if (readinessPanel) {
+    readinessPanel.style.display = 'none';
+  }
+  if (musicStatusAction) {
+    const section = document.getElementById('musicUploadSection');
+    if (section) section.style.display = 'none';
+  }
 }
 
 // Project selector event listeners
@@ -2618,51 +2538,52 @@ if (projectSelector) {
   });
 }
 
-// New project modal event listeners
-const newProjectBtn = document.getElementById('newProjectBtn');
-const newProjectModal = document.getElementById('newProjectModal');
-const newProjectModalClose = document.getElementById('newProjectModalClose');
-const newProjectModalOverlay = document.getElementById('newProjectModalOverlay');
-const cancelNewProjectBtn = document.getElementById('cancelNewProject');
-const createNewProjectBtn = document.getElementById('createNewProject');
-
-if (newProjectBtn && newProjectModal) {
-  newProjectBtn.addEventListener('click', () => {
-    newProjectModal.style.display = 'flex';
-    document.getElementById('projectName').value = '';
-    document.getElementById('projectDescription').value = '';
-  });
-
-  const closeNewProjectModal = () => {
-    newProjectModal.style.display = 'none';
-  };
-
-  newProjectModalClose?.addEventListener('click', closeNewProjectModal);
-  newProjectModalOverlay?.addEventListener('click', closeNewProjectModal);
-  cancelNewProjectBtn?.addEventListener('click', closeNewProjectModal);
-
-  createNewProjectBtn?.addEventListener('click', async () => {
-    const name = document.getElementById('projectName').value.trim();
-    const description = document.getElementById('projectDescription').value.trim();
-
-    if (!name) {
-      showToast('Error', 'Project name is required', 'error', 3000);
-      return;
-    }
-
-    const loadingToast = showToast('Creating project...', name, 'info', 0);
-
-    try {
+if (projectActions && typeof projectActions.bindProjectActions === 'function') {
+  projectActions.bindProjectActions({
+    showToast,
+    dismissToast,
+    getCurrentProject: () => currentProject,
+    createProject: async ({ name, description }) => {
       await createNewProject(name, description);
-    } catch (err) {
-      dismissToast(loadingToast);
-      showToast('Failed to create project', err.message, 'error', 4000);
+    },
+    deleteProject: async ({ projectId }) => {
+      await deleteActiveProject(projectId);
+    },
+    confirmDeleteMessage: (project) => {
+      const projectId = project && project.id ? project.id : '';
+      const projectName = project && project.name ? project.name : projectId;
+      return `Delete project "${projectName}"? This cannot be undone.`;
     }
   });
 }
 
+function setupPageChatBridge() {
+  window.PageChatBridge = {
+    pageId: 'storyboard',
+    getProjectId() {
+      if (currentProject && currentProject.id) return String(currentProject.id);
+      return window.SharedUtils ? window.SharedUtils.getProjectId() : 'default';
+    },
+    collectLiveState() {
+      return {
+        pageId: 'storyboard',
+        url: window.location.pathname + (window.location.search || ''),
+        view: currentView,
+        selectedShot: selectedShot ? selectedShot.shotId : '',
+        selectedVariation: selectedVariation || '',
+        shotCount: Array.isArray(sequenceData?.selections) ? sequenceData.selections.length : 0
+      };
+    },
+    async onAppliedChanges() {
+      return;
+    }
+  };
+}
+
 // Initialize
 (async () => {
+  setupPageChatBridge();
+
   // Initialize DOM elements first
   initializeDOMElements();
 

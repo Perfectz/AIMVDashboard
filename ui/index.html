@@ -6,7 +6,7 @@
   <title>Step 5: Shots - AI Music Video</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/themes/dark.css">
   <link rel="stylesheet" href="ui-layer.css">
@@ -34,37 +34,6 @@
         <div class="nav-footer" data-ui-nav-footer data-ui-mode="standard"></div>
       </nav>
 
-      <aside class="sidebar" id="shotsSidebar">
-        <div class="sidebar-header">
-          <div class="sidebar-title-row">
-            <h2>Platforms</h2>
-            <button class="sidebar-toggle" id="sidebarToggle" title="Collapse sidebar">&#8249;</button>
-          </div>
-        </div>
-
-        <div class="platform-filters">
-          <button class="platform-filter-btn active" data-platform="all"><span class="platform-icon">ALL</span><span class="platform-label">All Shots</span><span class="platform-count" id="filter-count-all">0</span></button>
-          <button class="platform-filter-btn" data-platform="kling"><span class="platform-icon">KL</span><span class="platform-label">Kling 3.0</span><span class="platform-count" id="filter-count-kling">0</span></button>
-          <button class="platform-filter-btn" data-platform="nanobanana"><span class="platform-icon">NB</span><span class="platform-label">Nano Banana</span><span class="platform-count" id="filter-count-nanobanana">0</span></button>
-          <button class="platform-filter-btn" data-platform="suno"><span class="platform-icon">SU</span><span class="platform-label">Suno</span><span class="platform-count" id="filter-count-suno">0</span></button>
-          <button class="platform-filter-btn" data-platform="seedream"><span class="platform-icon">SD</span><span class="platform-label">SeedDream</span><span class="platform-count" id="filter-count-seedream">0</span></button>
-        </div>
-
-        <div class="sidebar-divider"></div>
-
-        <div class="sidebar-section-header">
-          <h3>Shots</h3>
-          <input type="text" id="search" placeholder="Search shots..." class="search-input">
-          <select id="lintFilter" class="search-input lint-filter">
-            <option value="all">All lint states</option>
-            <option value="fail">Failing only</option>
-            <option value="pass">Passing only</option>
-          </select>
-        </div>
-
-        <div class="shot-list" id="shotList"></div>
-      </aside>
-
       <main class="content">
         <div class="page-toolbar">
           <div class="page-toolbar-title">
@@ -73,10 +42,32 @@
           </div>
           <div class="page-toolbar-actions">
             <button id="mobileNavToggle" class="btn btn-secondary mobile-panel-toggle" type="button">Menu</button>
-            <button id="mobileSidebarToggle" class="btn btn-secondary mobile-panel-toggle" type="button">Shots</button>
-            <button id="focusModeBtn" class="btn btn-secondary">Focus Mode</button>
-            <button id="commandPaletteBtn" class="btn btn-secondary">Command Menu</button>
+            <button id="runPipelineBtn" class="btn btn-primary" type="button">Compile &amp; Validate</button>
           </div>
+        </div>
+
+        <div class="shot-toolbar">
+          <select id="platformFilter" class="search-input">
+            <option value="all">All Platforms</option>
+            <option value="kling">Kling 3.0</option>
+            <option value="nanobanana">Nano Banana</option>
+            <option value="suno">Suno</option>
+            <option value="seedream">SeedDream</option>
+          </select>
+          <select id="shotSelector" class="search-input shot-selector">
+            <option value="">Select a shot...</option>
+          </select>
+          <input type="text" id="search" placeholder="Search shots..." class="search-input">
+          <select id="lintFilter" class="search-input lint-filter">
+            <option value="all">All lint states</option>
+            <option value="fail">Failing only</option>
+            <option value="pass">Passing only</option>
+          </select>
+          <button id="toggleShotListBtn" class="btn btn-secondary btn-sm" type="button">Shot List</button>
+        </div>
+
+        <div class="shot-list-panel" id="shotListPanel" style="display: none;">
+          <div class="shot-list" id="shotList"></div>
         </div>
 
         <div id="promptsWorkspace">
@@ -107,67 +98,105 @@
             </div>
           </div>
 
-          <div class="variation-selector" id="variationSelector" style="display: none;">
-            <button class="variation-btn" data-variation="A">Option A</button>
-            <button class="variation-btn" data-variation="B">Option B</button>
-            <button class="variation-btn" data-variation="C">Option C</button>
-            <button class="variation-btn" data-variation="D">Option D</button>
-          </div>
-
-          <div class="prompt-actions">
-            <button id="copyBtn" class="btn btn-primary">Copy to Clipboard</button>
-            <button id="generateShotBtn" class="btn btn-generate" style="display: none;">Generate First + Last Frame</button>
-            <button id="generateRefImageBtn" class="btn btn-secondary" style="display: none;">Generate Image (Ref)</button>
-            <button id="autoUploadRefSetBtn" class="btn btn-secondary" style="display: none;">Auto-Upload Ref Set (14)</button>
-            <button id="generationCancelBtn" class="btn btn-secondary" style="display: none;" disabled>Cancel Generation</button>
-            <button id="agentGeneratePromptBtn" class="btn btn-secondary" style="display: none;">Agent Generate Prompt</button>
-            <button id="replicateKeyBtn" class="btn btn-secondary">Replicate Key</button>
-            <button id="previewContextBtn" class="btn btn-secondary">Preview AI Context</button>
-            <span id="copyFeedback" class="copy-feedback"></span>
-          </div>
-          <div class="generation-job-row">
-            <span id="generationJobStatus" class="generation-job-status"></span>
-            <span id="generationMetrics" class="generation-metrics"></span>
-          </div>
-
-          <div class="prompt-content"><pre id="promptText"></pre></div>
-
-          <div class="shot-generation-layout" id="shotGenerationLayout" style="display: none;">
-            <div class="shot-renders" id="shotRenders" style="display: none;">
-              <div class="shot-renders-header">
-                <h3>Generated Frames</h3>
-                <label class="continuity-toggle">
-                  <input type="checkbox" id="continuityToggle" checked />
-                  <span>Auto continuity</span>
-                </label>
+          <div class="shot-detail-layout">
+            <section class="shot-visual-panel">
+              <div class="variation-selector" id="variationSelector" style="display: none;">
+                <button class="variation-btn" data-variation="A">Option A</button>
+                <button class="variation-btn" data-variation="B">Option B</button>
+                <button class="variation-btn" data-variation="C">Option C</button>
+                <button class="variation-btn" data-variation="D">Option D</button>
               </div>
-            <div class="continuity-note" id="continuityNote"></div>
-            <div class="continuity-note" id="refSetNote"></div>
-            <div class="shot-renders-grid" id="shotRendersGrid"></div>
-            <div class="generation-history" id="generationHistorySection">
-              <div class="generation-history-header">
-                <h4>Generation History</h4>
-                <button id="refreshGenerationHistoryBtn" class="btn btn-secondary btn-sm">Refresh</button>
-              </div>
-              <div id="generationHistoryList" class="generation-history-list"></div>
-            </div>
-          </div>
 
-            <aside class="agent-run-panel" id="agentRunPanel" style="display: none;">
-              <div class="agent-run-header">
-                <h3>Agent Run Panel</h3>
-                <span id="githubAuthPill" class="agent-auth-pill disconnected">GitHub not connected</span>
+              <div class="shot-generation-layout" id="shotGenerationLayout" style="display: none;">
+                <div class="shot-renders" id="shotRenders" style="display: none;">
+                  <div class="shot-renders-header">
+                    <h3>Generated Frames</h3>
+                  </div>
+                  <div class="continuity-note" id="continuityNote"></div>
+                  <div class="continuity-note" id="refSetNote"></div>
+                  <div class="shot-renders-grid" id="shotRendersGrid"></div>
+                  <div class="generation-history" id="generationHistorySection">
+                    <div class="generation-history-header">
+                      <h4>Generation History</h4>
+                      <button id="refreshGenerationHistoryBtn" class="btn btn-secondary btn-sm">Refresh</button>
+                    </div>
+                    <div id="generationHistoryList" class="generation-history-list"></div>
+                  </div>
+                </div>
               </div>
-              <div class="agent-run-actions">
-                <button id="githubConnectBtn" class="btn btn-secondary btn-sm">Connect GitHub</button>
-                <button id="githubLogoutBtn" class="btn btn-secondary btn-sm" style="display: none;">Logout</button>
-                <button id="agentCancelRunBtn" class="btn btn-secondary btn-sm" disabled>Cancel</button>
-                <button id="agentRevertRunBtn" class="btn btn-secondary btn-sm" disabled>Revert Run</button>
+            </section>
+
+            <aside class="actions-panel">
+              <div class="panel-section-title">Preflight</div>
+              <div class="shot-readiness" id="shotReadiness">
+                <div class="shot-readiness-header">
+                  <strong>Generation Readiness</strong>
+                  <button id="refreshReadinessBtn" class="btn btn-secondary btn-sm" type="button">Refresh</button>
+                </div>
+                <div class="readiness-badges">
+                  <span id="readinessReplicate" class="readiness-pill pending">Replicate: unknown</span>
+                  <span id="readinessPrompt" class="readiness-pill pending">Prompt: unknown</span>
+                  <span id="readinessContinuity" class="readiness-pill pending">Continuity: unknown</span>
+                  <span id="readinessRefs" class="readiness-pill pending">References: unknown</span>
+                </div>
+                <div id="readinessMessage" class="readiness-message">Select a shot and run refresh to validate generation readiness.</div>
               </div>
-              <div class="agent-run-status" id="agentRunStatus">No run started yet.</div>
-              <div class="agent-run-files" id="agentRunFiles"></div>
-              <pre class="agent-run-log" id="agentRunLog"></pre>
+
+              <div class="panel-section-title">Primary Actions</div>
+              <div class="prompt-actions">
+                <button id="generateShotBtn" class="btn btn-generate" style="display: none;">Generate Shot</button>
+                <button id="generationCancelBtn" class="btn btn-secondary" style="display: none;" disabled>Cancel Generation</button>
+                <button id="copyBtn" class="btn btn-primary">Copy to Clipboard</button>
+                <button id="previewContextBtn" class="btn btn-secondary">Preview AI Context</button>
+                <span id="copyFeedback" class="copy-feedback"></span>
+              </div>
+
+              <div class="advanced-actions-shell">
+                <div class="panel-section-title">Advanced</div>
+                <button id="toggleAdvancedActionsBtn" class="btn btn-secondary btn-sm" type="button">Show Advanced</button>
+                <div id="advancedActionsPanel" class="advanced-actions-panel" style="display: none;">
+                  <button id="generateRefImageBtn" class="btn btn-secondary" style="display: none;">Generate Single Ref Image</button>
+                  <button id="autoUploadRefSetBtn" class="btn btn-secondary" style="display: none;">Auto-prepare Ref Set (up to 14)</button>
+                  <label class="continuity-toggle">
+                    <input type="checkbox" id="continuityToggle" checked />
+                    <span>Auto continuity</span>
+                  </label>
+                  <button id="replicateKeyBtn" class="btn btn-secondary">Replicate Key</button>
+                  <button id="aiProviderBtn" class="btn btn-secondary">AI Settings</button>
+                  <button id="agentGeneratePromptBtn" class="btn btn-secondary" style="display: none;">Agent Generate Prompt</button>
+                </div>
+              </div>
+
+              <div class="panel-section-title">Status</div>
+              <div class="generation-job-row">
+                <span id="generationJobStatus" class="generation-job-status"></span>
+                <span id="generationMetrics" class="generation-metrics"></span>
+              </div>
+              <div id="referenceProvenance" class="reference-provenance"></div>
+              <div class="pipeline-status-row">
+                <span id="pipelineStatus" class="pipeline-status">Pipeline status pending...</span>
+              </div>
+
+              <aside class="agent-run-panel" id="agentRunPanel" style="display: none;">
+                <div class="agent-run-header">
+                  <h3>Agent Run Panel</h3>
+                  <span id="githubAuthPill" class="agent-auth-pill disconnected">GitHub not connected</span>
+                </div>
+                <div class="agent-run-actions">
+                  <button id="githubConnectBtn" class="btn btn-secondary btn-sm">Connect GitHub</button>
+                  <button id="githubLogoutBtn" class="btn btn-secondary btn-sm" style="display: none;">Logout</button>
+                  <button id="agentCancelRunBtn" class="btn btn-secondary btn-sm" disabled>Cancel</button>
+                  <button id="agentRevertRunBtn" class="btn btn-secondary btn-sm" disabled>Revert Run</button>
+                </div>
+                <div class="agent-run-status" id="agentRunStatus">No run started yet.</div>
+                <div class="agent-run-files" id="agentRunFiles"></div>
+                <pre class="agent-run-log" id="agentRunLog"></pre>
+              </aside>
             </aside>
+          </div>
+
+          <div class="prompt-collapse">
+            <div class="prompt-content" id="promptContent"><pre id="promptText"></pre></div>
           </div>
 
             <div class="prompt-info">
@@ -175,59 +204,20 @@
               <div class="info-row" id="promptVersionRow" style="display: none;"><strong>Version:</strong> <span id="promptVersion"></span></div>
               <div class="info-row" id="lintErrorsRow" style="display: none;"><strong>Lint Errors:</strong><ul id="lintErrorsList"></ul></div>
             </div>
+            <div class="step-footer">
+              <a href="storyboard.html" class="btn btn-primary">Continue to Step 6: Storyboard</a>
+            </div>
           </div>
         </div>
 
-        <div class="workspace-shell" id="workspaceShell" style="display:none;">
-          <div class="workspace-shell-header">
-            <div id="workspaceShellTitle">Workspace</div>
-            <button class="btn btn-secondary btn-sm" id="workspaceShellCloseBtn">Back to Shots</button>
-          </div>
-          <div id="workspaceShellLoading" class="workspace-shell-loading" style="display:none;">
-            <div class="workspace-shell-loading-spinner"></div>
-            <div class="workspace-shell-loading-text">Loading workspace...</div>
-          </div>
-          <div id="workspaceShellError" class="workspace-shell-error" style="display:none;">
-            <h3>Unable to load workspace page</h3>
-            <p id="workspaceShellErrorText">The page could not be loaded in this panel.</p>
-            <div class="workspace-shell-error-actions">
-              <button class="btn btn-secondary btn-sm" id="workspaceShellRetryBtn">Retry</button>
-              <button class="btn btn-secondary btn-sm" id="workspaceShellOpenNewBtn">Open in New Tab</button>
-            </div>
-          </div>
-          <iframe id="workspaceShellFrame" class="workspace-shell-frame" title="Embedded Workspace"></iframe>
-        </div>
       </main>
     </div>
   </div>
 
   <div class="mobile-panel-overlay" id="mobilePanelOverlay" aria-hidden="true"></div>
 
-  <div class="modal" id="newProjectModal" style="display: none;">
-    <div class="modal-overlay" id="newProjectModalOverlay"></div>
-    <div class="modal-content">
-      <div class="modal-header"><h2>Create New Project</h2><button class="modal-close" id="newProjectModalClose">×</button></div>
-      <div class="modal-body">
-        <form id="newProjectForm">
-          <div class="form-group"><label for="projectName">Project Name *</label><input type="text" id="projectName" required maxlength="100" placeholder="My Music Video" /></div>
-          <div class="form-group"><label for="projectDescription">Description</label><textarea id="projectDescription" rows="3" maxlength="500" placeholder="A brief description of your project"></textarea></div>
-        </form>
-      </div>
-      <div class="modal-footer"><button class="btn btn-secondary" id="cancelNewProject">Cancel</button><button class="btn btn-primary" id="createNewProject">Create Project</button></div>
-    </div>
-  </div>
-
-  <div class="modal" id="analysisPromptModal" style="display: none;">
-    <div class="modal-overlay" id="analysisPromptModalOverlay"></div>
-    <div class="modal-content modal-large">
-      <div class="modal-header"><h2>AI Music Analysis Prompt</h2><button class="modal-close" id="analysisPromptModalClose">×</button></div>
-      <div class="modal-body">
-        <p class="modal-description">Copy this prompt and paste it into another AI (Claude, ChatGPT, etc.) along with your music file. The AI will analyze your music and return a JSON file that you can upload here.</p>
-        <div class="prompt-box"><button class="btn btn-primary btn-sm copy-prompt-btn" id="copyAnalysisPromptBtn">Copy Prompt</button><pre id="analysisPromptText">Loading prompt...</pre></div>
-      </div>
-      <div class="modal-footer"><button class="btn btn-secondary" id="closeAnalysisPromptModal">Close</button></div>
-    </div>
-  </div>
+  <div data-ui-new-project-modal></div>
+  <div data-ui-analysis-prompt-modal></div>
 
   <div class="modal" id="replicateKeyModal" style="display: none;">
     <div class="modal-overlay" id="replicateKeyModalOverlay"></div>
@@ -248,15 +238,77 @@
     </div>
   </div>
 
+  <div class="modal" id="aiProviderModal" style="display: none;">
+    <div class="modal-overlay" id="aiProviderModalOverlay"></div>
+    <div class="modal-content">
+      <div class="modal-header"><h2>AI Provider Settings</h2><button class="modal-close" id="aiProviderModalClose">&times;</button></div>
+      <div class="modal-body">
+        <p class="modal-description">Select which AI model provider to use for agent runs and page chat.</p>
+        <div class="ai-provider-selector">
+          <label class="ai-provider-option">
+            <input type="radio" name="aiProvider" value="anthropic" />
+            <span class="ai-provider-label">Anthropic Claude</span>
+            <span class="ai-provider-model" id="aiProviderAnthropicModel"></span>
+          </label>
+          <label class="ai-provider-option">
+            <input type="radio" name="aiProvider" value="openai" />
+            <span class="ai-provider-label">OpenAI</span>
+            <span class="ai-provider-model" id="aiProviderOpenaiModel"></span>
+          </label>
+          <label class="ai-provider-option">
+            <input type="radio" name="aiProvider" value="github" />
+            <span class="ai-provider-label">GitHub Models (OAuth)</span>
+            <span class="ai-provider-model" id="aiProviderGithubModel"></span>
+          </label>
+        </div>
+
+        <div class="ai-provider-key-section" id="aiProviderAnthropicSection">
+          <div class="panel-section-title">Anthropic API Key</div>
+          <div class="form-group">
+            <input type="password" id="anthropicKeyInput" placeholder="sk-ant-..." autocomplete="off" />
+          </div>
+          <div class="info-row"><strong>Status:</strong> <span id="anthropicKeyStatus">Unknown</span></div>
+          <div class="ai-provider-key-actions">
+            <button class="btn btn-secondary btn-sm" id="clearAnthropicKeyBtn">Clear</button>
+            <button class="btn btn-primary btn-sm" id="saveAnthropicKeyBtn">Save Session Key</button>
+          </div>
+        </div>
+
+        <div class="ai-provider-key-section" id="aiProviderOpenaiSection">
+          <div class="panel-section-title">OpenAI API Key</div>
+          <div class="form-group">
+            <input type="password" id="openaiKeyInput" placeholder="sk-..." autocomplete="off" />
+          </div>
+          <div class="info-row"><strong>Status:</strong> <span id="openaiKeyStatus">Unknown</span></div>
+          <div class="ai-provider-key-actions">
+            <button class="btn btn-secondary btn-sm" id="clearOpenaiKeyBtn">Clear</button>
+            <button class="btn btn-primary btn-sm" id="saveOpenaiKeyBtn">Save Session Key</button>
+          </div>
+        </div>
+
+        <div class="ai-provider-key-section" id="aiProviderGithubSection">
+          <div class="panel-section-title">GitHub OAuth</div>
+          <div class="info-row"><strong>Status:</strong> <span id="githubProviderStatus">Not connected</span></div>
+          <p class="modal-description">GitHub Models uses OAuth. Use the Connect/Logout buttons in the Agent Run Panel below.</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="aiProviderModalDone">Done</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal" id="generationChoiceModal" style="display: none;">
     <div class="modal-overlay" id="generationChoiceModalOverlay"></div>
     <div class="modal-content modal-large">
-      <div class="modal-header"><h2>Generated Preview</h2><button class="modal-close" id="generationChoiceModalClose">×</button></div>
+      <div class="modal-header"><h2>Review Generated Outputs</h2><button class="modal-close" id="generationChoiceModalClose">×</button></div>
       <div class="modal-body">
-        <p class="modal-description" id="generationChoiceMeta">Review generated previews and choose what to keep.</p>
+        <p class="modal-description" id="generationChoiceMeta">Review generated outputs and choose what to keep.</p>
         <div class="shot-renders-grid" id="generationChoiceGrid"></div>
       </div>
       <div class="modal-footer">
+        <button class="btn btn-primary" id="quickAcceptGeneratedBtn">Quick Accept (Save First + Last)</button>
+        <button class="btn btn-primary" id="quickAcceptAndNextBtn">Quick Accept + Next</button>
         <button class="btn btn-secondary" id="discardGeneratedBtn">Discard All</button>
         <button class="btn btn-secondary" id="closeGenerationChoiceBtn">Close</button>
       </div>
@@ -328,7 +380,7 @@
     </div>
   </div>
 
-  <div class="toast-container" id="toastContainer"></div>
+  <div data-ui-toast-container></div>
   <div class="context-drawer-overlay" id="contextDrawerOverlay" style="display:none;"></div>
   <aside class="context-drawer" id="contextDrawer" inert>
     <div class="context-drawer-header">
@@ -341,30 +393,46 @@
     </div>
     <div class="context-drawer-content" id="contextDrawerContent"></div>
   </aside>
-  <div class="command-palette" id="commandPalette" style="display:none;" aria-hidden="true">
-    <div class="command-palette-overlay" id="commandPaletteOverlay"></div>
-    <div class="command-palette-panel">
-      <div class="command-palette-header">Quick Actions</div>
-      <button class="command-item" data-command="focus">Toggle Focus Mode</button>
-      <button class="command-item" data-command="prompts">Return to Shots</button>
-      <button class="command-item" data-command="guide">Open Guide</button>
-    </div>
-  </div>
 
   <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/shoelace-autoloader.js"></script>
+  <script src="modules/project-context.js"></script>
+  <script src="modules/project-actions.js"></script>
   <script src="ui-layer.js"></script>
   <script>window.UILayer && window.UILayer.init();</script>
+  <script src="modules/state.js"></script>
+  <script src="modules/shot-flow-state.js"></script>
+  <script src="modules/error-taxonomy.js"></script>
   <script src="domain/content-domain.js"></script>
   <script src="domain/reference-upload-domain.js"></script>
   <script src="services/http-client.js"></script>
+  <script src="services/service-base.js"></script>
+  <script src="services/bootstrap-service.js"></script>
+  <script src="services/generation-jobs-service.js"></script>
+  <script src="services/generation-readiness-service.js"></script>
+  <script src="services/context-bundle-service.js"></script>
+  <script src="services/agent-runtime-service.js"></script>
+  <script src="services/pipeline-service.js"></script>
+  <script src="services/lint-report-service.js"></script>
+  <script src="services/auto-save-service.js"></script>
+  <script src="services/page-chat-service.js"></script>
   <script src="services/content-service.js"></script>
   <script src="services/project-service.js"></script>
   <script src="services/reference-upload-service.js"></script>
+  <script src="services/reference-library-service.js"></script>
   <script src="features/content-feature.js"></script>
   <script src="features/project-feature.js"></script>
   <script src="features/reference-feature.js"></script>
   <script src="controllers/app-deps.js"></script>
+  <script src="modules/pipeline.js"></script>
+  <script src="modules/shared-utils.js"></script>
+  <script src="modules/prompt-viewer.js"></script>
+  <script src="modules/generation-workflow.js"></script>
+  <script src="modules/agent-integration.js"></script>
+  <script src="modules/reference-manager.js"></script>
+  <script src="modules/canon-editor.js"></script>
   <script src="app.js"></script>
+  <script src="modules/page-chat-adapters.js"></script>
+  <script src="modules/page-chat.js"></script>
 </body>
 </html>
 

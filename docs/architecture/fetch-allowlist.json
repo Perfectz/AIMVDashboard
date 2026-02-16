@@ -1,11 +1,13 @@
 {
-  "version": "2026-02-11",
+  "version": "2026-02-16",
   "policy": "direct fetch() should live in ui/services/*",
   "files": [
     "ui/app.js"
   ],
   "notes": [
-    "These are legacy orchestration files being incrementally migrated to feature/service modules.",
-    "Do not add new UI files here without explicit architectural review."
+    "ui/app.js remains the legacy orchestration shell and still contains direct fetch() calls pending final decomposition.",
+    "All generation/agent/pipeline/auto-save/storyboard module fetch() usage was moved into ui/services/* in this cleanup pass.",
+    "Do not add new UI files here without explicit architectural review.",
+    "Entries added on 2026-02-16 are temporary and should trend toward zero."
   ]
 }

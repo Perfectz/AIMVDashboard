@@ -1,12 +1,19 @@
 {
-  "version": "2026-02-11",
+  "version": "2026-02-15",
   "layers": [
     "ui",
+    "module",
     "feature",
     "domain",
+    "service",
     "api"
   ],
   "dependencies": [
+    {
+      "from": "ui/app.js",
+      "to": "ui/controllers/app-deps.js",
+      "type": "uses"
+    },
     {
       "from": "ui/app.js",
       "to": "ui/features/content-feature.js",
@@ -21,6 +28,109 @@
       "from": "ui/app.js",
       "to": "ui/features/reference-feature.js",
       "type": "uses"
+    },
+    {
+      "from": "ui/app.js",
+      "to": "ui/modules/shared-utils.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/app.js",
+      "to": "ui/modules/state.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/app.js",
+      "to": "ui/modules/auto-save.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/app.js",
+      "to": "ui/modules/canon-editor.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/app.js",
+      "to": "ui/modules/prompt-viewer.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/app.js",
+      "to": "ui/modules/generation-workflow.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/app.js",
+      "to": "ui/modules/agent-integration.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/app.js",
+      "to": "ui/modules/reference-manager.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/app.js",
+      "to": "ui/modules/pipeline.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/modules/agent-integration.js",
+      "to": "ui/modules/shared-utils.js",
+      "type": "uses",
+      "note": "el() from SharedUtils"
+    },
+    {
+      "from": "ui/modules/canon-editor.js",
+      "to": "ui/modules/shared-utils.js",
+      "type": "uses",
+      "note": "el() from SharedUtils"
+    },
+    {
+      "from": "ui/modules/generation-workflow.js",
+      "to": "ui/modules/shared-utils.js",
+      "type": "uses",
+      "note": "el() from SharedUtils"
+    },
+    {
+      "from": "ui/modules/prompt-viewer.js",
+      "to": "ui/modules/shared-utils.js",
+      "type": "uses",
+      "note": "el() from SharedUtils"
+    },
+    {
+      "from": "ui/modules/reference-manager.js",
+      "to": "ui/modules/shared-utils.js",
+      "type": "uses",
+      "note": "el() from SharedUtils"
+    },
+    {
+      "from": "ui/modules/pipeline.js",
+      "to": "ui/modules/shared-utils.js",
+      "type": "uses",
+      "note": "getProjectId() from SharedUtils"
+    },
+    {
+      "from": "ui/modules/page-chat.js",
+      "to": "ui/modules/shared-utils.js",
+      "type": "uses",
+      "note": "escapeHtml() from SharedUtils"
+    },
+    {
+      "from": "ui/modules/page-chat.js",
+      "to": "ui/modules/page-chat-adapters.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/modules/page-chat.js",
+      "to": "ui/services/page-chat-service.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/modules/page-chat-adapters.js",
+      "to": "ui/modules/shared-utils.js",
+      "type": "uses",
+      "note": "getProjectId() from SharedUtils"
     },
     {
       "from": "ui/features/content-feature.js",
@@ -39,22 +149,67 @@
     },
     {
       "from": "ui/features/reference-feature.js",
+      "to": "ui/domain/reference-upload-domain.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/features/reference-feature.js",
       "to": "ui/services/reference-upload-service.js",
       "type": "uses"
     },
     {
+      "from": "ui/controllers/app-deps.js",
+      "to": "ui/features/content-feature.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/controllers/app-deps.js",
+      "to": "ui/features/project-feature.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/controllers/app-deps.js",
+      "to": "ui/features/reference-feature.js",
+      "type": "uses"
+    },
+    {
       "from": "ui/services/content-service.js",
-      "to": "scripts/serve_ui.js:/api/save/*,/api/load/*",
+      "to": "scripts/routes/content.js:/api/save/*,/api/load/*",
       "type": "calls"
     },
     {
       "from": "ui/services/project-service.js",
-      "to": "scripts/serve_ui.js:/api/projects",
+      "to": "scripts/routes/projects.js:/api/projects",
       "type": "calls"
     },
     {
       "from": "ui/services/reference-upload-service.js",
-      "to": "scripts/serve_ui.js:/api/upload/*",
+      "to": "scripts/routes/uploads.js:/api/upload/*",
+      "type": "calls"
+    },
+    {
+      "from": "ui/services/reference-library-service.js",
+      "to": "scripts/routes/references.js:/api/references/*",
+      "type": "calls"
+    },
+    {
+      "from": "ui/services/review-service.js",
+      "to": "scripts/routes/storyboard.js:/api/review/*,/api/storyboard/*",
+      "type": "calls"
+    },
+    {
+      "from": "ui/services/page-chat-service.js",
+      "to": "scripts/routes/page-chat.js:/api/page-chat/*",
+      "type": "calls"
+    },
+    {
+      "from": "ui/services/storyboard-page-service.js",
+      "to": "scripts/routes/storyboard.js:/api/storyboard/*",
+      "type": "calls"
+    },
+    {
+      "from": "ui/services/storyboard-upload-service.js",
+      "to": "scripts/routes/uploads.js:/api/upload/shot-render",
       "type": "calls"
     },
     {
@@ -63,6 +218,17 @@
       "type": "uses"
     },
     {
+      "from": "ui/storyboard.js",
+      "to": "ui/services/storyboard-page-service.js",
+      "type": "uses"
+    },
+    {
+      "from": "ui/storyboard.js",
+      "to": "ui/modules/shared-utils.js",
+      "type": "uses",
+      "note": "getProjectId() from SharedUtils"
+    },
+    {
       "from": "ui/index.html",
       "to": "ui/controllers/app-deps.js",
       "type": "loads"
@@ -113,8 +279,8 @@
       "type": "loads"
     },
     {
-      "from": "ui/guide.html",
-      "to": "ui/services/project-service.js",
+      "from": "ui/home.html",
+      "to": "ui/app.js",
       "type": "loads"
     },
     {
@@ -133,48 +299,153 @@
       "type": "loads"
     },
     {
-      "from": "ui/storyboard.js",
-      "to": "ui/services/storyboard-page-service.js",
+      "from": "scripts/serve_ui.js",
+      "to": "scripts/config.js",
+      "type": "requires"
+    },
+    {
+      "from": "scripts/serve_ui.js",
+      "to": "scripts/router.js",
+      "type": "requires"
+    },
+    {
+      "from": "scripts/serve_ui.js",
+      "to": "scripts/middleware/logger.js",
+      "type": "requires"
+    },
+    {
+      "from": "scripts/serve_ui.js",
+      "to": "scripts/middleware/error-handler.js",
+      "type": "requires"
+    },
+    {
+      "from": "scripts/serve_ui.js",
+      "to": "scripts/middleware/body-parser.js",
+      "type": "requires"
+    },
+    {
+      "from": "scripts/serve_ui.js",
+      "to": "scripts/middleware/http-utils.js",
+      "type": "requires"
+    },
+    {
+      "from": "scripts/serve_ui.js",
+      "to": "scripts/middleware/busboy-upload.js",
+      "type": "requires"
+    },
+    {
+      "from": "scripts/serve_ui.js",
+      "to": "scripts/services/session_service.js",
+      "type": "requires"
+    },
+    {
+      "from": "scripts/serve_ui.js",
+      "to": "scripts/services/agent_runtime_service.js",
+      "type": "requires"
+    },
+    {
+      "from": "scripts/serve_ui.js",
+      "to": "scripts/services/generation_jobs_service.js",
+      "type": "requires"
+    },
+    {
+      "from": "scripts/serve_ui.js",
+      "to": "scripts/services/generation_task_service.js",
+      "type": "requires"
+    },
+    {
+      "from": "scripts/serve_ui.js",
+      "to": "scripts/services/render_management_service.js",
+      "type": "requires"
+    },
+    {
+      "from": "scripts/serve_ui.js",
+      "to": "scripts/services/storyboard_persistence_service.js",
+      "type": "requires"
+    },
+    {
+      "from": "scripts/serve_ui.js",
+      "to": "scripts/services/pipeline_status_service.js",
+      "type": "requires"
+    },
+    {
+      "from": "scripts/serve_ui.js",
+      "to": "scripts/services/context_bundle_service.js",
+      "type": "requires"
+    },
+    {
+      "from": "scripts/serve_ui.js",
+      "to": "scripts/services/page_chat_service.js",
+      "type": "requires"
+    },
+    {
+      "from": "scripts/services/page_chat_service.js",
+      "to": "scripts/services/page_chat_store_service.js",
       "type": "uses"
     },
     {
-      "from": "ui/services/storyboard-page-service.js",
-      "to": "scripts/serve_ui.js:/api/export/context-bundle",
-      "type": "calls"
-    },
-    {
-      "from": "ui/services/storyboard-page-service.js",
-      "to": "scripts/serve_ui.js:/api/upload/music",
-      "type": "calls"
-    },
-    {
-      "from": "ui/services/storyboard-page-service.js",
-      "to": "scripts/serve_ui.js:/api/storyboard/readiness-report",
-      "type": "calls"
-    },
-    {
-      "from": "ui/services/storyboard-page-service.js",
-      "to": "scripts/serve_ui.js:/api/load/canon/script",
-      "type": "calls"
-    },
-    {
-      "from": "ui/controllers/app-deps.js",
-      "to": "ui/features/content-feature.js",
+      "from": "scripts/services/page_chat_service.js",
+      "to": "scripts/services/page_chat_context_service.js",
       "type": "uses"
     },
     {
-      "from": "ui/controllers/app-deps.js",
-      "to": "ui/features/project-feature.js",
+      "from": "scripts/services/page_chat_service.js",
+      "to": "scripts/services/page_chat_apply_service.js",
       "type": "uses"
     },
     {
-      "from": "ui/controllers/app-deps.js",
-      "to": "ui/features/reference-feature.js",
+      "from": "scripts/services/page_chat_service.js",
+      "to": "scripts/services/github_models_service.js",
       "type": "uses"
     },
     {
-      "from": "ui/app.js",
-      "to": "ui/controllers/app-deps.js",
+      "from": "scripts/services/page_chat_context_service.js",
+      "to": "scripts/services/content_file_service.js",
+      "type": "uses"
+    },
+    {
+      "from": "scripts/services/page_chat_context_service.js",
+      "to": "scripts/services/agent_prompt_tools.js",
+      "type": "uses"
+    },
+    {
+      "from": "scripts/services/page_chat_apply_service.js",
+      "to": "scripts/services/content_file_service.js",
+      "type": "uses"
+    },
+    {
+      "from": "scripts/services/agent_runtime_service.js",
+      "to": "scripts/services/agent_file_guard_service.js",
+      "type": "uses"
+    },
+    {
+      "from": "scripts/services/agent_runtime_service.js",
+      "to": "scripts/services/github_models_service.js",
+      "type": "uses"
+    },
+    {
+      "from": "scripts/services/agent_prompt_tools.js",
+      "to": "scripts/services/timed_context_service.js",
+      "type": "uses"
+    },
+    {
+      "from": "scripts/services/generation_task_service.js",
+      "to": "scripts/services/generation_jobs_service.js",
+      "type": "uses"
+    },
+    {
+      "from": "scripts/services/generation_task_service.js",
+      "to": "scripts/services/render_management_service.js",
+      "type": "uses"
+    },
+    {
+      "from": "scripts/services/generation_task_service.js",
+      "to": "scripts/services/storyboard_persistence_service.js",
+      "type": "uses"
+    },
+    {
+      "from": "scripts/services/render_management_service.js",
+      "to": "scripts/services/storyboard_persistence_service.js",
       "type": "uses"
     }
   ]

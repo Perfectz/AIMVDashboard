@@ -6,7 +6,7 @@
   <title>Step 4: References - AI Music Video</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/themes/dark.css">
   <link rel="stylesheet" href="ui-layer.css">
@@ -82,81 +82,58 @@
           <!-- Populated by JavaScript -->
         </div>
 
+        <div class="step-footer">
+          <a href="index.html" class="btn btn-primary">Continue to Step 5: Shots</a>
+        </div>
       </main>
     </div>
   </div>
 
-  <!-- New Project Modal -->
-  <div class="modal" id="newProjectModal" style="display: none;">
-    <div class="modal-overlay" id="newProjectModalOverlay"></div>
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>Create New Project</h2>
-        <button class="modal-close" id="newProjectModalClose">&times;</button>
-      </div>
-      <div class="modal-body">
-        <form id="newProjectForm">
-          <div class="form-group">
-            <label for="projectName">Project Name *</label>
-            <input type="text" id="projectName" required maxlength="100" placeholder="My Music Video" />
-          </div>
-          <div class="form-group">
-            <label for="projectDescription">Description</label>
-            <textarea id="projectDescription" rows="3" maxlength="500" placeholder="A brief description of your project"></textarea>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" id="cancelNewProject">Cancel</button>
-        <button class="btn btn-primary" id="createNewProject">Create Project</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- AI Analysis Prompt Modal -->
-  <div class="modal" id="analysisPromptModal" style="display: none;">
-    <div class="modal-overlay" id="analysisPromptModalOverlay"></div>
-    <div class="modal-content modal-large">
-      <div class="modal-header">
-        <h2>AI Music Analysis Prompt</h2>
-        <button class="modal-close" id="analysisPromptModalClose">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p class="modal-description">Copy this prompt and paste it into another AI (Claude, ChatGPT, etc.) along with your music file.
-          The AI will analyze your music and return a JSON file that you can upload here.
-        </p>
-        <div class="prompt-box">
-          <button class="btn btn-primary btn-sm copy-prompt-btn" id="copyAnalysisPromptBtn">Copy Prompt
-          </button>
-          <pre id="analysisPromptText">Loading prompt...</pre>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" id="closeAnalysisPromptModal">Close</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Toast Container -->
-  <div class="toast-container" id="toastContainer"></div>
+  <div data-ui-new-project-modal></div>
+  <div data-ui-analysis-prompt-modal></div>
+  <div data-ui-toast-container></div>
 
   <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/shoelace-autoloader.js"></script>
+  <script src="modules/project-context.js"></script>
+  <script src="modules/project-actions.js"></script>
   <script src="ui-layer.js"></script>
   <script>window.UILayer && window.UILayer.init();</script>
+  <script src="modules/state.js"></script>
+  <script src="modules/shot-flow-state.js"></script>
+  <script src="modules/error-taxonomy.js"></script>
   <script src="domain/content-domain.js"></script>
   <script src="domain/reference-upload-domain.js"></script>
   <script src="services/http-client.js"></script>
+  <script src="services/service-base.js"></script>
+  <script src="services/bootstrap-service.js"></script>
+  <script src="services/generation-jobs-service.js"></script>
+  <script src="services/generation-readiness-service.js"></script>
+  <script src="services/context-bundle-service.js"></script>
+  <script src="services/agent-runtime-service.js"></script>
+  <script src="services/pipeline-service.js"></script>
+  <script src="services/lint-report-service.js"></script>
+  <script src="services/auto-save-service.js"></script>
+  <script src="services/page-chat-service.js"></script>
   <script src="services/content-service.js"></script>
   <script src="services/project-service.js"></script>
   <script src="services/reference-upload-service.js"></script>
+  <script src="services/reference-library-service.js"></script>
   <script src="features/content-feature.js"></script>
   <script src="features/project-feature.js"></script>
   <script src="features/reference-feature.js"></script>
   <script src="controllers/app-deps.js"></script>
+  <script src="modules/shared-utils.js"></script>
+  <script src="modules/prompt-viewer.js"></script>
+  <script src="modules/generation-workflow.js"></script>
+  <script src="modules/agent-integration.js"></script>
+  <script src="modules/reference-manager.js"></script>
+
+  <script src="modules/canon-editor.js"></script>
   <script src="app.js"></script>
+  <script src="modules/page-chat-adapters.js"></script>
+  <script src="modules/page-chat.js"></script>
 </body>
 </html>
-
 
 
 

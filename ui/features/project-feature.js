@@ -41,6 +41,7 @@
 
       var activeId = getActiveProjectId() || projects[0].id;
       var currentProject = projects.find(function(project) { return project.id === activeId; }) || projects[0];
+      setActiveProjectId(currentProject.id);
 
       return {
         ok: true,
@@ -58,11 +59,28 @@
       return { ok: true, project: result.data.project };
     }
 
+    async function deleteProject(projectId) {
+      var id = String(projectId || '').trim();
+      if (!id) {
+        return { ok: false, error: 'Project ID is required' };
+      }
+      if (typeof projectService.deleteProject !== 'function') {
+        return { ok: false, error: 'Delete project is not available in this page context' };
+      }
+
+      var result = await projectService.deleteProject(id);
+      if (!result.ok || !result.data || !result.data.success) {
+        return { ok: false, error: result.error || 'Failed to delete project' };
+      }
+      return { ok: true, data: result.data };
+    }
+
     return {
       getActiveProjectId: getActiveProjectId,
       setActiveProjectId: setActiveProjectId,
       loadProjects: loadProjects,
-      createProject: createProject
+      createProject: createProject,
+      deleteProject: deleteProject
     };
   }
 

@@ -1,39 +1,44 @@
 (function(root) {
   'use strict';
 
-  function resolveDependency(name, directValue) {
-    if (directValue) return directValue;
-    if (root && root[name]) return root[name];
+  function resolveServiceBase(opts) {
+    if (opts && opts.serviceBase) return opts.serviceBase;
+    if (root && root.ServiceBase) return root.ServiceBase;
+    if (typeof require === 'function') {
+      try {
+        return require('./service-base.js');
+      } catch (_) {
+        return null;
+      }
+    }
     return null;
   }
 
   function createReferenceUploadService(options) {
     var opts = options || {};
-    var domain = resolveDependency('ReferenceUploadDomain', opts.domain);
-    var httpClientFactory = resolveDependency('HttpClient', opts.httpClientFactory);
-    var fetchImpl = opts.fetchImpl || (typeof fetch !== 'undefined' ? fetch.bind(root) : null);
+    var serviceBase = resolveServiceBase(opts);
+    if (!serviceBase || !serviceBase.resolveDependency || !serviceBase.resolveHttpClient) {
+      throw new Error('ServiceBase.resolveDependency and ServiceBase.resolveHttpClient are required');
+    }
+
+    var domain = serviceBase.resolveDependency('ReferenceUploadDomain', opts.domain);
 
     if (!domain || !domain.validateReferenceImageFile || !domain.validateShotRenderUpload) {
       throw new Error('ReferenceUploadDomain is required');
     }
+    var httpClient = serviceBase.resolveHttpClient(opts);
 
-    if (!httpClientFactory || !httpClientFactory.createHttpClient) {
-      throw new Error('HttpClient.createHttpClient is required');
-    }
-
-    var httpClient = httpClientFactory.createHttpClient({ fetchImpl: fetchImpl });
-
-    async function uploadCharacterReference(input) {
+    async function uploadEntityReference(input, entityField, endpoint) {
       var validation = domain.validateReferenceImageFile(input && input.file);
       if (!validation.ok) return { ok: false, error: validation.error };
 
       var formData = new FormData();
       formData.append('project', String(input.projectId || ''));
-      formData.append('character', String(input.characterName || ''));
+      formData.append(entityField, String(input.entityName || ''));
       formData.append('slot', String(input.slotNum || ''));
       formData.append('image', input.file);
 
-      var result = await httpClient.request('/api/upload/reference-image', {
+      var result = await httpClient.request(endpoint, {
         method: 'POST',
         body: formData
       });
@@ -41,30 +46,33 @@
       if (!result.response.ok || !result.payload.success) {
         return { ok: false, error: result.payload.error || 'Upload failed' };
       }
-
       return { ok: true, data: result.payload };
+    }
+
+    async function uploadCharacterReference(input) {
+      return uploadEntityReference(
+        {
+          projectId: input && input.projectId,
+          entityName: input && input.characterName,
+          slotNum: input && input.slotNum,
+          file: input && input.file
+        },
+        'character',
+        '/api/upload/reference-image'
+      );
     }
 
     async function uploadLocationReference(input) {
-      var validation = domain.validateReferenceImageFile(input && input.file);
-      if (!validation.ok) return { ok: false, error: validation.error };
-
-      var formData = new FormData();
-      formData.append('project', String(input.projectId || ''));
-      formData.append('location', String(input.locationName || ''));
-      formData.append('slot', String(input.slotNum || ''));
-      formData.append('image', input.file);
-
-      var result = await httpClient.request('/api/upload/location-reference-image', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!result.response.ok || !result.payload.success) {
-        return { ok: false, error: result.payload.error || 'Upload failed' };
-      }
-
-      return { ok: true, data: result.payload };
+      return uploadEntityReference(
+        {
+          projectId: input && input.projectId,
+          entityName: input && input.locationName,
+          slotNum: input && input.slotNum,
+          file: input && input.file
+        },
+        'location',
+        '/api/upload/location-reference-image'
+      );
     }
 
     async function uploadShotRenderFrame(input) {

@@ -13,7 +13,7 @@ async function run() {
     },
     ReferenceUploadService: { createReferenceUploadService: () => ({ uploadCharacterReference: async () => ({ ok: true }), uploadLocationReference: async () => ({ ok: true }), uploadShotRenderFrame: async () => ({ ok: true }) }) },
     ContentService: { createContentService: () => ({ saveContent: async () => ({ ok: true }), loadContent: async () => ({ ok: true }) }) },
-    ProjectService: { createProjectService: () => ({ listProjects: async () => ({ ok: true, data: { success: true, projects: [{ id: 'p1' }] } }), createProject: async () => ({ ok: true, data: { project: { id: 'p2' } } }) }) },
+    ProjectService: { createProjectService: () => ({ listProjects: async () => ({ ok: true, data: { success: true, projects: [{ id: 'p1' }] } }), createProject: async () => ({ ok: true, data: { project: { id: 'p2' } } }), deleteProject: async () => ({ ok: true, data: { success: true } }) }) },
     ReferenceFeature: { createReferenceFeature: ({ referenceUploadService }) => ({ uploadCharacterReference: referenceUploadService.uploadCharacterReference }) },
     ContentFeature: { createContentFeature: ({ contentService }) => ({ saveContent: contentService.saveContent }) },
     ProjectFeature: { createProjectFeature: ({ projectService }) => ({ loadProjects: projectService.listProjects }) }

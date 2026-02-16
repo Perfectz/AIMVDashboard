@@ -16,6 +16,48 @@
   };
   const NAV_VERSION = 'v2026-02-10';
 
+  function getProjectContextApi() {
+    return window.ProjectContext || null;
+  }
+
+  function normalizeProjectId(value) {
+    const api = getProjectContextApi();
+    if (api && typeof api.normalizeProjectId === 'function') {
+      return api.normalizeProjectId(value);
+    }
+    const id = String(value || '').trim();
+    return id || '';
+  }
+
+  function persistProjectFromQuery() {
+    const api = getProjectContextApi();
+    if (api && typeof api.persistProjectFromQuery === 'function') {
+      api.persistProjectFromQuery();
+    }
+  }
+
+  function getCurrentProjectId(root) {
+    const api = getProjectContextApi();
+    if (api && typeof api.getCurrentProjectId === 'function') {
+      return api.getCurrentProjectId('projectSelector', root || document);
+    }
+
+    const scope = root || document;
+    const selector = scope.querySelector('#projectSelector');
+    if (selector && selector.value) {
+      return normalizeProjectId(selector.value);
+    }
+    return '';
+  }
+
+  function withProjectParam(href, projectId) {
+    const api = getProjectContextApi();
+    if (api && typeof api.buildProjectUrl === 'function') {
+      return api.buildProjectUrl(href, projectId);
+    }
+    return String(href || '').trim();
+  }
+
   function createElement(tag, className, text) {
     const el = document.createElement(tag);
     if (className) el.className = className;
@@ -38,17 +80,26 @@
     const scope = root || document;
     scope.querySelectorAll('[data-ui-project-selector]').forEach((container) => {
       const mode = container.getAttribute('data-ui-mode') || 'standard';
-      const includeCreate = mode !== 'basic';
+      const includeProjectActions = mode !== 'basic';
       container.innerHTML = '';
 
       const header = createElement('div', 'nav-header');
       header.appendChild(createElement('div', 'nav-title', 'Current Project'));
-      if (includeCreate) {
+      if (includeProjectActions) {
+        const actions = createElement('div', 'project-selector-actions');
         const add = createElement('button', 'btn-icon', '+');
         add.id = 'newProjectBtn';
         add.type = 'button';
         add.title = 'New Project';
-        header.appendChild(add);
+        actions.appendChild(add);
+
+        const remove = createElement('button', 'btn-icon btn-icon-danger', '-');
+        remove.id = 'deleteProjectBtn';
+        remove.type = 'button';
+        remove.title = 'Delete Project';
+        actions.appendChild(remove);
+
+        header.appendChild(actions);
       }
 
       const select = createElement('select', 'project-dropdown');
@@ -75,19 +126,11 @@
   function renderNavStats(root) {
     const scope = root || document;
     scope.querySelectorAll('[data-ui-nav-stats]').forEach((container) => {
-      const mode = container.getAttribute('data-ui-mode') || 'standard';
       container.innerHTML = '';
-      if (mode === 'storyboard') {
-        container.appendChild(createStatItem('stat-total-shots', 'Total Shots'));
-        container.appendChild(createStatItem('stat-rendered', 'Rendered'));
-        container.appendChild(createStatItem('stat-selected', 'Selected', 'nav-stat-success'));
-        container.appendChild(createStatItem('stat-duration', 'Duration'));
-        return;
-      }
-      container.appendChild(createStatItem('stat-shots', 'Shots'));
-      container.appendChild(createStatItem('stat-prompts', 'Shot Files'));
-      container.appendChild(createStatItem('stat-passed', 'Passed', 'nav-stat-success'));
-      container.appendChild(createStatItem('stat-failed', 'Failed', 'nav-stat-error'));
+      container.appendChild(createStatItem('stat-shots', 'Total Shots'));
+      container.appendChild(createStatItem('stat-ready', 'Ready'));
+      container.appendChild(createStatItem('stat-passed', 'Validated', 'nav-stat-success'));
+      container.appendChild(createStatItem('stat-failed', 'Errors', 'nav-stat-error'));
     });
   }
 
@@ -191,11 +234,28 @@
       if (el.dataset.uiNavBound === '1') return;
       el.dataset.uiNavBound = '1';
       el.addEventListener('click', () => {
-        const url = el.getAttribute('data-nav-url') || el.getAttribute('data-workspace-url');
-        if (url) {
+        const baseUrl = el.getAttribute('data-nav-url') || el.getAttribute('data-workspace-url');
+        if (baseUrl) {
+          const url = withProjectParam(baseUrl, getCurrentProjectId(scope));
           window.location.href = url;
         }
       });
+    });
+  }
+
+  function hydrateProjectLinks(root) {
+    const scope = root || document;
+    const projectId = getCurrentProjectId(scope);
+    if (!projectId) return;
+
+    scope.querySelectorAll('a[href]').forEach((link) => {
+      if (link.dataset.uiProjectLinkBound === '1') return;
+      link.dataset.uiProjectLinkBound = '1';
+      const href = link.getAttribute('href') || '';
+      const nextHref = withProjectParam(href, projectId);
+      if (nextHref && nextHref !== href) {
+        link.setAttribute('href', nextHref);
+      }
     });
   }
 
@@ -337,13 +397,90 @@
           window.location.href = url.toString();
         });
       }
-    } catch {
-      // Keep the selector in its loading/fallback state if service hydration fails.
+    } catch (err) {
+      console.error('[UILayer] Failed to hydrate project selector', err);
     }
+  }
+
+  function renderNewProjectModal(root) {
+    var scope = root || document;
+    scope.querySelectorAll('[data-ui-new-project-modal]').forEach(function(container) {
+      container.innerHTML =
+        '<div class="modal" id="newProjectModal" style="display: none;">' +
+          '<div class="modal-overlay" id="newProjectModalOverlay"></div>' +
+          '<div class="modal-content">' +
+            '<div class="modal-header">' +
+              '<h2>Create New Project</h2>' +
+              '<button class="modal-close" id="newProjectModalClose">&times;</button>' +
+            '</div>' +
+            '<div class="modal-body">' +
+              '<form id="newProjectForm">' +
+                '<div class="form-group">' +
+                  '<label for="projectName">Project Name *</label>' +
+                  '<input type="text" id="projectName" required maxlength="100" placeholder="My Music Video" />' +
+                '</div>' +
+                '<div class="form-group">' +
+                  '<label for="projectDescription">Description</label>' +
+                  '<textarea id="projectDescription" rows="3" maxlength="500" placeholder="A brief description of your project"></textarea>' +
+                '</div>' +
+              '</form>' +
+            '</div>' +
+            '<div class="modal-footer">' +
+              '<button class="btn btn-secondary" id="cancelNewProject">Cancel</button>' +
+              '<button class="btn btn-primary" id="createNewProject">Create Project</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+    });
+  }
+
+  function renderAnalysisPromptModal(root) {
+    var scope = root || document;
+    scope.querySelectorAll('[data-ui-analysis-prompt-modal]').forEach(function(container) {
+      container.innerHTML =
+        '<div class="modal" id="analysisPromptModal" style="display: none;">' +
+          '<div class="modal-overlay" id="analysisPromptModalOverlay"></div>' +
+          '<div class="modal-content modal-large">' +
+            '<div class="modal-header">' +
+              '<h2>AI Music Analysis Prompt</h2>' +
+              '<button class="modal-close" id="analysisPromptModalClose">&times;</button>' +
+            '</div>' +
+            '<div class="modal-body">' +
+              '<p class="modal-description">Copy this prompt and paste it into another AI (Claude, ChatGPT, etc.) along with your music file. ' +
+                'The AI will analyze your music and return a JSON file that you can upload here.</p>' +
+              '<div class="prompt-box">' +
+                '<button class="btn btn-primary btn-sm copy-prompt-btn" id="copyAnalysisPromptBtn">Copy Prompt</button>' +
+                '<pre id="analysisPromptText">Loading prompt...</pre>' +
+              '</div>' +
+            '</div>' +
+            '<div class="modal-footer">' +
+              '<button class="btn btn-secondary" id="closeAnalysisPromptModal">Close</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+    });
+  }
+
+  function renderToastContainer(root) {
+    var scope = root || document;
+    scope.querySelectorAll('[data-ui-toast-container]').forEach(function(container) {
+      container.innerHTML = '<div class="toast-container" id="toastContainer"></div>';
+    });
+  }
+
+  function renderPageChatMount(root) {
+    var scope = root || document;
+    if (scope.getElementById && scope.getElementById('globalPageChatMount')) {
+      return;
+    }
+    var mount = createElement('div', 'page-chat-mount');
+    mount.id = 'globalPageChatMount';
+    scope.body.appendChild(mount);
   }
 
   function init() {
     document.documentElement.setAttribute('data-ui-layer', '1');
+    persistProjectFromQuery();
     renderNavBrand(document);
     renderProjectSelectorSection(document);
     renderNavStats(document);
@@ -351,6 +488,11 @@
     renderWorkflowNavs(document);
     renderResourceNavs(document);
     renderGuideNavs(document);
+    hydrateProjectLinks(document);
+    renderNewProjectModal(document);
+    renderAnalysisPromptModal(document);
+    renderToastContainer(document);
+    renderPageChatMount(document);
     wireDataNav(document);
     hydrateGuideProjectSelector(document);
   }
@@ -370,6 +512,10 @@
     renderNavFooter,
     renderWorkflowNavs,
     renderResourceNavs,
-    renderGuideNavs
+    renderGuideNavs,
+    renderNewProjectModal,
+    renderAnalysisPromptModal,
+    renderToastContainer,
+    renderPageChatMount
   };
 })();

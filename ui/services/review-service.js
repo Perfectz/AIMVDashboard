@@ -1,9 +1,16 @@
 (function(root) {
   'use strict';
 
-  function resolveDependency(name, directValue) {
-    if (directValue) return directValue;
-    if (root && root[name]) return root[name];
+  function resolveServiceBase(opts) {
+    if (opts && opts.serviceBase) return opts.serviceBase;
+    if (root && root.ServiceBase) return root.ServiceBase;
+    if (typeof require === 'function') {
+      try {
+        return require('./service-base.js');
+      } catch (_) {
+        return null;
+      }
+    }
     return null;
   }
 
@@ -13,14 +20,11 @@
 
   function createReviewService(options) {
     var opts = options || {};
-    var httpClientFactory = resolveDependency('HttpClient', opts.httpClientFactory);
-    var fetchImpl = opts.fetchImpl || (typeof fetch !== 'undefined' ? fetch.bind(root) : null);
-
-    if (!httpClientFactory || !httpClientFactory.createHttpClient) {
-      throw new Error('HttpClient.createHttpClient is required');
+    var serviceBase = resolveServiceBase(opts);
+    if (!serviceBase || !serviceBase.resolveHttpClient) {
+      throw new Error('ServiceBase.resolveHttpClient is required');
     }
-
-    var httpClient = httpClientFactory.createHttpClient({ fetchImpl: fetchImpl });
+    var httpClient = serviceBase.resolveHttpClient(opts);
 
     async function loadPrevisMap(projectId) {
       var result = await httpClient.request('/api/storyboard/previs-map' + toProjectQuery(projectId), { method: 'GET' });

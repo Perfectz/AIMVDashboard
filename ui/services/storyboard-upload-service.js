@@ -1,27 +1,31 @@
 (function(root) {
   'use strict';
 
-  function resolveDependency(name, directValue) {
-    if (directValue) return directValue;
-    if (root && root[name]) return root[name];
+  function resolveServiceBase(opts) {
+    if (opts && opts.serviceBase) return opts.serviceBase;
+    if (root && root.ServiceBase) return root.ServiceBase;
+    if (typeof require === 'function') {
+      try {
+        return require('./service-base.js');
+      } catch (_) {
+        return null;
+      }
+    }
     return null;
   }
 
   function createStoryboardUploadService(options) {
     var opts = options || {};
-    var uploadDomain = resolveDependency('UploadDomain', opts.uploadDomain);
-    var httpClientFactory = resolveDependency('HttpClient', opts.httpClientFactory);
-    var fetchImpl = opts.fetchImpl || (typeof fetch !== 'undefined' ? fetch.bind(root) : null);
+    var serviceBase = resolveServiceBase(opts);
+    if (!serviceBase || !serviceBase.resolveDependency || !serviceBase.resolveHttpClient) {
+      throw new Error('ServiceBase.resolveDependency and ServiceBase.resolveHttpClient are required');
+    }
+    var uploadDomain = serviceBase.resolveDependency('UploadDomain', opts.uploadDomain);
 
     if (!uploadDomain || !uploadDomain.validateKlingVideoUpload) {
       throw new Error('UploadDomain.validateKlingVideoUpload is required');
     }
-
-    if (!httpClientFactory || !httpClientFactory.createHttpClient) {
-      throw new Error('HttpClient.createHttpClient is required');
-    }
-
-    var httpClient = httpClientFactory.createHttpClient({ fetchImpl: fetchImpl });
+    var httpClient = serviceBase.resolveHttpClient(opts);
 
     async function uploadKlingVariation(input) {
       var validation = uploadDomain.validateKlingVideoUpload(input);

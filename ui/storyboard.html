@@ -6,7 +6,7 @@
   <title>Step 6: Storyboard Preview - AI Music Video</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/themes/dark.css">
   <link rel="stylesheet" href="ui-layer.css">
@@ -50,79 +50,22 @@
           </div>
         </div>
 
-        <section class="music-upload-section">
-          <div class="nav-header"><div class="nav-title">Music Track</div></div>
-          <div class="music-drop-zone" id="musicDropZone" data-has-file="false">
-            <div class="drop-zone-content"><span class="drop-zone-icon">MP3</span><span class="drop-zone-label">Drop MP3 here</span><span class="drop-zone-filename" id="musicFilename"></span></div>
-            <input type="file" id="musicFileInput" accept=".mp3" style="display: none;" />
-          </div>
-        </section>
-
         <div class="view-controls">
           <div class="view-mode-tabs">
             <button class="view-tab active" data-view="grid"><span>Grid View</span></button>
             <button class="view-tab" data-view="timeline"><span>Storyboard Preview</span></button>
           </div>
-          <div class="view-actions"><button class="btn btn-small" id="refreshBtn" title="Reload shot videos and references from disk">Refresh</button></div>
+          <div class="view-actions">
+            <span class="music-status-pill" id="musicStatusPill">No music uploaded</span>
+            <button class="btn btn-small btn-secondary" id="musicStatusAction" type="button">Upload</button>
+            <button class="btn btn-small" id="refreshBtn" title="Reload shot videos and references from disk">Refresh</button>
+          </div>
         </div>
 
-        <div class="readiness-panel" id="readinessPanel" style="display: none;">
-          <div class="readiness-header">
-            <div class="readiness-title-wrap">
-              <h3>Shot Readiness</h3>
-              <p>Quick dependency lint before final selection.</p>
-            </div>
-            <div class="readiness-actions">
-              <button class="btn btn-small btn-secondary" id="clearReadinessFilterBtn" style="display: none;">Clear Filter</button>
-              <button class="btn btn-small" id="saveReadinessReportBtn" title="Write summary to projects/&lt;id&gt;/lint/readiness_report.json">Save Report</button>
-            </div>
-          </div>
-          <div class="readiness-counts" id="readinessCounts"></div>
-          <div class="readiness-lists" id="readinessLists"></div>
-          <div class="readiness-recommendations" id="readinessRecommendations"></div>
-        </div>
-
-        <section class="asset-panel" id="assetPanel">
-          <div class="asset-panel-header">
-            <div>
-              <h2>Asset Manifest</h2>
-              <p>Track status, ownership, and storyboard usage for all assets.</p>
-            </div>
-            <span class="asset-count" id="assetCount">0 assets</span>
-          </div>
-          <div class="asset-filters">
-            <label>Type
-              <select id="assetTypeFilter">
-                <option value="all">All Types</option>
-              </select>
-            </label>
-            <label>Status
-              <select id="assetStatusFilter">
-                <option value="all">All Statuses</option>
-              </select>
-            </label>
-            <label>Used in Shot
-              <select id="assetShotFilter">
-                <option value="all">Any Shot</option>
-              </select>
-            </label>
-          </div>
-          <div class="asset-empty" id="assetEmptyState" style="display:none;">No assets found in <code>bible/asset_manifest.json</code>.</div>
-          <div class="asset-table-wrap">
-            <table class="asset-table" id="assetTable">
-              <thead>
-                <tr>
-                  <th>Asset</th>
-                  <th>Type</th>
-                  <th>Status</th>
-                  <th>Owner</th>
-                  <th>Source</th>
-                  <th>Used In</th>
-                  <th>Readiness</th>
-                </tr>
-              </thead>
-              <tbody id="assetTableBody"></tbody>
-            </table>
+        <section class="music-upload-section" id="musicUploadSection" style="display: none;">
+          <div class="music-drop-zone" id="musicDropZone" data-has-file="false">
+            <div class="drop-zone-content"><span class="drop-zone-icon">MP3</span><span class="drop-zone-label">Drop MP3 here</span><span class="drop-zone-filename" id="musicFilename"></span></div>
+            <input type="file" id="musicFileInput" accept=".mp3" style="display: none;" />
           </div>
         </section>
 
@@ -150,6 +93,76 @@
           </div>
         </div>
 
+        <div class="readiness-bar" id="readinessBar" style="display: none;">
+          <div class="readiness-bar-text" id="readinessSummary">Readiness summary unavailable</div>
+          <button class="btn btn-small btn-secondary" id="readinessBarToggle" type="button">Show Details</button>
+        </div>
+
+        <div class="readiness-panel" id="readinessPanel" style="display: none;">
+          <div class="readiness-header">
+            <div class="readiness-title-wrap">
+              <h3>Shot Readiness</h3>
+              <p>Quick dependency lint before final selection.</p>
+            </div>
+            <div class="readiness-actions">
+              <button class="btn btn-small btn-secondary" id="clearReadinessFilterBtn" style="display: none;">Clear Filter</button>
+              <button class="btn btn-small" id="saveReadinessReportBtn" title="Write summary to projects/&lt;id&gt;/lint/readiness_report.json">Save Report</button>
+            </div>
+          </div>
+          <div class="readiness-counts" id="readinessCounts"></div>
+          <div class="readiness-lists" id="readinessLists"></div>
+          <div class="readiness-recommendations" id="readinessRecommendations"></div>
+        </div>
+
+        <section class="asset-panel manifest-collapsible" id="assetPanel">
+          <div class="manifest-header">
+            <div>
+              <h2>Asset Manifest</h2>
+              <p>Track status, ownership, and storyboard usage for all assets.</p>
+            </div>
+            <div class="manifest-header-actions">
+              <span class="asset-count" id="assetCount">0 assets</span>
+              <button id="manifestToggleBtn" class="btn btn-small btn-secondary" type="button">Show Manifest</button>
+            </div>
+          </div>
+          <div id="manifestBody" style="display: none;">
+            <div class="asset-filters">
+              <label>Type
+                <select id="assetTypeFilter">
+                  <option value="all">All Types</option>
+                </select>
+              </label>
+              <label>Status
+                <select id="assetStatusFilter">
+                  <option value="all">All Statuses</option>
+                </select>
+              </label>
+              <label>Used in Shot
+                <select id="assetShotFilter">
+                  <option value="all">Any Shot</option>
+                </select>
+              </label>
+            </div>
+            <div class="asset-empty" id="assetEmptyState" style="display:none;">No assets found in <code>bible/asset_manifest.json</code>.</div>
+            <div class="asset-table-wrap">
+              <table class="asset-table" id="assetTable">
+                <thead>
+                  <tr>
+                    <th>Asset</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Owner</th>
+                    <th>Source</th>
+                    <th>Used In</th>
+                    <th>Readiness</th>
+                  </tr>
+                </thead>
+                <tbody id="assetTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <div class="modal" id="shotModal" style="display: none;">
           <div class="modal-overlay" id="modalOverlay"></div>
           <div class="modal-content">
@@ -176,23 +189,10 @@
     </div>
   </div>
 
-  <div class="modal" id="newProjectModal" style="display: none;">
-    <div class="modal-overlay" id="newProjectModalOverlay"></div>
-    <div class="modal-content">
-      <div class="modal-header"><h2>Create New Project</h2><button class="modal-close" id="newProjectModalClose">×</button></div>
-      <div class="modal-body">
-        <form id="newProjectForm">
-          <div class="form-group"><label for="projectName">Project Name *</label><input type="text" id="projectName" required maxlength="100" placeholder="My Music Video" /></div>
-          <div class="form-group"><label for="projectDescription">Description</label><textarea id="projectDescription" rows="3" maxlength="500" placeholder="A brief description of your project"></textarea></div>
-        </form>
-      </div>
-      <div class="modal-footer"><button class="btn btn-secondary" id="cancelNewProject">Cancel</button><button class="btn btn-primary" id="createNewProject">Create Project</button></div>
-    </div>
-  </div>
-
-  <div class="toast-container" id="toastContainer"></div>
+  <div data-ui-new-project-modal></div>
+  <div data-ui-toast-container></div>
   <div class="context-drawer-overlay" id="contextDrawerOverlay" style="display:none;"></div>
-  <aside class="context-drawer" id="contextDrawer" aria-hidden="true">
+  <aside class="context-drawer" id="contextDrawer" inert>
     <div class="context-drawer-header">
       <h2>AI Context Preview</h2>
       <button class="btn btn-secondary btn-sm" id="closeContextDrawerBtn">Close</button>
@@ -205,14 +205,24 @@
   </aside>
 
   <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/shoelace-autoloader.js"></script>
+  <script src="modules/project-context.js"></script>
+  <script src="modules/project-actions.js"></script>
   <script src="ui-layer.js"></script>
   <script>window.UILayer && window.UILayer.init();</script>
   <script src="domain/upload-domain.js"></script>
   <script src="services/http-client.js"></script>
+  <script src="services/service-base.js"></script>
+  <script src="services/bootstrap-service.js"></script>
+  <script src="services/lint-report-service.js"></script>
+  <script src="services/context-bundle-service.js"></script>
+  <script src="services/page-chat-service.js"></script>
   <script src="services/project-service.js"></script>
   <script src="services/review-service.js"></script>
   <script src="services/storyboard-upload-service.js"></script>
   <script src="services/storyboard-page-service.js"></script>
+  <script src="modules/shared-utils.js"></script>
   <script src="storyboard.js"></script>
+  <script src="modules/page-chat-adapters.js"></script>
+  <script src="modules/page-chat.js"></script>
 </body>
 </html>

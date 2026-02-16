@@ -27,6 +27,9 @@ async function run() {
           if (url === '/api/projects' && options.method === 'POST') {
             return { response: { ok: true }, payload: { success: true, project: { id: 'new-project' } } };
           }
+          if (url === '/api/projects/p1' && options.method === 'DELETE') {
+            return { response: { ok: true }, payload: { success: true, message: 'Project deleted' } };
+          }
           return { response: { ok: false }, payload: { success: false, error: 'Unexpected call' } };
         }
       };
@@ -43,11 +46,17 @@ async function run() {
   assert.strictEqual(createResult.ok, true);
   assert.strictEqual(createResult.data.project.id, 'new-project');
 
-  assert.strictEqual(captured.length, 2);
+  const deleteResult = await service.deleteProject('p1');
+  assert.strictEqual(deleteResult.ok, true);
+  assert.strictEqual(deleteResult.data.success, true);
+
+  assert.strictEqual(captured.length, 3);
   assert.strictEqual(captured[0].url, '/api/projects');
   assert.strictEqual(captured[1].url, '/api/projects');
+  assert.strictEqual(captured[2].url, '/api/projects/p1');
   assert.strictEqual(captured[1].options.body.entries[0][0], 'name');
   assert.strictEqual(captured[1].options.body.entries[1][0], 'description');
+  assert.strictEqual(captured[2].options.method, 'DELETE');
 
   console.log('project-service.test.js passed');
 }

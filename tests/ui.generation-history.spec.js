@@ -210,6 +210,38 @@ async function mockShotPageApis(page, options = {}) {
     });
   });
 
+  await page.route('**/api/shot-generation/preflight*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        projectId: PROJECT_ID,
+        shotId: 'SHOT_01',
+        variation: 'A',
+        tool: 'seedream',
+        readiness: {
+          replicateConfigured: true,
+          promptFound: true,
+          continuity: {
+            source: 'none',
+            reason: 'missing_previous_last',
+            path: null
+          },
+          uploadedRefSetCount: 0,
+          autoCollectableRefCount: 0
+        },
+        recommendedAction: 'generate',
+        defaults: {
+          maxImages: 2,
+          previewOnly: true,
+          requireReference: true,
+          autoPrepareRefSet: true
+        }
+      })
+    });
+  });
+
   await page.route('**/api/generation-jobs*', async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === '/api/generation-jobs/metrics') {

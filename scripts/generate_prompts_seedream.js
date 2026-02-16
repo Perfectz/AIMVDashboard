@@ -3,6 +3,8 @@
 /**
  * SeedDream v4.5 Prompt Generator
  * Version: 2026-02-08 v3
+ * Legacy status: retained for backwards compatibility.
+ * Preferred entrypoint is `scripts/compile_prompts.js`.
  *
  * Generates compact "Create 2 Images" prompts for sequential generation.
  * Each image prompt is a complete scene description — Frame 2 describes

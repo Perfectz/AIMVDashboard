@@ -1,6 +1,6 @@
 {
   "version": "2026-02-07",
-  "activeProject": "where-time-breaks",
+  "activeProject": "youtube-how-i-made-a-video-app-in-1-day",
   "projects": [
     {
       "id": "default",
@@ -14,6 +14,13 @@
       "name": "Where Time Breaks",
       "createdAt": "2026-02-07T00:00:00Z",
       "lastModified": "2026-02-07T00:00:00Z",
+      "status": "active"
+    },
+    {
+      "id": "youtube-how-i-made-a-video-app-in-1-day",
+      "name": "Youtube, How I made a video app in 1 day",
+      "createdAt": "2026-02-16T03:00:32.917Z",
+      "lastModified": "2026-02-16T03:00:32.917Z",
       "status": "active"
     }
   ]
