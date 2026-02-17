@@ -186,6 +186,21 @@
     }, 4000);
   }
 
+  // --- Page Visibility: pause auto-refresh when tab is hidden ---
+  var _autoRefreshWasActive = false;
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+      var gs = getGenerationState();
+      _autoRefreshWasActive = !!gs.generationHistoryAutoRefreshTimer;
+      if (_autoRefreshWasActive) stopGenerationHistoryAutoRefresh();
+    } else {
+      if (_autoRefreshWasActive) {
+        _autoRefreshWasActive = false;
+        setGenerationHistoryAutoRefresh(true);
+      }
+    }
+  });
+
   // --- Generation Details Modal ---
 
   function closeGenerationJobDetailsModal() {

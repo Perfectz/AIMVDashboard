@@ -1,6 +1,6 @@
 {
   "version": "2026-02-07",
-  "activeProject": "youtube-how-i-made-a-video-app-in-1-day",
+  "activeProject": "hollywood-studio-in-a-text-file",
   "projects": [
     {
       "id": "default",
@@ -21,6 +21,13 @@
       "name": "Youtube, How I made a video app in 1 day",
       "createdAt": "2026-02-16T03:00:32.917Z",
       "lastModified": "2026-02-16T03:00:32.917Z",
+      "status": "active"
+    },
+    {
+      "id": "hollywood-studio-in-a-text-file",
+      "name": "Hollywood Studio In A Text File",
+      "createdAt": "2026-02-16T18:51:17.394Z",
+      "lastModified": "2026-02-16T18:51:17.394Z",
       "status": "active"
     }
   ]

@@ -32,7 +32,7 @@
     "fileNaming": "Use pattern: kling_option_A.mp4, kling_option_B.mp4, nano_first_frame.png, nano_last_frame.png",
     "workflow": "1) Render shots, 2) Place in folders, 3) Update selections, 4) View in Storyboard UI, 5) Export for CapCut"
   },
-  "lastUpdated": "2026-02-15T16:09:40.223Z",
+  "lastUpdated": "2026-02-16T22:29:38.543Z",
   "editorialOrder": [
     "SHOT_01"
   ]
