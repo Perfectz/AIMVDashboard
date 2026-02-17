@@ -18,11 +18,9 @@
   var el = getSharedUtils().el;
 
   var PLATFORM_LABELS = {
-    all: 'All Platforms',
-    kling: 'Kling 3.0',
-    nanobanana: 'Nano Banana',
-    suno: 'Suno',
-    seedream: 'SeedDream 4.5'
+    all: 'All Prompts',
+    image: 'Image Prompts',
+    video: 'Video Prompts'
   };
 
   function getShotLintState(shot) {
@@ -40,8 +38,23 @@
     var searchTerm = (searchInput ? searchInput.value : '').toLowerCase().trim();
 
     return promptsState.indexData.shots.filter(function(shot) {
-      if (searchTerm && !shot.shotId.toLowerCase().includes(searchTerm)) {
-        return false;
+      if (searchTerm) {
+        var matchesId = shot.shotId.toLowerCase().includes(searchTerm);
+        if (!matchesId) {
+          // Search prompt text content across all variations
+          var matchesContent = false;
+          var variations = shot.variations || {};
+          Object.keys(variations).some(function(tool) {
+            return (variations[tool] || []).some(function(prompt) {
+              if (prompt.content && prompt.content.toLowerCase().includes(searchTerm)) {
+                matchesContent = true;
+                return true;
+              }
+              return false;
+            });
+          });
+          if (!matchesContent) return false;
+        }
       }
 
       if (promptsState.currentLintFilter !== 'all') {
@@ -52,19 +65,14 @@
 
       var hasKling = shot.variations.kling && shot.variations.kling.length > 0;
       var hasNano = shot.variations.nanobanana && shot.variations.nanobanana.length > 0;
-      var hasSuno = shot.variations.suno && shot.variations.suno.length > 0;
       var hasSeedream = shot.variations.seedream && shot.variations.seedream.length > 0;
+      var hasImage = hasSeedream || hasNano;
+      var hasVideo = hasKling;
 
-      if (promptsState.currentPlatform !== 'all') {
-        return (
-          (promptsState.currentPlatform === 'kling' && hasKling) ||
-          (promptsState.currentPlatform === 'nanobanana' && hasNano) ||
-          (promptsState.currentPlatform === 'suno' && hasSuno) ||
-          (promptsState.currentPlatform === 'seedream' && hasSeedream)
-        );
-      }
+      if (promptsState.currentPlatform === 'image') return hasImage;
+      if (promptsState.currentPlatform === 'video') return hasVideo;
 
-      return hasKling || hasNano || hasSuno || hasSeedream;
+      return hasImage || hasVideo;
     });
   }
 
@@ -75,7 +83,9 @@
     var filteredShots = getFilteredShots(promptsState);
 
     if (!promptsState.indexData || !promptsState.indexData.shots || promptsState.indexData.shots.length === 0 || filteredShots.length === 0) {
-      shotList.innerHTML = '<p style="color: var(--text-secondary); padding: 1rem;">No shots match these filters. Adjust platform, lint state, or search.</p>';
+      shotList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128269;</div><div class="empty-state-heading">No shots match</div><div class="empty-state-description">Adjust platform, lint state, or search filters to find shots.</div></div>';
+      var countEl = el('shotListCount');
+      if (countEl) countEl.textContent = '0 shots';
       if (shotSelector) {
         shotSelector.innerHTML = '<option value="">Select a shot...</option>';
       }
@@ -84,54 +94,87 @@
       return filteredShots;
     }
 
-    shotList.innerHTML = '';
     if (shotSelector) {
       shotSelector.innerHTML = '<option value="">Select a shot...</option>';
     }
 
+    // Show result count
+    var totalShots = promptsState.indexData.shots.length;
+    var countEl = el('shotListCount');
+    if (!countEl) {
+      countEl = document.createElement('div');
+      countEl.id = 'shotListCount';
+      countEl.className = 'result-count';
+      shotList.parentNode.insertBefore(countEl, shotList);
+    }
+    if (filteredShots.length < totalShots) {
+      countEl.innerHTML = 'Showing <strong>' + filteredShots.length + '</strong> of ' + totalShots + ' shots';
+    } else {
+      countEl.textContent = totalShots + ' shots';
+    }
+
+    // Incremental DOM update: reuse existing items, add/remove as needed
+    var existingItems = shotList.querySelectorAll('.shot-item');
+    var existingMap = {};
+    existingItems.forEach(function(item) { existingMap[item.dataset.shotId] = item; });
+    var newIds = new Set(filteredShots.map(function(s) { return s.shotId; }));
+
+    // Remove items no longer in filtered list
+    existingItems.forEach(function(item) {
+      if (!newIds.has(item.dataset.shotId)) shotList.removeChild(item);
+    });
+
     filteredShots.forEach(function(shot) {
-      var hasKling = shot.variations.kling && shot.variations.kling.length > 0;
-      var hasNano = shot.variations.nanobanana && shot.variations.nanobanana.length > 0;
-      var hasSuno = shot.variations.suno && shot.variations.suno.length > 0;
-      var hasSeedream = shot.variations.seedream && shot.variations.seedream.length > 0;
-      var tags = [];
-      if (hasKling) tags.push({ className: 'kling', text: 'Kling (' + shot.variations.kling.length + ')' });
-      if (hasNano) tags.push({ className: 'nanobanana', text: 'Nano (' + shot.variations.nanobanana.length + ')' });
-      if (hasSuno) tags.push({ className: 'suno', text: 'Suno (' + shot.variations.suno.length + ')' });
-      if (hasSeedream) tags.push({ className: 'seedream', text: 'SeedDream (' + shot.variations.seedream.length + ')' });
+      var isActive = Boolean(promptsState.currentShot && promptsState.currentShot.shotId === shot.shotId);
 
-      if (root.UILayer && root.UILayer.createShotSidebarItem) {
-        var shotItem = root.UILayer.createShotSidebarItem({
-          shotId: shot.shotId,
-          active: Boolean(promptsState.currentShot && promptsState.currentShot.shotId === shot.shotId),
-          tags: tags,
-          onClick: function() { selectShotFn(shot); }
-        });
-        shotItem.dataset.shotId = shot.shotId;
-        shotList.appendChild(shotItem);
+      // Reuse existing DOM node if present
+      var existing = existingMap[shot.shotId];
+      if (existing) {
+        existing.classList.toggle('active', isActive);
+        shotList.appendChild(existing); // re-append to ensure order
       } else {
-        var shotItem = document.createElement('div');
-        shotItem.className = 'shot-item';
-        shotItem.dataset.shotId = shot.shotId;
-        if (promptsState.currentShot && promptsState.currentShot.shotId === shot.shotId) shotItem.classList.add('active');
+        var hasKling = shot.variations.kling && shot.variations.kling.length > 0;
+        var hasNano = shot.variations.nanobanana && shot.variations.nanobanana.length > 0;
+        var hasSeedream = shot.variations.seedream && shot.variations.seedream.length > 0;
+        var imageCount = (hasSeedream ? shot.variations.seedream.length : 0) + (hasNano ? shot.variations.nanobanana.length : 0);
+        var videoCount = hasKling ? shot.variations.kling.length : 0;
+        var tags = [];
+        if (imageCount > 0) tags.push({ className: 'image', text: 'Image (' + imageCount + ')' });
+        if (videoCount > 0) tags.push({ className: 'video', text: 'Video (' + videoCount + ')' });
 
-        var header = document.createElement('div');
-        header.className = 'shot-item-header';
-        header.textContent = shot.shotId;
+        if (root.UILayer && root.UILayer.createShotSidebarItem) {
+          var shotItem = root.UILayer.createShotSidebarItem({
+            shotId: shot.shotId,
+            active: isActive,
+            tags: tags,
+            onClick: function() { selectShotFn(shot); }
+          });
+          shotItem.dataset.shotId = shot.shotId;
+          shotList.appendChild(shotItem);
+        } else {
+          var shotItem = document.createElement('div');
+          shotItem.className = 'shot-item';
+          shotItem.dataset.shotId = shot.shotId;
+          if (isActive) shotItem.classList.add('active');
 
-        var tools = document.createElement('div');
-        tools.className = 'shot-item-tools';
-        tags.forEach(function(tagData) {
-          var tag = document.createElement('span');
-          tag.className = 'tool-tag ' + tagData.className;
-          tag.textContent = tagData.text;
-          tools.appendChild(tag);
-        });
+          var header = document.createElement('div');
+          header.className = 'shot-item-header';
+          header.textContent = shot.shotId;
 
-        shotItem.appendChild(header);
-        shotItem.appendChild(tools);
-        shotItem.addEventListener('click', function() { selectShotFn(shot); });
-        shotList.appendChild(shotItem);
+          var tools = document.createElement('div');
+          tools.className = 'shot-item-tools';
+          tags.forEach(function(tagData) {
+            var tag = document.createElement('span');
+            tag.className = 'tool-tag ' + tagData.className;
+            tag.textContent = tagData.text;
+            tools.appendChild(tag);
+          });
+
+          shotItem.appendChild(header);
+          shotItem.appendChild(tools);
+          shotItem.addEventListener('click', function() { selectShotFn(shot); });
+          shotList.appendChild(shotItem);
+        }
       }
 
       if (shotSelector) {
@@ -152,8 +195,8 @@
     var prompts = promptsState.currentShot.variations[promptsState.currentTool];
     if (!prompts || prompts.length === 0) return null;
 
-    // For tools with variations (Kling, SeedDream), find by variation
-    if (promptsState.currentTool === 'kling' || promptsState.currentTool === 'seedream') {
+    // For tools with variations (Kling, SeedDream, Nano Banana), find by variation
+    if (promptsState.currentTool === 'kling' || promptsState.currentTool === 'seedream' || promptsState.currentTool === 'nanobanana') {
       var prompt = prompts.find(function(p) { return p.variation === promptsState.currentVariation; });
       return prompt || prompts[0];
     }
@@ -193,8 +236,8 @@
   /**
    * Parse and render prompt sections
    */
-  function renderPromptSections(content, tool) {
-    var promptText = el('promptText');
+  function renderPromptSections(content, tool, targetEl) {
+    var promptText = targetEl || el('promptText');
     if (!promptText) return;
 
     // Define section patterns for different tools
@@ -331,7 +374,7 @@
         }
       })
       .catch(function(err) {
-        console.error('Failed to load lint report:', err);
+        /* silently handled */
       });
   }
 
@@ -340,23 +383,39 @@
    */
   function copyToClipboard() {
     var utils = getSharedUtils();
-    var promptTextEl = el('promptText');
-    // Get all section content
-    var sections = document.querySelectorAll('.prompt-section-content');
-    var fullText = '';
+    var parts = [];
 
-    if (sections.length > 0) {
-      sections.forEach(function(section) {
-        fullText += section.textContent + '\n\n';
-      });
-    } else if (promptTextEl) {
-      fullText = promptTextEl.textContent;
+    // Collect image prompt content
+    var imageBlock = el('imagePromptBlock');
+    if (imageBlock && imageBlock.style.display !== 'none') {
+      var imageSections = imageBlock.querySelectorAll('.prompt-section-content');
+      if (imageSections.length > 0) {
+        parts.push('--- IMAGE PROMPT ---');
+        imageSections.forEach(function(s) { parts.push(s.textContent); });
+      }
     }
 
-    utils.copyText(fullText.trim()).then(function() {
-      utils.showToast('Copied!', 'Shot text copied to clipboard', 'success', 2000);
+    // Collect video prompt content
+    var videoBlock = el('videoPromptBlock');
+    if (videoBlock && videoBlock.style.display !== 'none') {
+      var videoSections = videoBlock.querySelectorAll('.prompt-section-content');
+      if (videoSections.length > 0) {
+        parts.push('--- VIDEO PROMPT ---');
+        videoSections.forEach(function(s) { parts.push(s.textContent); });
+      }
+    }
+
+    // Fallback: try all sections on page
+    if (parts.length === 0) {
+      var allSections = document.querySelectorAll('.prompt-section-content');
+      allSections.forEach(function(s) { parts.push(s.textContent); });
+    }
+
+    var fullText = parts.join('\n\n').trim();
+    utils.copyText(fullText).then(function() {
+      utils.showToast('Copied!', 'Prompt text copied to clipboard', 'success', 2000);
     }).catch(function() {
-      utils.showToast('Failed to copy', 'Could not copy shot text to clipboard', 'error', 3000);
+      utils.showToast('Failed to copy', 'Could not copy prompt text to clipboard', 'error', 3000);
     });
   }
 

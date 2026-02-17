@@ -3,8 +3,12 @@
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const { HTTP_TIMEOUT_MS } = require('../config');
 
 const PROVIDERS = ['anthropic', 'openai', 'github'];
+
+function logInfo() { /* silent */ }
+function logError() { /* silent */ }
 
 const DEFAULTS = {
   anthropic: {
@@ -49,8 +53,8 @@ function requestJson(url, options, body) {
       });
     });
     req.on('error', reject);
-    req.setTimeout(30000, () => {
-      req.destroy(new Error('AI provider request timed out'));
+    req.setTimeout(HTTP_TIMEOUT_MS, () => {
+      req.destroy(new Error('AI provider request timed out (' + (HTTP_TIMEOUT_MS / 1000) + 's)'));
     });
     if (body) req.write(body);
     req.end();
@@ -114,12 +118,18 @@ async function callAnthropic(key, model, messages, temperature, maxTokens) {
 }
 
 async function callOpenAI(key, model, messages, temperature, maxTokens) {
-  const body = JSON.stringify({
+  const requestBody = {
     model,
     messages,
-    max_completion_tokens: maxTokens,
-    temperature
-  });
+    max_completion_tokens: maxTokens
+  };
+  // Reasoning models (o-series, gpt-5+) may ignore temperature or require 1.
+  // Only include temperature for non-reasoning models.
+  const isReasoning = /^(o[1-9]|gpt-5)/.test(model);
+  if (!isReasoning) {
+    requestBody.temperature = temperature;
+  }
+  const body = JSON.stringify(requestBody);
   const url = new URL(DEFAULTS.openai.endpoint);
   const payload = await requestJson(url, {
     method: 'POST',
@@ -132,20 +142,40 @@ async function callOpenAI(key, model, messages, temperature, maxTokens) {
     }
   }, body);
 
-  const content = payload?.choices?.[0]?.message?.content;
+  const choice = payload?.choices?.[0];
+  const content = choice?.message?.content;
+  const refusal = choice?.message?.refusal;
+  const finishReason = choice?.finish_reason;
+
+  // Reasoning models may exhaust tokens on thinking, returning content: null
   if (!content || typeof content !== 'string') {
-    throw new Error('OpenAI response missing message content');
+    const usage = payload?.usage || {};
+    const diag = `finish_reason=${finishReason} refusal=${refusal || 'none'} ` +
+      `completion_tokens=${usage.completion_tokens || 0} ` +
+      `reasoning_tokens=${usage.completion_tokens_details?.reasoning_tokens || 'n/a'} ` +
+      `total_tokens=${usage.total_tokens || 0}`;
+    if (refusal) {
+      throw new Error(`OpenAI refused the request: ${refusal}`);
+    }
+    if (finishReason === 'length') {
+      throw new Error('OpenAI response truncated — model used all tokens on reasoning. Try increasing maxTokens or simplifying context.');
+    }
+    throw new Error(`OpenAI response missing message content (finish_reason=${finishReason})`);
   }
   return { model, content };
 }
 
 async function callGitHub(token, model, endpoint, messages, temperature, maxTokens) {
-  const body = JSON.stringify({
+  const requestBody = {
     model,
     messages,
-    max_completion_tokens: maxTokens,
-    temperature
-  });
+    max_completion_tokens: maxTokens
+  };
+  const isReasoning = /^(o[1-9]|.*gpt-5)/.test(model);
+  if (!isReasoning) {
+    requestBody.temperature = temperature;
+  }
+  const body = JSON.stringify(requestBody);
   const url = new URL(endpoint);
   const payload = await requestJson(url, {
     method: 'POST',
@@ -158,9 +188,24 @@ async function callGitHub(token, model, endpoint, messages, temperature, maxToke
     }
   }, body);
 
-  const content = payload?.choices?.[0]?.message?.content;
+  const choice = payload?.choices?.[0];
+  const content = choice?.message?.content;
+  const refusal = choice?.message?.refusal;
+  const finishReason = choice?.finish_reason;
+
   if (!content || typeof content !== 'string') {
-    throw new Error('GitHub model response missing message content');
+    const usage = payload?.usage || {};
+    const diag = `finish_reason=${finishReason} refusal=${refusal || 'none'} ` +
+      `completion_tokens=${usage.completion_tokens || 0} ` +
+      `reasoning_tokens=${usage.completion_tokens_details?.reasoning_tokens || 'n/a'} ` +
+      `total_tokens=${usage.total_tokens || 0}`;
+    if (refusal) {
+      throw new Error(`GitHub model refused the request: ${refusal}`);
+    }
+    if (finishReason === 'length') {
+      throw new Error('GitHub model response truncated — model used all tokens on reasoning.');
+    }
+    throw new Error(`GitHub model response missing message content (finish_reason=${finishReason})`);
   }
   return { model, content };
 }
@@ -208,6 +253,7 @@ function createAiProviderService() {
       throw new Error(`Invalid provider: ${provider}. Must be one of: ${PROVIDERS.join(', ')}`);
     }
     activeProvider = provider;
+    logInfo(provider, 'setActive', `model=${DEFAULTS[provider].model}`);
     return activeProvider;
   }
 
@@ -220,12 +266,15 @@ function createAiProviderService() {
     }
     const value = typeof key === 'string' ? key.trim() : '';
     sessionKeys[provider] = value || null;
+    const preview = value ? value.slice(0, 7) + '...' : '(cleared)';
+    logInfo(provider, 'sessionKey', preview);
   }
 
   function clearSessionKey(provider) {
     if (provider === 'github') return;
     if (!PROVIDERS.includes(provider)) return;
     sessionKeys[provider] = null;
+    logInfo(provider, 'sessionKey', 'cleared');
   }
 
   function getStatus() {
@@ -248,23 +297,39 @@ function createAiProviderService() {
     const messages = Array.isArray(options.messages) ? options.messages : [];
     if (messages.length === 0) throw new Error('messages is required');
     const temperature = Number.isFinite(options.temperature) ? options.temperature : 0.2;
-    const maxTokens = Number.isFinite(options.maxTokens) ? options.maxTokens : 1200;
+    const defaultMax = /^(o[1-9]|gpt-5)/.test(DEFAULTS[provider].model) ? 4096 : 1200;
+    const maxTokens = Number.isFinite(options.maxTokens) ? options.maxTokens : defaultMax;
+    const model = DEFAULTS[provider].model;
+    const source = getTokenSource(provider);
 
-    if (provider === 'anthropic') {
-      const key = resolveKey('anthropic');
-      if (!key) throw new Error('Anthropic API key not configured');
-      return callAnthropic(key, DEFAULTS.anthropic.model, messages, temperature, maxTokens);
+    logInfo(provider, 'generate', `model=${model} tokenSource=${source} msgs=${messages.length} temp=${temperature} maxTokens=${maxTokens}`);
+    const start = Date.now();
+
+    try {
+      let result;
+      if (provider === 'anthropic') {
+        const key = resolveKey('anthropic');
+        if (!key) throw new Error('Anthropic API key not configured');
+        result = await callAnthropic(key, model, messages, temperature, maxTokens);
+      } else if (provider === 'openai') {
+        const key = resolveKey('openai');
+        if (!key) throw new Error('OpenAI API key not configured');
+        result = await callOpenAI(key, model, messages, temperature, maxTokens);
+      } else {
+        const token = providerConfig && providerConfig.token ? String(providerConfig.token).trim() : '';
+        if (!token) throw new Error('GitHub access token is required');
+        result = await callGitHub(token, model, DEFAULTS.github.endpoint, messages, temperature, maxTokens);
+      }
+
+      const durationMs = Date.now() - start;
+      const chars = result.content ? result.content.length : 0;
+      logInfo(provider, 'success', `model=${result.model} ${durationMs}ms ${chars} chars`);
+      return result;
+    } catch (err) {
+      const durationMs = Date.now() - start;
+      logError(provider, `generate failed after ${durationMs}ms`, err);
+      throw err;
     }
-
-    if (provider === 'openai') {
-      const key = resolveKey('openai');
-      if (!key) throw new Error('OpenAI API key not configured');
-      return callOpenAI(key, DEFAULTS.openai.model, messages, temperature, maxTokens);
-    }
-
-    const token = providerConfig && providerConfig.token ? String(providerConfig.token).trim() : '';
-    if (!token) throw new Error('GitHub access token is required');
-    return callGitHub(token, DEFAULTS.github.model, DEFAULTS.github.endpoint, messages, temperature, maxTokens);
   }
 
   return {

@@ -15,7 +15,7 @@
   <div class="container">
     <div class="main-layout">
       <!-- Left Navigation -->
-      <nav class="left-nav">
+      <nav class="left-nav" aria-label="Workflow navigation">
         <!-- Brand Header -->
         <div class="nav-brand" data-ui-nav-brand data-ui-mode="standard"></div>
 
@@ -43,11 +43,6 @@
 
       <!-- Main Content -->
       <main class="content content-full-width">
-        <!-- Breadcrumbs -->
-        <nav class="breadcrumbs" id="breadcrumbs" style="display: none;">
-          <!-- Populated by JavaScript -->
-        </nav>
-
         <!-- Step 2: Upload Music & Analysis -->
         <div class="upload-section" id="uploadSection">
           <div class="section-header">
@@ -214,7 +209,8 @@
         </div>
 
         <div class="step-footer">
-          <a href="step3.html" class="btn btn-primary">Continue to Step 3: Canon</a>
+          <a href="step1.html" class="btn-back">&larr; Step 1: Theme</a>
+          <a href="step3.html" class="btn btn-primary">Continue to Step 3: Canon &rarr;</a>
         </div>
       </main>
     </div>
@@ -230,6 +226,7 @@
   <script src="modules/project-actions.js"></script>
   <script src="ui-layer.js"></script>
   <script>window.UILayer && window.UILayer.init();</script>
+  <script src="modules/command-palette.js"></script>
   <script src="modules/state.js"></script>
   <script src="modules/shot-flow-state.js"></script>
   <script src="modules/error-taxonomy.js"></script>
@@ -267,10 +264,6 @@
   <script src="modules/page-chat.js"></script>
 </body>
 </html>
-
-
-
-
 
 
 

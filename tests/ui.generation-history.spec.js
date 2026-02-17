@@ -270,6 +270,12 @@ async function mockShotPageApis(page, options = {}) {
 }
 
 test.describe('Generation history phase-3 wrap-up', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.clear();
+    });
+  });
+
   test('details modal, row cancel, and retry-with-overrides call expected endpoints', async ({ page }) => {
     const historyJobs = [
       {

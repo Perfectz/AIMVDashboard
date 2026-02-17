@@ -13,6 +13,7 @@ const MODEL_OWNER = process.env.REPLICATE_MODEL_OWNER || 'bytedance';
 const MODEL_NAME = process.env.REPLICATE_MODEL_NAME || 'seedream-4.5';
 const MODEL_VERSION = (process.env.REPLICATE_MODEL_VERSION || '').trim() || null;
 const API_HOST = 'api.replicate.com';
+const LOCAL_REPLICATE_API_TOKEN = '';
 const POLL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const INITIAL_POLL_INTERVAL_MS = 2000;
 const MAX_POLL_INTERVAL_MS = 15000;
@@ -20,9 +21,59 @@ const MAX_TOTAL_IMAGES = 15;
 const MAX_REFERENCE_IMAGES = 14;
 const MAX_GENERATED_IMAGES = 4;
 const DEFAULT_MAX_IMAGES = 1;
+const PLACEHOLDER_TOKEN_PATTERN = /^r8_your_token_here$/i;
+const LOCAL_HOST_ALLOWLIST = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', '']);
+const LOCAL_RUNTIME_BLOCKLIST_ENV = [
+  'VERCEL',
+  'RENDER',
+  'RAILWAY_ENVIRONMENT',
+  'HEROKU_APP_ID',
+  'K_SERVICE',
+  'AWS_EXECUTION_ENV',
+  'AWS_LAMBDA_FUNCTION_NAME',
+  'FLY_APP_NAME',
+  'CI'
+];
 
 let cachedToken = null;
 let sessionToken = null;
+let cachedTokenSource = null;
+
+function normalizeToken(value) {
+  let token = String(value || '').trim();
+  if ((token.startsWith('"') && token.endsWith('"')) ||
+      (token.startsWith("'") && token.endsWith("'"))) {
+    token = token.slice(1, -1).trim();
+  }
+  return token;
+}
+
+function isPlaceholderToken(token) {
+  return PLACEHOLDER_TOKEN_PATTERN.test(String(token || '').trim());
+}
+
+function cacheToken(token, source) {
+  cachedToken = token;
+  cachedTokenSource = source;
+  return token;
+}
+
+function isLocalRuntime() {
+  const forcedLocal = String(process.env.AIMV_FORCE_LOCAL || '').trim() === '1';
+  if (forcedLocal) return true;
+
+  const host = String(process.env.HOST || '').trim().toLowerCase();
+  const isLocalHost = LOCAL_HOST_ALLOWLIST.has(host);
+  if (!isLocalHost) return false;
+
+  const isProduction = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
+  if (isProduction) return false;
+
+  const blocked = LOCAL_RUNTIME_BLOCKLIST_ENV.some((key) => {
+    return String(process.env[key] || '').trim() !== '';
+  });
+  return !blocked;
+}
 
 /**
  * Load REPLICATE_API_TOKEN from .env file at project root.
@@ -32,50 +83,40 @@ function loadApiToken() {
   if (sessionToken) return sessionToken;
   if (cachedToken) return cachedToken;
 
+  if (isLocalRuntime()) {
+    return cacheToken(LOCAL_REPLICATE_API_TOKEN, 'local');
+  }
+
   // Check environment variable first
   if (process.env.REPLICATE_API_TOKEN) {
-    cachedToken = process.env.REPLICATE_API_TOKEN;
-    return cachedToken;
+    const envToken = normalizeToken(process.env.REPLICATE_API_TOKEN);
+    if (envToken && !isPlaceholderToken(envToken)) {
+      return cacheToken(envToken, 'env');
+    }
   }
 
   const envPath = path.join(__dirname, '..', '.env');
-  if (!fs.existsSync(envPath)) {
-    throw new Error(
-      'No .env file found.\n' +
-      'Create one at the project root with:\n\n' +
-      '  REPLICATE_API_TOKEN=r8_your_token_here\n\n' +
-      'Get your token at: https://replicate.com/account/api-tokens\n' +
-      'See .env.example for reference.'
-    );
-  }
+  if (fs.existsSync(envPath)) {
+    const content = fs.readFileSync(envPath, 'utf8');
+    const lines = content.split(/\r?\n/);
 
-  const content = fs.readFileSync(envPath, 'utf8');
-  const lines = content.split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-
-    const match = trimmed.match(/^REPLICATE_API_TOKEN\s*=\s*(.+)$/);
-    if (match) {
-      let value = match[1].trim();
-      // Strip surrounding quotes
-      if ((value.startsWith('"') && value.endsWith('"')) ||
-          (value.startsWith("'") && value.endsWith("'"))) {
-        value = value.slice(1, -1);
+      const match = trimmed.match(/^REPLICATE_API_TOKEN\s*=\s*(.+)$/);
+      if (match) {
+        const fileToken = normalizeToken(match[1]);
+        if (fileToken && !isPlaceholderToken(fileToken)) {
+          return cacheToken(fileToken, 'env');
+        }
       }
-      if (!value) {
-        throw new Error('REPLICATE_API_TOKEN is empty in .env file.');
-      }
-      cachedToken = value;
-      return cachedToken;
     }
   }
 
   throw new Error(
-    'REPLICATE_API_TOKEN not found in .env file.\n' +
-    'Add this line to your .env:\n\n' +
-    '  REPLICATE_API_TOKEN=r8_your_token_here'
+    'Replicate API token not configured.\n' +
+    'Set REPLICATE_API_TOKEN in your environment or .env file.'
   );
 }
 
@@ -370,38 +411,73 @@ async function pollPrediction(predictionId, startTime = Date.now(), onStatus = n
  */
 function downloadImage(imageUrl, savePath) {
   const dir = path.dirname(savePath);
-  if (!fs.existsSync(dir)) {
+  try {
     fs.mkdirSync(dir, { recursive: true });
+  } catch (err) {
+    if (err.code !== 'EEXIST') throw err;
   }
 
+  const MAX_REDIRECTS = 5;
+  const DOWNLOAD_TIMEOUT_MS = 120000;
+
   return new Promise((resolve, reject) => {
+    let settled = false;
+    let redirectCount = 0;
+
+    const fail = (err) => {
+      if (settled) return;
+      settled = true;
+      // Clean up partial file
+      try { fs.unlinkSync(savePath); } catch { /* file may not exist */ }
+      reject(err);
+    };
+
     const handleResponse = (response) => {
-      // Follow redirects
+      if (settled) return;
+
+      // Follow redirects with limit
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        redirectCount++;
+        if (redirectCount > MAX_REDIRECTS) {
+          fail(new Error(`Download failed: too many redirects (${MAX_REDIRECTS})`));
+          return;
+        }
         const redirectUrl = response.headers.location;
         const mod = redirectUrl.startsWith('https') ? https : require('http');
-        mod.get(redirectUrl, handleResponse).on('error', reject);
+        const req = mod.get(redirectUrl, handleResponse);
+        req.setTimeout(DOWNLOAD_TIMEOUT_MS, () => {
+          req.destroy(new Error('Download redirect timed out'));
+        });
+        req.on('error', fail);
         return;
       }
 
       if (response.statusCode !== 200) {
-        reject(new Error(`Download failed: HTTP ${response.statusCode}`));
+        fail(new Error(`Download failed: HTTP ${response.statusCode}`));
         return;
       }
 
       const writeStream = fs.createWriteStream(savePath);
       response.pipe(writeStream);
       writeStream.on('finish', () => {
-        const stats = fs.statSync(savePath);
-        resolve({ path: savePath, size: stats.size });
+        if (settled) return;
+        settled = true;
+        try {
+          const stats = fs.statSync(savePath);
+          resolve({ path: savePath, size: stats.size });
+        } catch (statErr) {
+          try { fs.unlinkSync(savePath); } catch { /* ignore */ }
+          reject(new Error(`Downloaded file not accessible: ${statErr.message}`));
+        }
       });
-      writeStream.on('error', (err) => {
-        fs.unlinkSync(savePath); // cleanup partial file
-        reject(err);
-      });
+      writeStream.on('error', fail);
     };
 
-    https.get(imageUrl, handleResponse).on('error', reject);
+    const req = https.get(imageUrl, handleResponse);
+    req.setTimeout(DOWNLOAD_TIMEOUT_MS, () => {
+      req.destroy(new Error('Image download timed out'));
+    });
+    req.on('error', fail);
   });
 }
 
@@ -414,6 +490,7 @@ function sleep(ms) {
  */
 function clearTokenCache() {
   cachedToken = null;
+  cachedTokenSource = null;
 }
 
 function setSessionToken(token) {
@@ -427,9 +504,10 @@ function clearSessionToken() {
 
 function getTokenSource() {
   if (sessionToken) return 'session';
+  if (cachedTokenSource) return cachedTokenSource;
   try {
     loadApiToken();
-    return 'env';
+    return cachedTokenSource || 'env';
   } catch {
     return 'none';
   }
@@ -446,6 +524,7 @@ module.exports = {
   setSessionToken,
   clearSessionToken,
   getTokenSource,
+  isLocalRuntime,
   MODEL_VERSION,
   MODEL_OWNER,
   MODEL_NAME

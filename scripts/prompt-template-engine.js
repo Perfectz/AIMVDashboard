@@ -18,9 +18,9 @@ function loadCanonFile(biblePath, filename, fallback) {
   if (!fs.existsSync(filePath)) return fallback;
   try {
     return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  } catch (err) {
-    console.error(`\nError: Failed to parse ${filename}: ${err.message}\n`);
-    process.exit(1);
+  } catch {
+    /* ignored — return fallback on parse error */
+    return fallback;
   }
 }
 

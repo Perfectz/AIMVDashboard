@@ -6,10 +6,8 @@
 const fs = require('fs');
 const path = require('path');
 const { safeResolve, sanitizePathSegment } = require('../shared');
+const { SHOT_ID_REGEX, VARIATION_REGEX, MAX_REFERENCE_IMAGES } = require('../config');
 
-const SHOT_ID_REGEX = /^[A-Za-z0-9_-]{1,64}$/;
-const VARIATION_REGEX = /^[A-D]$/;
-const MAX_REFERENCE_IMAGES = 14;
 const DEFAULT_REFERENCE_POLICY = 'continuity_then_uploaded_then_canon';
 
 function createGenerationTaskService({
@@ -295,7 +293,11 @@ function createGenerationTaskService({
     reportGenerationProgress(onProgress, 'download_outputs', 88);
     ensureNotCanceled(isCanceled);
 
-    const outputs = Array.isArray(result.output) ? result.output : [result.output];
+    const rawOutputs = Array.isArray(result.output) ? result.output : (result.output ? [result.output] : []);
+    const outputs = rawOutputs.filter((url) => url && typeof url === 'string');
+    if (outputs.length === 0) {
+      throw createHttpError('No valid image URLs returned from generation API', 500);
+    }
     const savedImages = [];
 
     for (let i = 0; i < outputs.length; i++) {
@@ -336,7 +338,7 @@ function createGenerationTaskService({
     const maxImages = Number.isFinite(requestedMaxImages)
       ? Math.max(1, Math.min(2, Math.floor(requestedMaxImages)))
       : 2;
-    const requireReference = data.requireReference !== false;
+    let requireReference = data.requireReference !== false;
     const previewOnly = Boolean(data.previewOnly);
     const autoPrepareRefSet = data.autoPrepareRefSet !== false;
     const useContinuity = data.useContinuity !== false;
@@ -380,95 +382,132 @@ function createGenerationTaskService({
       return true;
     };
 
-    if (useContinuity && resolvedFirst && resolvedFirst.path) {
-      const continuityRef = renderManagement.imagePathToDataUri(projectId, resolvedFirst.path);
-      addReference(
-        continuityRef,
-        'continuity',
-        resolvedFirst.source === 'inherited'
-          ? (resolvedFirst.inheritedFromShotId || 'unknown')
-          : 'manual',
-        resolvedFirst.path || null
-      );
-    }
+    const shotPrevisEntry = previewMap?.[shotId];
+    const isCustomRefMode = shotPrevisEntry?.referenceMode === 'custom' && Array.isArray(shotPrevisEntry.selectedReferences);
 
-    let uploadedFirstRefs = currentShotRenders.seedream?.[variation]?.refs || [];
-    const autoCollectablePaths = renderManagement.collectShotReferenceImagePaths(projectPath, shotId, MAX_REFERENCE_IMAGES);
-    if (autoPrepareRefSet && uploadedFirstRefs.length === 0 && autoCollectablePaths.length > 0) {
-      uploadedFirstRefs = renderManagement.syncShotReferenceSetFiles(
-        projectPath,
-        shotId,
-        'seedream',
-        variation,
-        autoCollectablePaths,
-        MAX_REFERENCE_IMAGES
-      );
-    }
+    let uploadedFirstRefs = [];
+    let autoCollectablePaths = [];
 
-    uploadedFirstRefs.forEach((refPath, idx) => {
-      const refDataUri = renderManagement.imagePathToDataUri(projectId, refPath);
-      addReference(refDataUri, 'uploaded_ref_set', String(idx + 1), refPath);
-    });
+    if (isCustomRefMode) {
+      // Custom mode: only include explicitly selected references
+      for (const refId of shotPrevisEntry.selectedReferences) {
+        if (refList.inputs.length >= MAX_REFERENCE_IMAGES) break;
+        ensureNotCanceled(isCanceled);
 
-    const shotListPath = path.join(projectPath, 'bible', 'shot_list.json');
-    if (fs.existsSync(shotListPath)) {
-      try {
-        const shotList = JSON.parse(fs.readFileSync(shotListPath, 'utf-8'));
-        const shot = shotList.shots
-          ? shotList.shots.find((s) => s.shotId === shotId || s.id === shotId)
-          : null;
-
-        if (shot && shot.characters && shot.characters.length > 0) {
-          const prioritizedCharacters = shot.characters
-            .slice()
-            .sort((a, b) => (a.prominence === 'primary' ? -1 : 0) - (b.prominence === 'primary' ? -1 : 0));
-
-          for (const characterRef of prioritizedCharacters) {
-            ensureNotCanceled(isCanceled);
-            const charId = characterRef.id;
-            if (!charId) continue;
-            const charDir = path.join(projectPath, 'reference', 'characters', charId);
-            if (!fs.existsSync(charDir)) continue;
-
-            const candidates = [
-              'ref_1.png', 'ref_1.jpg', 'ref_1.jpeg', 'ref_1.webp',
-              'ref_2.png', 'ref_2.jpg', 'ref_2.jpeg', 'ref_2.webp',
-              'generated_01.png'
-            ];
-
-            for (const candidate of candidates) {
-              if (refList.inputs.length >= MAX_REFERENCE_IMAGES) break;
-              const refPath = path.join(charDir, candidate);
-              if (!fs.existsSync(refPath)) continue;
-
-              const relativeRefPath = renderManagement.normalizeRelativeProjectPath(projectPath, refPath);
-              const refDataUri = renderManagement.imagePathToDataUri(projectId, relativeRefPath);
-              if (!refDataUri) continue;
-              addReference(refDataUri, 'character', `${charId}/${candidate}`, relativeRefPath);
-            }
-            if (refList.inputs.length >= MAX_REFERENCE_IMAGES) break;
+        if (refId === 'continuity:prev_last') {
+          const prevFrame = renderManagement.resolvePreviousShotLastFrame(projectId, shotId);
+          if (prevFrame.available && prevFrame.path) {
+            const dataUri = renderManagement.imagePathToDataUri(projectId, prevFrame.path);
+            if (dataUri) addReference(dataUri, 'continuity', prevFrame.previousShotId || 'unknown', prevFrame.path);
           }
+        } else if (refId.startsWith('char:')) {
+          const relPath = 'reference/characters/' + refId.slice(5);
+          const dataUri = renderManagement.imagePathToDataUri(projectId, relPath);
+          if (dataUri) addReference(dataUri, 'character', refId.slice(5), relPath);
+        } else if (refId.startsWith('loc:')) {
+          const relPath = 'reference/locations/' + refId.slice(4);
+          const dataUri = renderManagement.imagePathToDataUri(projectId, relPath);
+          if (dataUri) addReference(dataUri, 'location', refId.slice(4), relPath);
         }
+      }
+      // User explicitly chose zero references in custom mode — allow prompt-only generation
+      if (refList.inputs.length === 0) {
+        requireReference = false;
+      }
+    } else {
+      // Legacy mode: auto-collect references
+      if (useContinuity && resolvedFirst && resolvedFirst.path) {
+        const continuityRef = renderManagement.imagePathToDataUri(projectId, resolvedFirst.path);
+        if (continuityRef) {
+          addReference(
+            continuityRef,
+            'continuity',
+            resolvedFirst.source === 'inherited'
+              ? (resolvedFirst.inheritedFromShotId || 'unknown')
+              : 'manual',
+            resolvedFirst.path || null
+          );
+        }
+      }
 
-        if (shot && shot.location && shot.location.id && refList.inputs.length < MAX_REFERENCE_IMAGES) {
-          const locationId = String(shot.location.id).trim();
-          if (locationId) {
-            const locationDir = path.join(projectPath, 'reference', 'locations', locationId);
-            const locationFiles = renderManagement.getOrderedReferenceFiles(locationDir);
-            for (const file of locationFiles) {
-              if (refList.inputs.length >= MAX_REFERENCE_IMAGES) break;
+      uploadedFirstRefs = currentShotRenders.seedream?.[variation]?.refs || [];
+      autoCollectablePaths = renderManagement.collectShotReferenceImagePaths(projectPath, shotId, MAX_REFERENCE_IMAGES);
+      if (autoPrepareRefSet && uploadedFirstRefs.length === 0 && autoCollectablePaths.length > 0) {
+        uploadedFirstRefs = renderManagement.syncShotReferenceSetFiles(
+          projectPath,
+          shotId,
+          'seedream',
+          variation,
+          autoCollectablePaths,
+          MAX_REFERENCE_IMAGES
+        );
+      }
+
+      uploadedFirstRefs.forEach((refPath, idx) => {
+        const refDataUri = renderManagement.imagePathToDataUri(projectId, refPath);
+        addReference(refDataUri, 'uploaded_ref_set', String(idx + 1), refPath);
+      });
+
+      const shotListPath = path.join(projectPath, 'bible', 'shot_list.json');
+      if (fs.existsSync(shotListPath)) {
+        try {
+          const shotList = JSON.parse(fs.readFileSync(shotListPath, 'utf-8'));
+          const shot = shotList.shots
+            ? shotList.shots.find((s) => s.shotId === shotId || s.id === shotId)
+            : null;
+
+          if (shot && shot.characters && shot.characters.length > 0) {
+            const prioritizedCharacters = shot.characters
+              .slice()
+              .sort((a, b) => (a.prominence === 'primary' ? -1 : 0) - (b.prominence === 'primary' ? -1 : 0));
+
+            for (const characterRef of prioritizedCharacters) {
               ensureNotCanceled(isCanceled);
+              const charId = characterRef.id;
+              if (!charId) continue;
+              const charDir = path.join(projectPath, 'reference', 'characters', charId);
+              if (!fs.existsSync(charDir)) continue;
 
-              const refPath = path.join(locationDir, file);
-              const relativeRefPath = renderManagement.normalizeRelativeProjectPath(projectPath, refPath);
-              const refDataUri = renderManagement.imagePathToDataUri(projectId, relativeRefPath);
-              if (!refDataUri) continue;
-              addReference(refDataUri, 'location', `${locationId}/${file}`, relativeRefPath);
+              const candidates = [
+                'ref_1.png', 'ref_1.jpg', 'ref_1.jpeg', 'ref_1.webp',
+                'ref_2.png', 'ref_2.jpg', 'ref_2.jpeg', 'ref_2.webp',
+                'generated_01.png'
+              ];
+
+              for (const candidate of candidates) {
+                if (refList.inputs.length >= MAX_REFERENCE_IMAGES) break;
+                const refPath = path.join(charDir, candidate);
+                if (!fs.existsSync(refPath)) continue;
+
+                const relativeRefPath = renderManagement.normalizeRelativeProjectPath(projectPath, refPath);
+                const refDataUri = renderManagement.imagePathToDataUri(projectId, relativeRefPath);
+                if (!refDataUri) continue;
+                addReference(refDataUri, 'character', `${charId}/${candidate}`, relativeRefPath);
+              }
+              if (refList.inputs.length >= MAX_REFERENCE_IMAGES) break;
             }
           }
+
+          if (shot && shot.location && shot.location.id && refList.inputs.length < MAX_REFERENCE_IMAGES) {
+            const locationId = String(shot.location.id).trim();
+            if (locationId) {
+              const locationDir = path.join(projectPath, 'reference', 'locations', locationId);
+              const locationFiles = renderManagement.getOrderedReferenceFiles(locationDir);
+              for (const file of locationFiles) {
+                if (refList.inputs.length >= MAX_REFERENCE_IMAGES) break;
+                ensureNotCanceled(isCanceled);
+
+                const refPath = path.join(locationDir, file);
+                const relativeRefPath = renderManagement.normalizeRelativeProjectPath(projectPath, refPath);
+                const refDataUri = renderManagement.imagePathToDataUri(projectId, relativeRefPath);
+                if (!refDataUri) continue;
+                addReference(refDataUri, 'location', `${locationId}/${file}`, relativeRefPath);
+              }
+            }
+          }
+        } catch {
+          /* ignored — shot_list.json read error; continue without canon refs */
         }
-      } catch (shotListErr) {
-        console.warn(`[Generate Shot] Could not read shot_list.json: ${shotListErr.message}`);
       }
     }
 
@@ -519,8 +558,13 @@ function createGenerationTaskService({
     ensureNotCanceled(isCanceled);
     reportGenerationProgress(onProgress, 'download_outputs', 88);
 
-    const outputs = Array.isArray(result.output) ? result.output : [result.output];
+    const rawOutputs = Array.isArray(result.output) ? result.output : (result.output ? [result.output] : []);
+    const outputs = rawOutputs.filter((url) => url && typeof url === 'string');
+    if (outputs.length === 0) {
+      throw createHttpError('No valid image URLs returned from generation API', 500);
+    }
     const savedImages = [];
+    const frameAssignments = [];
     const labels = ['first', 'last'];
 
     if (previewOnly) {
@@ -532,10 +576,16 @@ function createGenerationTaskService({
       const stamp = Date.now();
       for (let i = 0; i < outputs.length && i < 2; i++) {
         ensureNotCanceled(isCanceled);
-        const filename = `seedream_${variation}_preview_${stamp}_${labels[i]}.png`;
+        const frame = labels[i] || `option_${i + 1}`;
+        const filename = `seedream_${variation}_preview_${stamp}_${frame}.png`;
         const saveFilePath = path.join(previewDir, filename);
         await replicate.downloadImage(outputs[i], saveFilePath);
-        savedImages.push(`rendered/shots/${shotId}/preview/${filename}`);
+        const savedPath = `rendered/shots/${shotId}/preview/${filename}`;
+        savedImages.push(savedPath);
+        frameAssignments.push({
+          frame,
+          path: savedPath
+        });
         reportGenerationProgress(onProgress, 'download_outputs', 88 + Math.min(8, Math.floor(((i + 1) / Math.min(outputs.length, 2)) * 8)));
       }
     } else {
@@ -546,16 +596,30 @@ function createGenerationTaskService({
 
       for (let i = 0; i < outputs.length && i < 2; i++) {
         ensureNotCanceled(isCanceled);
-        const filename = `seedream_${variation}_${labels[i]}.png`;
+        const frame = labels[i] || `option_${i + 1}`;
+        const filename = `seedream_${variation}_${frame}.png`;
         const saveFilePath = path.join(shotDir, filename);
         await replicate.downloadImage(outputs[i], saveFilePath);
-        savedImages.push(`rendered/shots/${shotId}/${filename}`);
+        const savedPath = `rendered/shots/${shotId}/${filename}`;
+        savedImages.push(savedPath);
+        frameAssignments.push({
+          frame,
+          path: savedPath
+        });
         reportGenerationProgress(onProgress, 'download_outputs', 88 + Math.min(8, Math.floor(((i + 1) / Math.min(outputs.length, 2)) * 8)));
       }
     }
 
+    const hasFirst = frameAssignments.some((item) => item && item.frame === 'first');
+    const hasLast = frameAssignments.some((item) => item && item.frame === 'last');
+    const isFirstLastPair = hasFirst && hasLast;
+    const generationMode = isFirstLastPair ? 'first_last_pair' : 'single_frame';
+
     return {
       images: savedImages,
+      frameAssignments,
+      generationMode,
+      isFirstLastPair,
       predictionId: result.predictionId,
       duration: result.duration,
       hasReferenceImage: refList.inputs.length > 0,

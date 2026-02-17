@@ -8,7 +8,10 @@ function run() {
   const okRef = validateReferenceImageFile({ name: 'ref.jpg', size: 1024 });
   assert.strictEqual(okRef.ok, true);
 
-  const badRefExt = validateReferenceImageFile({ name: 'ref.webp', size: 1024 });
+  const okRefWebp = validateReferenceImageFile({ name: 'ref.webp', size: 1024 });
+  assert.strictEqual(okRefWebp.ok, true);
+
+  const badRefExt = validateReferenceImageFile({ name: 'ref.gif', size: 1024 });
   assert.strictEqual(badRefExt.ok, false);
 
   const tooLargeRef = validateReferenceImageFile({ name: 'ref.jpg', size: 25 * 1024 * 1024 });

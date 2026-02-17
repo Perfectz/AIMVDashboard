@@ -141,14 +141,30 @@ function createStoryboardPersistenceService({ projectManager }) {
     const sourceRef = typeof entry.sourceRef === 'string' ? entry.sourceRef.trim() : '';
     const notes = typeof entry.notes === 'string' ? entry.notes.trim().slice(0, 500) : '';
     const locked = Boolean(entry.locked);
-    const continuityDisabled = Boolean(entry.continuityDisabled);
+
+    const REFERENCE_MODES = new Set(['canon', 'continuity', 'none', 'custom']);
+    const referenceMode = REFERENCE_MODES.has(entry.referenceMode) ? entry.referenceMode : 'continuity';
+
+    const REF_ID_PATTERN = /^(continuity|char|loc):[A-Za-z0-9_\/.:\-]+$/;
+    let selectedReferences = [];
+    if (referenceMode === 'custom' && Array.isArray(entry.selectedReferences)) {
+      selectedReferences = entry.selectedReferences
+        .filter((id) => typeof id === 'string' && id.length <= 256 && REF_ID_PATTERN.test(id) && !id.includes('..'))
+        .slice(0, 14);
+    }
+
+    const continuityDisabled = referenceMode === 'custom'
+      ? !selectedReferences.includes('continuity:prev_last')
+      : referenceMode !== 'continuity';
 
     return {
       sourceType,
       sourceRef,
       notes,
       locked,
-      continuityDisabled
+      continuityDisabled,
+      referenceMode,
+      selectedReferences
     };
   }
 

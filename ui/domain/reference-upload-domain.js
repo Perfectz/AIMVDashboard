@@ -1,13 +1,13 @@
 (function(root) {
   'use strict';
 
-  var MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
-  var IMAGE_REF_PATTERN = /\.(png|jpg|jpeg)$/i;
-  var IMAGE_RENDER_PATTERN = /\.(png|jpg|jpeg|webp)$/i;
-  var SHOT_ID_PATTERN = /^SHOT_[A-Z0-9_]+$/i;
-  var VARIATION_PATTERN = /^[A-D]$/;
-  var FRAME_PATTERN = /^(first|last)$/;
-  var TOOL_PATTERN = /^(seedream|kling)$/;
+  const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+  const IMAGE_REF_PATTERN = /\.(png|jpg|jpeg|webp)$/i;
+  const IMAGE_RENDER_PATTERN = /\.(png|jpg|jpeg|webp)$/i;
+  const SHOT_ID_PATTERN = /^SHOT_[A-Z0-9_]+$/i;
+  const VARIATION_PATTERN = /^[A-D]$/;
+  const FRAME_PATTERN = /^(first|last)$/;
+  const TOOL_PATTERN = /^(seedream|kling)$/;
 
   function validateFilePresence(file) {
     if (!file) return { ok: false, error: 'No file selected' };
@@ -15,11 +15,11 @@
   }
 
   function validateReferenceImageFile(file) {
-    var presence = validateFilePresence(file);
+    const presence = validateFilePresence(file);
     if (!presence.ok) return presence;
 
     if (!IMAGE_REF_PATTERN.test(String(file.name || ''))) {
-      return { ok: false, error: 'Only PNG and JPEG images are supported' };
+      return { ok: false, error: 'Only PNG, JPEG, and WebP images are supported' };
     }
 
     if (Number(file.size || 0) > MAX_UPLOAD_BYTES) {
@@ -30,13 +30,13 @@
   }
 
   function validateShotRenderUpload(input) {
-    var file = input && input.file;
-    var shotId = String((input && input.shotId) || '');
-    var variation = String((input && input.variation) || '').toUpperCase();
-    var frame = String((input && input.frame) || '');
-    var tool = String((input && input.tool) || '').toLowerCase();
+    const file = input && input.file;
+    const shotId = String((input && input.shotId) || '');
+    const variation = String((input && input.variation) || '').toUpperCase();
+    const frame = String((input && input.frame) || '');
+    const tool = String((input && input.tool) || '').toLowerCase();
 
-    var presence = validateFilePresence(file);
+    const presence = validateFilePresence(file);
     if (!presence.ok) return presence;
 
     if (!IMAGE_RENDER_PATTERN.test(String(file.name || ''))) {
@@ -75,7 +75,7 @@
     };
   }
 
-  var api = {
+  const api = {
     validateReferenceImageFile: validateReferenceImageFile,
     validateShotRenderUpload: validateShotRenderUpload
   };

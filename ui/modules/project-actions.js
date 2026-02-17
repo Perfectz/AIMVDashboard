@@ -20,7 +20,7 @@
       root.alert(message);
       return;
     }
-    console.error(message);
+    /* silently handled */
   }
 
   function bindProjectActions(options) {

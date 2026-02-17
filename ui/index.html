@@ -14,7 +14,7 @@
 <body>
   <div class="container">
     <div class="main-layout">
-      <nav class="left-nav">
+      <nav class="left-nav" aria-label="Workflow navigation">
         <div class="nav-brand" data-ui-nav-brand data-ui-mode="standard"></div>
 
         <div class="project-selector-section" data-ui-project-selector data-ui-mode="standard"></div>
@@ -48,11 +48,9 @@
 
         <div class="shot-toolbar">
           <select id="platformFilter" class="search-input">
-            <option value="all">All Platforms</option>
-            <option value="kling">Kling 3.0</option>
-            <option value="nanobanana">Nano Banana</option>
-            <option value="suno">Suno</option>
-            <option value="seedream">SeedDream</option>
+            <option value="all">All Prompts</option>
+            <option value="image">Image Prompts</option>
+            <option value="video">Video Prompts</option>
           </select>
           <select id="shotSelector" class="search-input shot-selector">
             <option value="">Select a shot...</option>
@@ -98,6 +96,42 @@
             </div>
           </div>
 
+          <div class="unified-prompt-view" id="unifiedPromptView">
+            <div class="prompt-block" id="imagePromptBlock" data-collapse-key="step5-image-prompt">
+              <div class="prompt-block-header">
+                <span class="prompt-block-label">Image Prompt</span>
+                <span class="prompt-block-toggle">&#9660;</span>
+              </div>
+              <div class="prompt-block-body">
+                <div class="prompt-content"><pre id="imagePromptContent"></pre></div>
+              </div>
+            </div>
+
+            <div class="prompt-block" id="videoPromptBlock" data-collapse-key="step5-video-prompt">
+              <div class="prompt-block-header">
+                <span class="prompt-block-label">Video Prompt</span>
+                <span class="prompt-block-toggle">&#9660;</span>
+              </div>
+              <div class="prompt-block-body">
+                <div class="prompt-content"><pre id="videoPromptContent"></pre></div>
+              </div>
+            </div>
+          </div>
+
+            <div class="prompt-block" data-collapse-key="step5-prompt-info">
+              <div class="prompt-block-header">
+                <span class="prompt-block-label">File Info</span>
+                <span class="prompt-block-toggle">&#9660;</span>
+              </div>
+              <div class="prompt-block-body">
+                <div class="prompt-info">
+                  <div class="info-row"><strong>Shot File:</strong> <code id="promptFile"></code></div>
+                  <div class="info-row" id="promptVersionRow" style="display: none;"><strong>Version:</strong> <span id="promptVersion"></span></div>
+                  <div class="info-row" id="lintErrorsRow" style="display: none;"><strong>Lint Errors:</strong><ul id="lintErrorsList"></ul></div>
+                </div>
+              </div>
+            </div>
+
           <div class="shot-detail-layout">
             <section class="shot-visual-panel">
               <div class="variation-selector" id="variationSelector" style="display: none;">
@@ -107,39 +141,52 @@
                 <button class="variation-btn" data-variation="D">Option D</button>
               </div>
 
+              <label class="variation-chosen-check" id="variationChosenLabel" style="display: none;">
+                <input type="checkbox" id="variationChosenCheckbox" />
+                <span>Mark as chosen variation</span>
+              </label>
+
               <div class="shot-generation-layout" id="shotGenerationLayout" style="display: none;">
                 <div class="shot-renders" id="shotRenders" style="display: none;">
                   <div class="shot-renders-header">
                     <h3>Generated Frames</h3>
                   </div>
                   <div class="continuity-note" id="continuityNote"></div>
-                  <div class="continuity-note" id="refSetNote"></div>
                   <div class="shot-renders-grid" id="shotRendersGrid"></div>
-                  <div class="generation-history" id="generationHistorySection">
-                    <div class="generation-history-header">
+                  <div class="generation-history collapsible-section" id="generationHistorySection" data-collapse-key="step5-gen-history">
+                    <div class="generation-history-header collapsible-section-header">
                       <h4>Generation History</h4>
-                      <button id="refreshGenerationHistoryBtn" class="btn btn-secondary btn-sm">Refresh</button>
+                      <div style="display:flex;gap:0.5rem;align-items:center;">
+                        <button id="refreshGenerationHistoryBtn" class="btn btn-secondary btn-sm">Refresh</button>
+                        <span class="prompt-block-toggle">&#9660;</span>
+                      </div>
                     </div>
-                    <div id="generationHistoryList" class="generation-history-list"></div>
+                    <div class="collapsible-section-body">
+                      <div id="generationHistoryList" class="generation-history-list"></div>
+                    </div>
                   </div>
                 </div>
               </div>
             </section>
 
             <aside class="actions-panel">
-              <div class="panel-section-title">Preflight</div>
-              <div class="shot-readiness" id="shotReadiness">
-                <div class="shot-readiness-header">
-                  <strong>Generation Readiness</strong>
-                  <button id="refreshReadinessBtn" class="btn btn-secondary btn-sm" type="button">Refresh</button>
+              <div class="shot-readiness collapsible-section" id="shotReadiness" data-collapse-key="step5-preflight">
+                <div class="shot-readiness-header collapsible-section-header">
+                  <strong>Preflight</strong>
+                  <div style="display:flex;gap:0.5rem;align-items:center;">
+                    <button id="refreshReadinessBtn" class="btn btn-secondary btn-sm" type="button">Refresh</button>
+                    <span class="prompt-block-toggle">&#9660;</span>
+                  </div>
                 </div>
-                <div class="readiness-badges">
-                  <span id="readinessReplicate" class="readiness-pill pending">Replicate: unknown</span>
-                  <span id="readinessPrompt" class="readiness-pill pending">Prompt: unknown</span>
-                  <span id="readinessContinuity" class="readiness-pill pending">Continuity: unknown</span>
-                  <span id="readinessRefs" class="readiness-pill pending">References: unknown</span>
+                <div class="collapsible-section-body">
+                  <div class="readiness-badges">
+                    <span id="readinessReplicate" class="readiness-pill pending">Replicate: unknown</span>
+                    <span id="readinessPrompt" class="readiness-pill pending">Prompt: unknown</span>
+                    <span id="readinessContinuity" class="readiness-pill pending">Continuity: unknown</span>
+                    <span id="readinessRefs" class="readiness-pill pending">References: unknown</span>
+                  </div>
+                  <div id="readinessMessage" class="readiness-message">Select a shot and run refresh to validate generation readiness.</div>
                 </div>
-                <div id="readinessMessage" class="readiness-message">Select a shot and run refresh to validate generation readiness.</div>
               </div>
 
               <div class="panel-section-title">Primary Actions</div>
@@ -156,14 +203,24 @@
                 <button id="toggleAdvancedActionsBtn" class="btn btn-secondary btn-sm" type="button">Show Advanced</button>
                 <div id="advancedActionsPanel" class="advanced-actions-panel" style="display: none;">
                   <button id="generateRefImageBtn" class="btn btn-secondary" style="display: none;">Generate Single Ref Image</button>
-                  <button id="autoUploadRefSetBtn" class="btn btn-secondary" style="display: none;">Auto-prepare Ref Set (up to 14)</button>
-                  <label class="continuity-toggle">
-                    <input type="checkbox" id="continuityToggle" checked />
-                    <span>Auto continuity</span>
-                  </label>
                   <button id="replicateKeyBtn" class="btn btn-secondary">Replicate Key</button>
                   <button id="aiProviderBtn" class="btn btn-secondary">AI Settings</button>
                   <button id="agentGeneratePromptBtn" class="btn btn-secondary" style="display: none;">Agent Generate Prompt</button>
+                </div>
+              </div>
+
+              <div class="reference-selector collapsible-section" id="referenceSelector" data-collapse-key="step5-references" style="display: none;">
+                <div class="reference-selector-header collapsible-section-header">
+                  <span class="reference-selector-title">Reference Images</span>
+                  <div style="display:flex;gap:0.5rem;align-items:center;">
+                    <button id="refSelectAllBtn" class="btn btn-secondary btn-xs" type="button">All</button>
+                    <button id="refClearAllBtn" class="btn btn-secondary btn-xs" type="button">Clear</button>
+                    <span class="prompt-block-toggle">&#9660;</span>
+                  </div>
+                </div>
+                <div class="collapsible-section-body">
+                  <div class="reference-selector-count" id="referenceSelectorCount">0 / 13 selected</div>
+                  <div class="reference-selector-list" id="referenceSelectorList"></div>
                 </div>
               </div>
 
@@ -177,33 +234,9 @@
                 <span id="pipelineStatus" class="pipeline-status">Pipeline status pending...</span>
               </div>
 
-              <aside class="agent-run-panel" id="agentRunPanel" style="display: none;">
-                <div class="agent-run-header">
-                  <h3>Agent Run Panel</h3>
-                  <span id="githubAuthPill" class="agent-auth-pill disconnected">GitHub not connected</span>
-                </div>
-                <div class="agent-run-actions">
-                  <button id="githubConnectBtn" class="btn btn-secondary btn-sm">Connect GitHub</button>
-                  <button id="githubLogoutBtn" class="btn btn-secondary btn-sm" style="display: none;">Logout</button>
-                  <button id="agentCancelRunBtn" class="btn btn-secondary btn-sm" disabled>Cancel</button>
-                  <button id="agentRevertRunBtn" class="btn btn-secondary btn-sm" disabled>Revert Run</button>
-                </div>
-                <div class="agent-run-status" id="agentRunStatus">No run started yet.</div>
-                <div class="agent-run-files" id="agentRunFiles"></div>
-                <pre class="agent-run-log" id="agentRunLog"></pre>
-              </aside>
             </aside>
           </div>
 
-          <div class="prompt-collapse">
-            <div class="prompt-content" id="promptContent"><pre id="promptText"></pre></div>
-          </div>
-
-            <div class="prompt-info">
-              <div class="info-row"><strong>Shot File:</strong> <code id="promptFile"></code></div>
-              <div class="info-row" id="promptVersionRow" style="display: none;"><strong>Version:</strong> <span id="promptVersion"></span></div>
-              <div class="info-row" id="lintErrorsRow" style="display: none;"><strong>Lint Errors:</strong><ul id="lintErrorsList"></ul></div>
-            </div>
             <div class="step-footer">
               <a href="storyboard.html" class="btn btn-primary">Continue to Step 6: Storyboard</a>
             </div>
@@ -289,7 +322,7 @@
         <div class="ai-provider-key-section" id="aiProviderGithubSection">
           <div class="panel-section-title">GitHub OAuth</div>
           <div class="info-row"><strong>Status:</strong> <span id="githubProviderStatus">Not connected</span></div>
-          <p class="modal-description">GitHub Models uses OAuth. Use the Connect/Logout buttons in the Agent Run Panel below.</p>
+          <p class="modal-description">GitHub Models uses OAuth. Manage connection via the AI chat window.</p>
         </div>
       </div>
       <div class="modal-footer">
@@ -399,6 +432,7 @@
   <script src="modules/project-actions.js"></script>
   <script src="ui-layer.js"></script>
   <script>window.UILayer && window.UILayer.init();</script>
+  <script src="modules/command-palette.js"></script>
   <script src="modules/state.js"></script>
   <script src="modules/shot-flow-state.js"></script>
   <script src="modules/error-taxonomy.js"></script>
@@ -419,6 +453,7 @@
   <script src="services/project-service.js"></script>
   <script src="services/reference-upload-service.js"></script>
   <script src="services/reference-library-service.js"></script>
+  <script src="services/review-service.js"></script>
   <script src="features/content-feature.js"></script>
   <script src="features/project-feature.js"></script>
   <script src="features/reference-feature.js"></script>

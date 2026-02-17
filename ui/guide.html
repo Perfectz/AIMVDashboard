@@ -264,7 +264,7 @@
   <div class="container">
     <div class="main-layout guide-layout">
     <!-- Left Navigation -->
-    <nav class="left-nav">
+    <nav class="left-nav" aria-label="Workflow navigation">
       <div class="nav-brand" data-ui-nav-brand data-ui-mode="basic"></div>
       <div class="project-selector-section" data-ui-project-selector data-ui-mode="basic"></div>
       <div class="nav-divider"></div>
@@ -951,6 +951,7 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
   <script src="services/project-service.js"></script>
   <script src="ui-layer.js"></script>
   <script>window.UILayer && window.UILayer.init();</script>
+  <script src="modules/command-palette.js"></script>
   <script>
     window.PageChatBridge = {
       pageId: 'guide',
@@ -971,6 +972,7 @@ dry pavement, daylight, cartoonish, low quality, artifacts</code></pre>
       }
     };
   </script>
+  <script src="modules/shared-utils.js"></script>
   <script src="modules/page-chat-adapters.js"></script>
   <script src="modules/page-chat.js"></script>
 </body>

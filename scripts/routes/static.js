@@ -36,6 +36,9 @@ function registerStaticRoutes(router, ctx) {
       } else if (requestPath.startsWith('/music/')) {
         const cleanPath = requestPath.replace(/^\/+/, '');
         filePath = safeResolve(projectManager.getProjectPath(projectId), cleanPath);
+      } else if (requestPath.startsWith('/reference/')) {
+        const cleanPath = requestPath.replace(/^\/+/, '');
+        filePath = safeResolve(projectManager.getProjectPath(projectId), cleanPath);
       } else if (requestPath.startsWith('/projects/')) {
         const cleanPath = requestPath.replace(/^\/projects\//, '');
         filePath = safeResolve(PROJECTS_DIR, cleanPath);

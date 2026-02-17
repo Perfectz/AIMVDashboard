@@ -37,7 +37,8 @@ const stateDefaults = {
   'generationDetailsJobId': null,
   'shotPreflightCache': new Map(),
   'lastShotPreflight': null,
-  'searchDebounceTimer': null
+  'searchDebounceTimer': null,
+  'cachedPromptContent': {}
 };
 
 Object.keys(stateDefaults).forEach((key) => {
@@ -74,7 +75,8 @@ const promptsState = createStateScope([
   'currentTool',
   'currentPlatform',
   'currentLintFilter',
-  'searchDebounceTimer'
+  'searchDebounceTimer',
+  'cachedPromptContent'
 ]);
 
 const generationState = createStateScope([
@@ -231,7 +233,7 @@ const {
 } = window.PromptViewer;
 
 // GenerationWorkflow module
-const { closeGenerationJobStream, stopGenerationHistoryAutoRefresh, generateShot, generateImage, generateReferencedImage, runGenerationJob, trackGenerationJob, loadShotRenders, createFrameUploadSlot, openGenerationChoiceModal, closeGenerationChoiceModal, openReplicateKeyModal, closeReplicateKeyModal, saveSessionReplicateKey, clearSessionReplicateKey, loadPrevisMap, saveShotContinuityToggle, autoUploadShotReferenceSet, loadShotGenerationHistory, loadGenerationMetrics, openGenerationJobDetailsModal, closeGenerationJobDetailsModal, cancelActiveGenerationJob, cancelGenerationJobById, retryGenerationJobFromHistory, retryGenerationJobFromDetails, discardPendingGeneratedPreviews, saveGeneratedPreview, setGenerationJobStatus, setGenerationControlsForActiveJob } = window.GenerationWorkflow;
+const { closeGenerationJobStream, stopGenerationHistoryAutoRefresh, generateShot, generateImage, generateReferencedImage, runGenerationJob, trackGenerationJob, loadShotRenders, createFrameUploadSlot, openGenerationChoiceModal, closeGenerationChoiceModal, openReplicateKeyModal, closeReplicateKeyModal, saveSessionReplicateKey, clearSessionReplicateKey, loadPrevisMap, loadShotGenerationHistory, loadGenerationMetrics, openGenerationJobDetailsModal, closeGenerationJobDetailsModal, cancelActiveGenerationJob, cancelGenerationJobById, retryGenerationJobFromHistory, retryGenerationJobFromDetails, discardPendingGeneratedPreviews, saveGeneratedPreview, setGenerationJobStatus, setGenerationControlsForActiveJob, saveVariationChosen, loadVariationChosenState, saveSelectedReferences, refSelectAll, refClearAll } = window.GenerationWorkflow;
 
 // AgentIntegration module
 const { checkGenerateStatus, isTerminalRunStatus, closeAgentEventStream, resetAgentRunUI, appendAgentLogLine, updateGitHubAuthUI, updateAgentControlsForShot, renderAgentRunFiles, renderAgentRunState, refreshGitHubAuthStatus, startGitHubOAuth, logoutGitHubOAuth, fetchAgentRunState, connectAgentRunEvents, startAgentPromptRun, cancelAgentRun, revertAgentRun, handleGitHubOAuthQueryFeedback } = window.AgentIntegration;
@@ -301,7 +303,11 @@ const lintErrorsList = document.getElementById('lintErrorsList');
 const breadcrumbs = document.getElementById('breadcrumbs');
 const generateShotBtn = document.getElementById('generateShotBtn');
 const generateRefImageBtn = document.getElementById('generateRefImageBtn');
-const autoUploadRefSetBtn = document.getElementById('autoUploadRefSetBtn');
+const referenceSelector = document.getElementById('referenceSelector');
+const referenceSelectorList = document.getElementById('referenceSelectorList');
+const refSelectAllBtn = document.getElementById('refSelectAllBtn');
+const refClearAllBtn = document.getElementById('refClearAllBtn');
+const referenceSelectorCount = document.getElementById('referenceSelectorCount');
 const generationCancelBtn = document.getElementById('generationCancelBtn');
 const refreshGenerationHistoryBtn = document.getElementById('refreshGenerationHistoryBtn');
 const agentGeneratePromptBtn = document.getElementById('agentGeneratePromptBtn');
@@ -313,9 +319,9 @@ const generationHistoryList = document.getElementById('generationHistoryList');
 const shotGenerationLayout = document.getElementById('shotGenerationLayout');
 const shotRenders = document.getElementById('shotRenders');
 const shotRendersGrid = document.getElementById('shotRendersGrid');
-const continuityToggle = document.getElementById('continuityToggle');
 const continuityNote = document.getElementById('continuityNote');
-const refSetNote = document.getElementById('refSetNote');
+const variationChosenCheckbox = document.getElementById('variationChosenCheckbox');
+const variationChosenLabel = document.getElementById('variationChosenLabel');
 const agentRunPanel = document.getElementById('agentRunPanel');
 const githubAuthPill = document.getElementById('githubAuthPill');
 const githubConnectBtn = document.getElementById('githubConnectBtn');
@@ -363,6 +369,12 @@ const generationRetryRequireReference = document.getElementById('generationRetry
 const generationRetryPreviewOnly = document.getElementById('generationRetryPreviewOnly');
 const generationJobRetryDefaultBtn = document.getElementById('generationJobRetryDefaultBtn');
 const generationJobRetryOverrideBtn = document.getElementById('generationJobRetryOverrideBtn');
+
+// Unified prompt view
+const imagePromptBlock = document.getElementById('imagePromptBlock');
+const imagePromptContent = document.getElementById('imagePromptContent');
+const videoPromptBlock = document.getElementById('videoPromptBlock');
+const videoPromptContent = document.getElementById('videoPromptContent');
 
 // Stats
 const statShots = document.getElementById('stat-shots');
@@ -460,7 +472,7 @@ async function loadProjects() {
 
     return true;
   } catch (err) {
-    console.error('Failed to load projects:', err);
+    /* silently handled */
     return false;
   }
 }
@@ -480,7 +492,6 @@ async function createNewProject(name, description) {
     }
     requireProjectContext().navigateWithProject(result.project.id);
   } catch (err) {
-    console.error('Failed to create project:', err);
     throw err;
   }
 }
@@ -502,7 +513,6 @@ async function deleteActiveProject(projectId) {
       requireProjectContext().navigateWithProject('');
     }
   } catch (err) {
-    console.error('Failed to delete project:', err);
     throw err;
   }
 }
@@ -536,7 +546,6 @@ async function loadIndex() {
       showToast('Loaded', `${promptsState.indexData.totalShots} shots ready for review`, 'success', 2000);
     }
   } catch (err) {
-    console.error('Failed to load index:', err);
     showEmptyState();
     showToast('No shots found', 'Run npm run index to refresh shot files', 'info', 0);
   } finally {
@@ -575,7 +584,7 @@ async function refreshReadyShotCount() {
     }
     cachedReadyShotCount = data.selections.filter(shotIsReadyForReview).length;
   } catch (err) {
-    console.error('[Stats] Failed to fetch ready shot count', err);
+    /* silently handled */
     cachedReadyShotCount = 0;
   }
   return cachedReadyShotCount;
@@ -617,13 +626,9 @@ function updateBreadcrumbs() {
 
   const parts = [
     { label: 'Step 5: Shots' },
-    { label: PLATFORM_LABELS[promptsState.currentPlatform] || PLATFORM_LABELS.all },
-    { label: promptsState.currentShot.shotId }
+    { label: promptsState.currentShot.shotId },
+    { label: `Variation ${promptsState.currentVariation}` }
   ];
-
-  if (promptsState.currentTool === 'kling' || promptsState.currentTool === 'seedream') {
-    parts.push({ label: `Variation ${promptsState.currentVariation}` });
-  }
 
   breadcrumbs.innerHTML = '';
 
@@ -643,6 +648,61 @@ function updateBreadcrumbs() {
   });
 
   breadcrumbs.style.display = 'flex';
+}
+
+// ========================================
+// Image / Video Tool Helpers
+// ========================================
+
+/**
+ * Check if a tool name is an image generation tool.
+ */
+function isImageTool(tool) {
+  return tool === 'seedream' || tool === 'nanobanana';
+}
+
+/**
+ * Determine the active image tool for a shot (seedream preferred, then nanobanana).
+ */
+function getImageToolForShot(shot) {
+  if (!shot) return null;
+  if (shot.variations.seedream && shot.variations.seedream.length > 0) return 'seedream';
+  if (shot.variations.nanobanana && shot.variations.nanobanana.length > 0) return 'nanobanana';
+  return null;
+}
+
+/**
+ * Fetch prompt content for a specific tool+variation, using cache when available.
+ */
+async function fetchPromptContent(tool, variation) {
+  const shot = promptsState.currentShot;
+  if (!shot) return null;
+
+  // Check cache first
+  const cached = promptsState.cachedPromptContent[tool]
+    && promptsState.cachedPromptContent[tool][variation];
+  if (cached) return cached;
+
+  // Find the prompt in the shot's variations
+  const prompts = shot.variations[tool];
+  if (!prompts || prompts.length === 0) return null;
+  const prompt = prompts.find(p => p.variation === variation) || prompts[0];
+  if (!prompt || !prompt.path) return null;
+
+  const projectParam = projectState.currentProject ? `?project=${projectState.currentProject.id}` : '';
+  try {
+    const response = await fetch(`/${prompt.path}${projectParam}`);
+    if (!response.ok) return null;
+    const content = await response.text();
+    // Cache it
+    if (!promptsState.cachedPromptContent[tool]) {
+      promptsState.cachedPromptContent[tool] = {};
+    }
+    promptsState.cachedPromptContent[tool][variation] = content;
+    return content;
+  } catch {
+    return null;
+  }
 }
 
 // ========================================
@@ -673,18 +733,17 @@ function selectShot(shot) {
   }
   generationState.lastShotPreflight = null;
 
-  if (promptsState.currentPlatform !== 'all') {
-    promptsState.currentTool = promptsState.currentPlatform;
+  // Clear prompt content cache on shot change
+  promptsState.cachedPromptContent = {};
+
+  // Set currentTool to image tool (for generation features); fallback to kling
+  const imageTool = getImageToolForShot(shot);
+  if (imageTool) {
+    promptsState.currentTool = imageTool;
+  } else if (shot.variations.kling && shot.variations.kling.length > 0) {
+    promptsState.currentTool = 'kling';
   } else {
-    if (shot.variations.seedream && shot.variations.seedream.length > 0) {
-      promptsState.currentTool = 'seedream';
-    } else if (shot.variations.kling && shot.variations.kling.length > 0) {
-      promptsState.currentTool = 'kling';
-    } else if (shot.variations.nanobanana && shot.variations.nanobanana.length > 0) {
-      promptsState.currentTool = 'nanobanana';
-    } else if (shot.variations.suno && shot.variations.suno.length > 0) {
-      promptsState.currentTool = 'suno';
-    }
+    promptsState.currentTool = null;
   }
 
   if (!previousShotId || previousShotId !== promptsState.currentShot.shotId) {
@@ -700,8 +759,8 @@ function selectShot(shot) {
 }
 
 async function renderPrompt() {
-  const prompt = getCurrentPrompt();
-  if (!prompt) {
+  const shot = promptsState.currentShot;
+  if (!shot || !promptsState.currentTool) {
     resetAgentRunUI({ clearLog: true });
     updateAgentControlsForShot();
     showEmptyState();
@@ -710,58 +769,92 @@ async function renderPrompt() {
 
   hideEmptyState();
 
-  promptTitle.textContent = promptsState.currentShot.shotId;
-  promptTool.textContent = promptsState.currentTool.toUpperCase();
-  promptTool.className = `tool-badge ${promptsState.currentTool}`;
+  const imageTool = getImageToolForShot(shot);
+  const hasKling = shot.variations.kling && shot.variations.kling.length > 0;
+  const variation = promptsState.currentVariation;
 
-  promptLintStatus.textContent = prompt.lintStatus || 'UNKNOWN';
-  promptLintStatus.className = `lint-status ${prompt.lintStatus || 'UNKNOWN'}`;
+  // Header
+  promptTitle.textContent = shot.shotId;
+  const badges = [];
+  if (imageTool) badges.push('IMAGE');
+  if (hasKling) badges.push('VIDEO');
+  promptTool.textContent = badges.join(' + ') || '';
+  promptTool.className = 'tool-badge image';
 
-  if (promptsState.currentTool === 'kling' || promptsState.currentTool === 'seedream') {
-    variationSelector.style.display = 'flex';
-    updateVariationButtons();
-  } else {
-    variationSelector.style.display = 'none';
+  // Lint status from the image prompt (primary)
+  const prompt = getCurrentPrompt();
+  if (prompt) {
+    promptLintStatus.textContent = prompt.lintStatus || 'UNKNOWN';
+    promptLintStatus.className = `lint-status ${prompt.lintStatus || 'UNKNOWN'}`;
   }
 
-  promptText.textContent = '';
-  const loadingSpinner = document.createElement('div');
-  loadingSpinner.className = 'loading-inline';
-  loadingSpinner.innerHTML = '<div class="loading-spinner-small"></div> <span>Loading shot text...</span>';
-  promptText.appendChild(loadingSpinner);
+  // Variation selector
+  variationSelector.style.display = 'flex';
+  updateVariationButtons();
 
-  try {
-    const projectParam = projectState.currentProject ? `?project=${projectState.currentProject.id}` : '';
-    const response = await fetch(`/${prompt.path}${projectParam}`);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  // --- Render Image Prompt block ---
+  if (imageTool && imagePromptBlock && imagePromptContent) {
+    imagePromptBlock.style.display = 'block';
+    imagePromptContent.textContent = '';
+
+    const imageContent = await fetchPromptContent(imageTool, variation);
+    if (imageContent) {
+      renderPromptSections(imageContent, imageTool, imagePromptContent);
+    } else {
+      imagePromptContent.textContent = 'No image prompt available for this variation.';
     }
-    const content = await response.text();
-    renderPromptSections(content, promptsState.currentTool);
-  } catch (err) {
-    promptText.textContent = 'Could not load this shot file.';
-    console.error('Failed to load prompt:', err);
-    showToast('Load error', `Failed to load shot file: ${err.message}`, 'error', 3000);
+  } else if (imagePromptBlock) {
+    imagePromptBlock.style.display = 'none';
   }
 
-  promptFile.textContent = prompt.path;
-
-  if (prompt.version) {
-    promptVersion.textContent = prompt.version;
-    promptVersionRow.style.display = 'block';
+  // --- Render frames (between image and video prompts) ---
+  if (imageTool && promptsState.currentTool === 'seedream') {
+    await loadShotRenders();
   } else {
-    promptVersionRow.style.display = 'none';
+    if (shotRenders) shotRenders.style.display = 'none';
+    if (shotGenerationLayout) {
+      shotGenerationLayout.style.display = shot ? 'grid' : 'none';
+      shotGenerationLayout.style.gridTemplateColumns = '1fr';
+    }
+    if (continuityNote) { continuityNote.textContent = ''; continuityNote.classList.remove('warning'); }
+    if (referenceSelector) referenceSelector.style.display = 'none';
   }
 
-  if (prompt.lintErrors > 0) {
-    lintErrorsRow.style.display = 'block';
-    loadLintErrors(prompt.path);
-  } else {
-    lintErrorsRow.style.display = 'none';
+  // --- Render Video Prompt block ---
+  if (hasKling && videoPromptBlock && videoPromptContent) {
+    videoPromptBlock.style.display = 'block';
+    videoPromptContent.textContent = '';
+
+    const videoContent = await fetchPromptContent('kling', variation);
+    if (videoContent) {
+      renderPromptSections(videoContent, 'kling', videoPromptContent);
+    } else {
+      videoPromptContent.textContent = 'No video prompt available for this variation.';
+    }
+  } else if (videoPromptBlock) {
+    videoPromptBlock.style.display = 'none';
+  }
+
+  // Prompt info (show image prompt file if available, else kling)
+  if (prompt) {
+    promptFile.textContent = prompt.path;
+    if (prompt.version) {
+      promptVersion.textContent = prompt.version;
+      promptVersionRow.style.display = 'block';
+    } else {
+      promptVersionRow.style.display = 'none';
+    }
+    if (prompt.lintErrors > 0) {
+      lintErrorsRow.style.display = 'block';
+      loadLintErrors(prompt.path);
+    } else {
+      lintErrorsRow.style.display = 'none';
+    }
   }
 
   updateBreadcrumbs();
 
+  // Generation features (seedream only)
   if (shotReadiness) {
     shotReadiness.style.display = promptsState.currentTool === 'seedream' ? 'block' : 'none';
   }
@@ -770,9 +863,6 @@ async function renderPrompt() {
   }
   if (generateRefImageBtn) {
     generateRefImageBtn.style.display = promptsState.currentTool === 'seedream' ? 'inline-flex' : 'none';
-  }
-  if (autoUploadRefSetBtn) {
-    autoUploadRefSetBtn.style.display = promptsState.currentTool === 'seedream' ? 'inline-flex' : 'none';
   }
   if (agentGeneratePromptBtn) {
     agentGeneratePromptBtn.style.display = promptsState.currentTool ? 'inline-flex' : 'none';
@@ -784,23 +874,12 @@ async function renderPrompt() {
 
   updateAgentControlsForShot();
 
-  if (promptsState.currentTool === 'seedream' || promptsState.currentTool === 'kling') {
-    await loadShotRenders();
-    if (promptsState.currentTool !== 'seedream') {
-      clearShotReadinessView();
-    }
-  } else if (shotRenders) {
-    shotRenders.style.display = 'none';
-    if (shotGenerationLayout) {
-      shotGenerationLayout.style.display = promptsState.currentShot ? 'grid' : 'none';
-      shotGenerationLayout.style.gridTemplateColumns = '1fr';
-    }
-    if (continuityNote) {
-      continuityNote.textContent = '';
-      continuityNote.classList.remove('warning');
-    }
-    if (refSetNote) refSetNote.textContent = '';
-    if (continuityToggle) continuityToggle.disabled = true;
+  // Generation history + metrics
+  if (promptsState.currentTool === 'seedream' || hasKling) {
+    await loadShotGenerationHistory();
+    loadGenerationMetrics();
+    loadVariationChosenState();
+  } else {
     clearShotReadinessView();
   }
 }
@@ -972,15 +1051,19 @@ async function quickAcceptGeneratedPreviews(options = {}) {
   if (!generationState.pendingGeneratedPreviews || !projectState.currentProject) return false;
   const goToNext = Boolean(options.nextShot);
   const pending = generationState.pendingGeneratedPreviews;
-  const firstPreviewPath = pending.paths[0] || '';
-  const lastPreviewPath = pending.paths[1] || pending.paths[0] || '';
+  const frameAssignments = Array.isArray(pending.frameAssignments) ? pending.frameAssignments : [];
+  const firstAssignment = frameAssignments.find((item) => item && item.frame === 'first' && item.path);
+  const lastAssignment = frameAssignments.find((item) => item && item.frame === 'last' && item.path);
+  const firstPreviewPath = (firstAssignment && firstAssignment.path) || pending.paths[0] || '';
+  const lastPreviewPath = (lastAssignment && lastAssignment.path)
+    || (pending.paths.length > 1 ? pending.paths[1] : '');
   if (!firstPreviewPath) {
     showToast('Quick accept unavailable', 'No generated images available to save.', 'warning', 3000);
     return false;
   }
 
   const selections = [{ frame: 'first', previewPath: firstPreviewPath }];
-  if (lastPreviewPath) {
+  if (lastPreviewPath && lastPreviewPath !== firstPreviewPath) {
     selections.push({ frame: 'last', previewPath: lastPreviewPath });
   }
 
@@ -1029,8 +1112,8 @@ async function loadAnalysisPrompt() {
     if (!response.ok) throw new Error('Failed to load prompt');
     return await response.text();
   } catch (err) {
-    console.error('Error loading analysis prompt:', err);
-    return 'Error loading prompt. Please check the console.';
+    /* silently handled */
+    return 'Error loading prompt. Please try again.';
   }
 }
 
@@ -1048,7 +1131,7 @@ async function checkUploadStatus() {
     updateStatusIndicator('Suno', status.sunoPrompt);
     updateStatusIndicator('SongInfo', status.songInfo);
   } catch (err) {
-    console.error('Error checking upload status:', err);
+    /* silently handled */
   }
 }
 
@@ -1283,7 +1366,7 @@ async function loadTextContent() {
       }
     }
   } catch (err) {
-    console.error('Error loading text content:', err);
+    /* silently handled */
   }
 }
 
@@ -1317,7 +1400,7 @@ async function loadStep1Content() {
         }
       }
     } catch (err) {
-      console.error(`Error loading ${type.endpoint}:`, err);
+      /* silently handled */
     }
   }
 }
@@ -1356,6 +1439,45 @@ function setupCollapsibleSections() {
   });
 }
 
+function setupPromptPageCollapsibles() {
+  const defaultCollapsed = new Set([
+    'step5-gen-history',
+    'step5-references',
+    'step5-prompt-info'
+  ]);
+
+  document.querySelectorAll('[data-collapse-key]').forEach(section => {
+    const key = section.getAttribute('data-collapse-key');
+    if (!key.startsWith('step5-')) return;
+
+    const header = section.querySelector(
+      '.prompt-block-header, .collapsible-section-header'
+    );
+    const toggle = section.querySelector('.prompt-block-toggle');
+    if (!header) return;
+
+    const saved = localStorage.getItem(`collapse_${key}`);
+    const shouldCollapse = saved !== null
+      ? saved === 'true'
+      : defaultCollapsed.has(key);
+
+    if (shouldCollapse) {
+      section.classList.add('collapsed');
+      if (toggle) toggle.textContent = '\u25b6';
+    } else {
+      if (toggle) toggle.textContent = '\u25bc';
+    }
+
+    header.addEventListener('click', (e) => {
+      if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+
+      const isCollapsed = section.classList.toggle('collapsed');
+      if (toggle) toggle.textContent = isCollapsed ? '\u25b6' : '\u25bc';
+      localStorage.setItem(`collapse_${key}`, isCollapsed);
+    });
+  });
+}
+
 async function checkMusicFile() {
   if (!projectState.currentProject) return;
 
@@ -1380,7 +1502,7 @@ async function checkMusicFile() {
       if (musicControls) musicControls.style.display = 'none';
     }
   } catch (err) {
-    console.error('Error checking music file:', err);
+    /* silently handled */
   }
 }
 
@@ -1446,7 +1568,7 @@ async function loadCanonData() {
         }
       }
     } catch (err) {
-      console.error(`Error loading ${type}:`, err);
+      /* silently handled */
     }
   }
 }
@@ -1662,10 +1784,32 @@ function setupPageChatBridge() {
 // Event Listeners
 // ========================================
 
+function syncFiltersToUrl() {
+  const url = new URL(window.location.href);
+  const search = searchInput ? searchInput.value.trim() : '';
+  if (search) url.searchParams.set('q', search); else url.searchParams.delete('q');
+  if (promptsState.currentPlatform !== 'all') url.searchParams.set('platform', promptsState.currentPlatform); else url.searchParams.delete('platform');
+  if (promptsState.currentLintFilter !== 'all') url.searchParams.set('lint', promptsState.currentLintFilter); else url.searchParams.delete('lint');
+  window.history.replaceState(null, '', url.toString());
+}
+
+function restoreFiltersFromUrl() {
+  const url = new URL(window.location.href);
+  const q = url.searchParams.get('q');
+  const platform = url.searchParams.get('platform');
+  const lint = url.searchParams.get('lint');
+  if (q && searchInput) searchInput.value = q;
+  if (platform && platformFilter) { promptsState.currentPlatform = platform; platformFilter.value = platform; }
+  if (lint && lintFilter) { promptsState.currentLintFilter = lint; lintFilter.value = lint; }
+}
+
+restoreFiltersFromUrl();
+
 if (platformFilter) {
   platformFilter.addEventListener('change', (event) => {
     promptsState.currentPlatform = event.target.value || 'all';
     renderShotList();
+    syncFiltersToUrl();
   });
 }
 
@@ -1699,6 +1843,7 @@ document.querySelectorAll('.variation-btn').forEach(btn => {
   });
 });
 
+
 // Copy button
 if (copyBtn) copyBtn.addEventListener('click', copyToClipboard);
 
@@ -1716,17 +1861,39 @@ if (refreshReadinessBtn) {
   });
 }
 
-if (continuityToggle) {
-  continuityToggle.addEventListener('change', async () => {
-    if (!projectState.currentProject || !promptsState.currentShot || promptsState.currentTool !== 'seedream') return;
-    const enabled = Boolean(continuityToggle.checked);
+if (referenceSelectorList) {
+  referenceSelectorList.addEventListener('click', (e) => {
+    var tile = e.target.closest('.reference-thumb-tile');
+    if (!tile || tile.classList.contains('unavailable')) return;
+    var checkbox = tile.querySelector('input[type="checkbox"]');
+    if (!checkbox || checkbox.disabled) return;
+    checkbox.checked = !checkbox.checked;
+    tile.classList.toggle('selected', checkbox.checked);
+    saveSelectedReferences();
+  });
+}
+
+if (refSelectAllBtn) {
+  refSelectAllBtn.addEventListener('click', refSelectAll);
+}
+
+if (refClearAllBtn) {
+  refClearAllBtn.addEventListener('click', refClearAll);
+}
+
+if (variationChosenCheckbox) {
+  variationChosenCheckbox.addEventListener('change', async () => {
+    if (!projectState.currentProject || !promptsState.currentShot) return;
+    const chosen = Boolean(variationChosenCheckbox.checked);
     try {
-      await saveShotContinuityToggle(promptsState.currentShot.shotId, enabled);
-      clearCurrentShotPreflightCache();
-      await loadShotRenders({ forcePreflight: true });
+      await saveVariationChosen(chosen);
+      if (variationChosenLabel) variationChosenLabel.classList.toggle('is-chosen', chosen);
+      showToast(chosen ? 'Variation chosen' : 'Variation unmarked',
+        chosen ? `${promptsState.currentVariation} marked as chosen for ${promptsState.currentShot.shotId}` : 'Selection cleared',
+        chosen ? 'success' : 'info', 3000);
     } catch (err) {
-      continuityToggle.checked = !enabled;
-      showToast('Continuity update failed', err.message, 'error', 4000);
+      variationChosenCheckbox.checked = !chosen;
+      showToast('Failed to save choice', err.message, 'error', 4000);
     }
   });
 }
@@ -1735,7 +1902,7 @@ if (continuityToggle) {
 if (searchInput) {
   searchInput.addEventListener('input', () => {
     clearTimeout(promptsState.searchDebounceTimer);
-    promptsState.searchDebounceTimer = setTimeout(renderShotList, 250);
+    promptsState.searchDebounceTimer = setTimeout(() => { renderShotList(); syncFiltersToUrl(); }, 250);
   });
 }
 
@@ -1754,6 +1921,7 @@ if (lintFilter) {
   lintFilter.addEventListener('change', (e) => {
     promptsState.currentLintFilter = e.target.value;
     renderShotList();
+    syncFiltersToUrl();
   });
 }
 
@@ -1768,6 +1936,49 @@ if (mobilePanelOverlay) {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeMobilePanels();
+    return;
+  }
+
+  // Arrow-key shot navigation (only when not in input/textarea)
+  const tag = (e.target.tagName || '').toLowerCase();
+  const isInput = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable;
+  if (isInput) return;
+
+  const shots = promptsState.indexData?.shots;
+  if (!shots || shots.length === 0) return;
+
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    const currentId = promptsState.currentShot?.shotId;
+    const filteredShots = window.PromptViewer ? window.PromptViewer.getFilteredShots(promptsState) : shots;
+    const idx = filteredShots.findIndex((s) => s.shotId === currentId);
+    let nextIdx;
+    if (e.key === 'ArrowDown') {
+      nextIdx = idx < filteredShots.length - 1 ? idx + 1 : 0;
+    } else {
+      nextIdx = idx > 0 ? idx - 1 : filteredShots.length - 1;
+    }
+    selectShot(filteredShots[nextIdx]);
+    const activeEl = document.querySelector(`.shot-item[data-shot-id="${filteredShots[nextIdx].shotId}"]`);
+    if (activeEl) activeEl.scrollIntoView({ block: 'nearest' });
+    return;
+  }
+
+  // Left/Right to switch variations
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    const variations = ['A', 'B', 'C', 'D'];
+    const curIdx = variations.indexOf(promptsState.currentVariation);
+    if (curIdx === -1) return;
+    let nextVar;
+    if (e.key === 'ArrowRight') {
+      nextVar = curIdx < variations.length - 1 ? variations[curIdx + 1] : variations[0];
+    } else {
+      nextVar = curIdx > 0 ? variations[curIdx - 1] : variations[variations.length - 1];
+    }
+    promptsState.currentVariation = nextVar;
+    updateVariationButtons();
+    renderPrompt();
+    return;
   }
 });
 
@@ -1915,9 +2126,6 @@ if (generateShotBtn) {
 if (generateRefImageBtn) {
   generateRefImageBtn.addEventListener('click', generateReferencedImage);
 }
-if (autoUploadRefSetBtn) {
-  autoUploadRefSetBtn.addEventListener('click', autoUploadShotReferenceSet);
-}
 if (generationCancelBtn) {
   generationCancelBtn.addEventListener('click', cancelActiveGenerationJob);
 }
@@ -2026,10 +2234,14 @@ if (downloadContextJsonBtn) {
   });
 }
 
-window.addEventListener('beforeunload', () => {
+window.addEventListener('beforeunload', (e) => {
   closeAgentEventStream();
   closeGenerationJobStream();
   stopGenerationHistoryAutoRefresh();
+  if (window.AutoSave && window.AutoSave.hasDirtyFields()) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
 });
 
 // ========================================
@@ -2058,6 +2270,7 @@ window.addEventListener('beforeunload', () => {
       await loadIndex();
       // Check generate status on prompts page for shot generation
       await checkGenerateStatus();
+      setupPromptPageCollapsibles();
     }
     initializeUploads();
     initializeCanon();

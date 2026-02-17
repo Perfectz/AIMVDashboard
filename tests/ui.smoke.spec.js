@@ -32,9 +32,10 @@ test.describe('UI smoke', () => {
   test('storyboard critical controls render', async ({ page }) => {
     await page.goto('/storyboard.html');
     await assertLeftNavLoaded(page);
-    await expect(page.getByText('Music Track')).toBeVisible();
+    await expect(page.locator('#musicStatusPill')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Grid View' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Storyboard Preview', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Filmstrip' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Timeline' })).toBeVisible();
     await expect(page.locator('#assetPanel')).toBeVisible();
   });
 

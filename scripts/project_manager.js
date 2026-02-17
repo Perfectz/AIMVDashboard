@@ -47,8 +47,8 @@ class ProjectManager {
 
       const data = fs.readFileSync(INDEX_FILE, 'utf8');
       return JSON.parse(data);
-    } catch (err) {
-      console.error('Error loading projects index:', err.message);
+    } catch {
+      /* ignored — return default index on parse error */
       return {
         version: '2026-02-07',
         activeProject: 'default',
@@ -69,8 +69,8 @@ class ProjectManager {
 
       writeJsonPreserveEol(INDEX_FILE, data);
       return true;
-    } catch (err) {
-      console.error('Error saving projects index:', err.message);
+    } catch {
+      /* ignored — index save failed silently */
       return false;
     }
   }
@@ -179,7 +179,6 @@ class ProjectManager {
 
       return projectData;
     } catch (err) {
-      console.error('Error creating project:', err.message);
       throw err;
     }
   }
@@ -201,7 +200,6 @@ class ProjectManager {
       const data = fs.readFileSync(projectFile, 'utf8');
       return JSON.parse(data);
     } catch (err) {
-      console.error('Error loading project:', err.message);
       throw err;
     }
   }
@@ -242,7 +240,6 @@ class ProjectManager {
 
       return updated;
     } catch (err) {
-      console.error('Error updating project:', err.message);
       throw err;
     }
   }
@@ -280,7 +277,6 @@ class ProjectManager {
 
       return true;
     } catch (err) {
-      console.error('Error deleting project:', err.message);
       throw err;
     }
   }
@@ -407,7 +403,6 @@ class ProjectManager {
 
       return true;
     } catch (err) {
-      console.error('Error setting active project:', err.message);
       throw err;
     }
   }

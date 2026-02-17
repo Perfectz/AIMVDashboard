@@ -26,11 +26,8 @@
       root.SharedUtils.showToast(title, message, tone || 'info', durationMs || 2800);
       return;
     }
-    if (tone === 'error') {
-      console.error('[PageChat]', title + ':', message);
-      return;
-    }
-    console.log('[PageChat]', title + ':', message);
+    /* silently handled - no toast available */
+    return;
   }
 
   var escapeHtml = root.SharedUtils.escapeHtml;

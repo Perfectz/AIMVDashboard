@@ -1,5 +1,6 @@
-const MAX_MESSAGE_CHARS = 4000;
-const MAX_MODEL_HISTORY = 8;
+const { MAX_CHAT_MESSAGE_CHARS, MAX_CHAT_MODEL_HISTORY } = require('../config');
+const MAX_MESSAGE_CHARS = MAX_CHAT_MESSAGE_CHARS;
+const MAX_MODEL_HISTORY = MAX_CHAT_MODEL_HISTORY;
 const MAX_PROPOSAL_CONTENT = 250000;
 
 function clip(value, maxChars) {
@@ -99,15 +100,32 @@ function parseModelJsonResponse(rawContent) {
   }
 }
 
-function buildSystemPrompt() {
-  return [
-    'You are Page Chat Copilot for an AI music video editor.',
-    'You must only propose edits allowed by the provided allowedTargets list.',
-    'Never propose file paths. Never propose unsupported targets.',
-    'Use only provided context. Keep text concise and practical.',
-    'Return strict JSON only using this schema:',
-    '{"assistantMessage":string,"proposals":[{"summary":string,"target":object,"newContent":string,"reason":string,"confidence":number}]}'
+const PROPOSAL_PAGES = new Set(['index', 'step1', 'step2', 'step3']);
+
+function buildSystemPrompt(pageId) {
+  const base = 'You are Page Chat Copilot — an AI agent for an AI music video editor.';
+  const awareness = [
+    'You have full awareness of the project across all workflow steps.',
+    'Context documents include the current focus document plus background data from other steps (concept, song info, canon docs, etc.).',
+    'Background docs (labeled "Step 1 —", "Step 2 —", "Canon —") give you project-wide knowledge.',
+    'Cross-reference other steps when relevant (e.g., suggest characters that match the concept, or cinematography that fits the song mood).'
   ].join(' ');
+
+  const proposalRules = [
+    'When you have concrete content to add or edit, include it as proposals using the allowedTargets list.',
+    'Only propose edits to targets in the allowedTargets list. Never propose file paths or unsupported targets.',
+    'If a document is empty, propose starter content based on what you know from the project.'
+  ].join(' ');
+
+  const format = [
+    'Return strict JSON only using this schema:',
+    '{"assistantMessage":string,"proposals":[{"summary":string,"target":object,"newContent":string,"reason":string,"confidence":number}]}',
+    'The assistantMessage MUST be a thorough, detailed explanation — write as much as needed.',
+    'Use markdown formatting in assistantMessage for readability (headers, bullet points, bold, etc.).',
+    'Always provide a helpful assistantMessage even if you have no proposals.'
+  ].join(' ');
+
+  return [base, awareness, proposalRules, format].join(' ');
 }
 
 function buildModelMessages(session, context, userMessage) {
@@ -152,7 +170,7 @@ function buildModelMessages(session, context, userMessage) {
   };
 
   return [
-    { role: 'system', content: buildSystemPrompt() },
+    { role: 'system', content: buildSystemPrompt(context.pageId) },
     ...modelHistory,
     { role: 'user', content: JSON.stringify(payload) }
   ];
@@ -229,21 +247,28 @@ function createPageChatService({ store, contextService, applyService, aiProvider
     const modelResult = await generateFn(providerConfig, {
       messages,
       temperature: 0.2,
-      maxTokens: 1800
+      maxTokens: 16384
     });
 
-    const parsed = parseModelJsonResponse(modelResult.content);
-    if (!parsed || typeof parsed !== 'object') {
-      warnings.push('Model output was not valid JSON; no proposals generated.');
+    const rawContent = String(modelResult.content || '');
+    const expectsJson = PROPOSAL_PAGES.has(context.pageId);
+
+    let assistantMessageRaw = '';
+    let rawProposals = [];
+
+    if (expectsJson) {
+      const parsed = parseModelJsonResponse(rawContent);
+      if (!parsed || typeof parsed !== 'object') {
+        warnings.push('Model output was not valid JSON; no proposals generated.');
+        assistantMessageRaw = rawContent || 'I reviewed the context but could not produce a structured proposal this time.';
+      } else {
+        assistantMessageRaw = typeof parsed.assistantMessage === 'string' ? parsed.assistantMessage : '';
+        rawProposals = Array.isArray(parsed.proposals) ? parsed.proposals : [];
+      }
+    } else {
+      // Plain text pages (step1, step2, step3, etc.) — use raw content directly
+      assistantMessageRaw = rawContent || 'No recommendations available for this context.';
     }
-
-    const assistantMessageRaw = parsed && typeof parsed.assistantMessage === 'string'
-      ? parsed.assistantMessage
-      : (context.editable
-        ? 'I reviewed the current page context but could not produce a valid structured proposal this time.'
-        : 'This page is read-only in chat v1. I can review context and suggest actions, but I cannot apply edits here.');
-
-    const rawProposals = parsed && Array.isArray(parsed.proposals) ? parsed.proposals : [];
     const proposals = [];
 
     rawProposals.forEach((rawProposal) => {
@@ -282,7 +307,7 @@ function createPageChatService({ store, contextService, applyService, aiProvider
       });
     });
 
-    const assistantMessage = clip(assistantMessageRaw, 3000);
+    const assistantMessage = clip(assistantMessageRaw, 12000);
     store.addMessage(projectId, sessionId, {
       id: store.createMessageId(),
       role: 'assistant',

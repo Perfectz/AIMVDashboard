@@ -114,7 +114,7 @@
         try {
           listener(state, normalized);
         } catch (err) {
-          console.error('[ShotFlowState] listener error:', err);
+          /* silently handled */
         }
       });
       return state;

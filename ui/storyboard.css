@@ -1393,6 +1393,325 @@ body.focus-mode .main-layout {
   gap: 0.55rem;
 }
 
+/* ===== FILMSTRIP VIEW ===== */
+.filmstrip-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+/* --- Player Stage --- */
+.filmstrip-player {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.filmstrip-player-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 520px;
+  background: #0a0a0f;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.filmstrip-player-image,
+.filmstrip-player-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.filmstrip-player-image.active,
+.filmstrip-player-video.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.filmstrip-player-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 1rem 1.25rem;
+  background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 100%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.filmstrip-player-stage:hover .filmstrip-player-overlay {
+  opacity: 1;
+}
+
+.filmstrip-player-shot-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+
+.filmstrip-player-counter {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+  letter-spacing: 0.02em;
+}
+
+.filmstrip-player-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-quaternary);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* --- Player Controls --- */
+.filmstrip-player-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+
+.filmstrip-ctrl-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 10px;
+  padding: 0.55rem 1rem;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  font-family: inherit;
+}
+
+.filmstrip-ctrl-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+}
+
+.filmstrip-play-btn {
+  min-width: 90px;
+}
+
+.filmstrip-play-btn.playing {
+  background: var(--accent-primary);
+  color: var(--storyboard-accent-contrast);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.filmstrip-speed-control {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: 0.75rem;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.filmstrip-speed-control select {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  padding: 0.35rem 0.5rem;
+  font-size: 12px;
+}
+
+/* --- Music Bar --- */
+.filmstrip-music-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.filmstrip-music-bar.has-music .filmstrip-music-toggle {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.filmstrip-music-bar.playing .filmstrip-music-toggle {
+  background: var(--accent-primary);
+  color: var(--storyboard-accent-contrast);
+  border-color: var(--accent-primary);
+}
+
+.filmstrip-music-toggle {
+  flex: 0 0 auto;
+  min-width: 64px;
+  font-size: 12px;
+  padding: 0.4rem 0.65rem;
+}
+
+.filmstrip-music-progress {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-elevated);
+  border-radius: 999px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  min-width: 80px;
+}
+
+.filmstrip-music-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent-primary);
+  border-radius: 999px;
+  transition: width 0.15s linear;
+}
+
+.filmstrip-music-time {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.filmstrip-music-name {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--text-quaternary);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Scroll Track --- */
+.filmstrip-scroll-track {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding: 0.5rem 0.25rem 0.75rem;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.filmstrip-scroll-track::-webkit-scrollbar {
+  height: 6px;
+}
+
+.filmstrip-scroll-track::-webkit-scrollbar-track {
+  background: var(--bg-card);
+  border-radius: 999px;
+}
+
+.filmstrip-scroll-track::-webkit-scrollbar-thumb {
+  background: var(--border-hover);
+  border-radius: 999px;
+}
+
+.filmstrip-scroll-track::-webkit-scrollbar-thumb:hover {
+  background: var(--text-quaternary);
+}
+
+.filmstrip-frame {
+  flex: 0 0 auto;
+  width: 140px;
+  cursor: pointer;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  transition: all var(--transition-base);
+  position: relative;
+  background: var(--bg-elevated);
+}
+
+.filmstrip-frame:hover {
+  border-color: var(--border-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.filmstrip-frame.active {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.filmstrip-frame-thumb {
+  aspect-ratio: 16 / 9;
+  background: var(--bg-primary);
+  overflow: hidden;
+}
+
+.filmstrip-frame-thumb img,
+.filmstrip-frame-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.filmstrip-frame-thumb .filmstrip-frame-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--text-quaternary);
+}
+
+.filmstrip-frame-label {
+  padding: 0.3rem 0.4rem;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--bg-card);
+}
+
+.filmstrip-frame-index {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: rgba(0,0,0,0.65);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
 @media (max-width: 880px) {
   .view-controls {
     flex-direction: column;

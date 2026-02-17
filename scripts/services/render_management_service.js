@@ -84,8 +84,8 @@ function createRenderManagementService({ projectManager, storyboardPersistence }
           ensureVariationEntry(entries, tool, variation);
         });
       });
-    } catch (readErr) {
-      console.warn(`[Shot Renders] Error reading ${shotDir}: ${readErr.message}`);
+    } catch {
+      /* ignored — shot dir read error; return empty entries */
     }
 
     return entries;
@@ -223,7 +223,16 @@ function createRenderManagementService({ projectManager, storyboardPersistence }
     const orderedShotIds = getOrderedShotIds(projectId);
     const previousShotId = getPreviousShotId(shotId, orderedShotIds);
     const previousRenders = previousShotId ? listShotRenderEntries(projectId, previousShotId) : { seedream: {} };
-    const previousLastA = previousRenders.seedream?.A?.last || null;
+
+    // Use previous shot's chosen variation instead of always A
+    const sequence = storyboardPersistence.readSequenceFile(projectId);
+    const prevSelection = previousShotId
+      ? (sequence.selections || []).find((s) => s.shotId === previousShotId)
+      : null;
+    const prevChosenVariation = (prevSelection && prevSelection.selectedVariation && prevSelection.selectedVariation !== 'none')
+      ? prevSelection.selectedVariation
+      : 'A';
+    const previousLastChosen = previousRenders.seedream?.[prevChosenVariation]?.last || null;
     const continuityDisabled = Boolean(previsMap?.[shotId]?.continuityDisabled);
 
     const resolvedSeedream = {};
@@ -246,10 +255,10 @@ function createRenderManagementService({ projectManager, storyboardPersistence }
         reason = 'disabled_by_shot';
       } else if (!previousShotId) {
         reason = 'no_previous_shot';
-      } else if (!previousLastA) {
+      } else if (!previousLastChosen) {
         reason = 'missing_previous_last';
       } else {
-        firstPath = previousLastA;
+        firstPath = previousLastChosen;
         firstSource = 'inherited';
         inheritedFromShotId = previousShotId;
         reason = 'inherited_from_previous_last';
@@ -260,7 +269,7 @@ function createRenderManagementService({ projectManager, storyboardPersistence }
           path: firstPath,
           source: firstSource,
           inheritedFromShotId,
-          inheritedFromVariation: inheritedFromShotId ? 'A' : null,
+          inheritedFromVariation: inheritedFromShotId ? prevChosenVariation : null,
           inheritedFromFrame: inheritedFromShotId ? 'last' : null
         },
         last: {
@@ -273,7 +282,7 @@ function createRenderManagementService({ projectManager, storyboardPersistence }
         enabled: !continuityDisabled,
         disabledByShot: continuityDisabled,
         sourceShotId: inheritedFromShotId,
-        sourceVariation: inheritedFromShotId ? 'A' : null,
+        sourceVariation: inheritedFromShotId ? prevChosenVariation : null,
         sourceFrame: inheritedFromShotId ? 'last' : null,
         reason
       };
@@ -285,23 +294,65 @@ function createRenderManagementService({ projectManager, storyboardPersistence }
         enabled: !continuityDisabled,
         disabledByShot: continuityDisabled,
         sourceShotId: previousShotId,
-        sourceFrame: previousLastA ? 'last' : null,
+        sourceFrame: previousLastChosen ? 'last' : null,
         reason: continuityDisabled
           ? 'disabled_by_shot'
-          : (!previousShotId ? 'no_previous_shot' : (previousLastA ? 'source_available' : 'missing_previous_last')),
+          : (!previousShotId ? 'no_previous_shot' : (previousLastChosen ? 'source_available' : 'missing_previous_last')),
         byVariation: continuityByVariation
       }
     };
   }
+
+  function resolvePreviousShotLastFrame(projectId, currentShotId) {
+    const orderedShotIds = getOrderedShotIds(projectId);
+    const previousShotId = getPreviousShotId(currentShotId, orderedShotIds);
+    if (!previousShotId) return { available: false, reason: 'no_previous_shot' };
+
+    const sequence = storyboardPersistence.readSequenceFile(projectId);
+    const prevSelection = (sequence.selections || []).find((s) => s.shotId === previousShotId);
+    const prevChosenVariation = (prevSelection && prevSelection.selectedVariation && prevSelection.selectedVariation !== 'none')
+      ? prevSelection.selectedVariation
+      : 'A';
+
+    const previousRenders = listShotRenderEntries(projectId, previousShotId);
+    const lastFrame = previousRenders.seedream?.[prevChosenVariation]?.last || null;
+
+    if (!lastFrame) {
+      return {
+        available: false,
+        previousShotId,
+        variation: prevChosenVariation,
+        reason: 'missing_previous_last'
+      };
+    }
+
+    return {
+      available: true,
+      previousShotId,
+      variation: prevChosenVariation,
+      path: lastFrame,
+      reason: 'source_available'
+    };
+  }
+
+  const MIME_MAP = { '.jpg': 'jpeg', '.jpeg': 'jpeg', '.png': 'png', '.webp': 'webp' };
+  const MAX_IMAGE_FILE_SIZE = 10 * 1024 * 1024; // 10 MB per reference image
 
   function imagePathToDataUri(projectId, relativeImagePath) {
     if (!relativeImagePath) return null;
     const absolutePath = safeResolve(projectManager.getProjectPath(projectId), relativeImagePath);
     if (!fs.existsSync(absolutePath)) return null;
 
+    try {
+      const stat = fs.statSync(absolutePath);
+      if (stat.size > MAX_IMAGE_FILE_SIZE) return null;
+    } catch { return null; }
+
+    const ext = path.extname(absolutePath).toLowerCase();
+    const mime = MIME_MAP[ext];
+    if (!mime) return null;
+
     const imgData = fs.readFileSync(absolutePath);
-    const ext = path.extname(absolutePath).toLowerCase().replace('.', '');
-    const mime = ext === 'jpg' ? 'jpeg' : ext;
     return `data:image/${mime};base64,${imgData.toString('base64')}`;
   }
 
@@ -310,7 +361,9 @@ function createRenderManagementService({ projectManager, storyboardPersistence }
   }
 
   function isPreviewPathForShot(shotId, relativePath) {
-    const normalized = String(relativePath || '').replace(/\\/g, '/').replace(/^\/+/, '');
+    if (!relativePath || typeof relativePath !== 'string') return false;
+    const normalized = String(relativePath).replace(/\\/g, '/').replace(/^\/+/, '');
+    if (normalized.includes('..')) return false;
     const expectedPrefix = `rendered/shots/${shotId}/preview/`;
     return normalized.startsWith(expectedPrefix);
   }
@@ -328,6 +381,7 @@ function createRenderManagementService({ projectManager, storyboardPersistence }
     getOrderedShotIds,
     getPreviousShotId,
     resolveSeedreamContinuityForShot,
+    resolvePreviousShotLastFrame,
     imagePathToDataUri,
     getShotPreviewDir,
     isPreviewPathForShot,

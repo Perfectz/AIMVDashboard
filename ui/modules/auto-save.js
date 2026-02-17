@@ -10,6 +10,7 @@ window.AutoSave = (function () {
   'use strict';
 
   const timers = new Map();
+  const dirtyFields = new Set();
   const DEBOUNCE_MS = 800;
   const SAVED_DISPLAY_MS = 2500;
   let autoSaveService = null;
@@ -59,17 +60,36 @@ window.AutoSave = (function () {
    * @param {Function} opts.projectGetter - returns current project ID
    * @param {string} [opts.statusElementId] - optional existing status element to update
    */
+  function createCharCounter(textarea, maxChars) {
+    let counter = textarea.parentElement.querySelector('.char-counter');
+    if (counter) return counter;
+    counter = document.createElement('span');
+    counter.className = 'char-counter';
+    textarea.parentElement.appendChild(counter);
+    function update() {
+      const len = textarea.value.length;
+      counter.textContent = maxChars ? len + ' / ' + maxChars : len + ' chars';
+      counter.classList.toggle('char-counter-warn', maxChars > 0 && len > maxChars * 0.9);
+      counter.classList.toggle('char-counter-over', maxChars > 0 && len > maxChars);
+    }
+    textarea.addEventListener('input', update);
+    update();
+    return counter;
+  }
+
   function attach(textarea, opts) {
     if (!textarea) return;
     const indicator = createIndicator(textarea);
+    createCharCounter(textarea, opts.maxChars || 0);
 
     textarea.addEventListener('input', () => {
       clearTimeout(timers.get(textarea));
       setStatus(indicator, 'pending', '');
+      dirtyFields.add(textarea);
 
       timers.set(textarea, setTimeout(async () => {
         const content = textarea.value.trim();
-        if (!content) return;
+        if (!content) { dirtyFields.delete(textarea); return; }
 
         const projectId = opts.projectGetter();
         if (!projectId) return;
@@ -82,6 +102,7 @@ window.AutoSave = (function () {
           } else {
             await saveContent(projectId, opts.contentType, content);
           }
+          dirtyFields.delete(textarea);
           setStatus(indicator, 'saved', '\u2713 Saved');
           setTimeout(() => setStatus(indicator, '', ''), SAVED_DISPLAY_MS);
 
@@ -103,5 +124,9 @@ window.AutoSave = (function () {
     });
   }
 
-  return { attach };
+  function hasDirtyFields() {
+    return dirtyFields.size > 0;
+  }
+
+  return { attach, hasDirtyFields };
 })();

@@ -9,7 +9,6 @@
  */
 
 const http = require('http');
-const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { createRouter } = require('./router');
@@ -297,7 +296,12 @@ registerCanonRoutes(router, {
 });
 
 registerReferenceRoutes(router, {
-  ...sharedCtx
+  ...sharedCtx,
+  safeResolve,
+  sanitizePathSegment,
+  CHARACTER_REGEX,
+  LOCATION_REGEX,
+  IMAGE_EXTENSIONS
 });
 
 registerUploadRoutes(router, {
@@ -325,8 +329,13 @@ registerGenerationRoutes(router, {
   listShotRenderEntries: renderManagement.listShotRenderEntries,
   readPrevisMapFile: storyboardPersistence.readPrevisMapFile,
   resolveSeedreamContinuityForShot: renderManagement.resolveSeedreamContinuityForShot,
+  resolvePreviousShotLastFrame: renderManagement.resolvePreviousShotLastFrame,
+  getOrderedReferenceFiles: renderManagement.getOrderedReferenceFiles,
+  getOrderedShotIds: renderManagement.getOrderedShotIds,
+  getPreviousShotId: renderManagement.getPreviousShotId,
   collectShotReferenceImagePaths: renderManagement.collectShotReferenceImagePaths,
-  syncShotReferenceSetFiles: renderManagement.syncShotReferenceSetFiles
+  syncShotReferenceSetFiles: renderManagement.syncShotReferenceSetFiles,
+  readSequenceFile: storyboardPersistence.readSequenceFile
 });
 
 registerAiProviderRoutes(router, {

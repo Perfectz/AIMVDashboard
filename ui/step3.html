@@ -15,7 +15,7 @@
   <div class="container">
     <div class="main-layout">
       <!-- Left Navigation -->
-      <nav class="left-nav">
+      <nav class="left-nav" aria-label="Workflow navigation">
         <!-- Brand Header -->
         <div class="nav-brand" data-ui-nav-brand data-ui-mode="standard"></div>
 
@@ -43,11 +43,6 @@
 
       <!-- Main Content -->
       <main class="content content-full-width">
-        <!-- Breadcrumbs -->
-        <nav class="breadcrumbs" id="breadcrumbs" style="display: none;">
-          <!-- Populated by JavaScript -->
-        </nav>
-
         <div class="section-header">
           <h2>Step 3: Content Blueprint</h2>
           <p class="section-subtitle">Separate production script, YouTube content flow, transcript, assets, and visual canon</p>
@@ -301,7 +296,8 @@
           </div>
         </div>
         <div class="step-footer">
-          <a href="step4.html" class="btn btn-primary">Continue to Step 4: References</a>
+          <a href="step2.html" class="btn-back">&larr; Step 2: Music</a>
+          <a href="step4.html" class="btn btn-primary">Continue to Step 4: References &rarr;</a>
         </div>
       </main>
     </div>
@@ -316,6 +312,7 @@
   <script src="modules/project-actions.js"></script>
   <script src="ui-layer.js"></script>
   <script>window.UILayer && window.UILayer.init();</script>
+  <script src="modules/command-palette.js"></script>
   <script src="modules/state.js"></script>
   <script src="modules/shot-flow-state.js"></script>
   <script src="modules/error-taxonomy.js"></script>
@@ -353,10 +350,6 @@
   <script src="modules/page-chat.js"></script>
 </body>
 </html>
-
-
-
-
 
 
 

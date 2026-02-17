@@ -90,9 +90,13 @@
         var replicateKeyStatus = el('replicateKeyStatus');
         if (replicateKeyStatus) {
           if (data.configured === true) {
-            replicateKeyStatus.textContent = (data.tokenSource === 'session')
-              ? 'Configured (session key)'
-              : 'Configured (.env key)';
+            if (data.tokenSource === 'session') {
+              replicateKeyStatus.textContent = 'Configured (session key)';
+            } else if (data.tokenSource === 'local') {
+              replicateKeyStatus.textContent = 'Configured (local-only key)';
+            } else {
+              replicateKeyStatus.textContent = 'Configured (.env key)';
+            }
           } else {
             replicateKeyStatus.textContent = 'Not configured';
           }
@@ -548,7 +552,7 @@
         return data;
       }
     } catch (e) {
-      console.error('Failed to fetch AI provider status', e);
+      /* silently handled */
     }
     return null;
   }
@@ -619,7 +623,7 @@
         getSharedUtils().showToast('Provider changed', 'Active AI provider set to ' + provider, 'success', 2500);
       }
     } catch (e) {
-      console.error('Failed to set AI provider', e);
+      /* silently handled */
     }
   }
 
@@ -644,7 +648,6 @@
         throw new Error(result.error || 'Failed to save key');
       }
     } catch (e) {
-      console.error('Failed to save AI provider key', e);
       getSharedUtils().showToast('Error', 'Failed to save key.', 'error', 3000);
     }
   }
@@ -659,7 +662,7 @@
         getSharedUtils().showToast('Key cleared', provider + ' session key cleared.', 'info', 2500);
       }
     } catch (e) {
-      console.error('Failed to clear AI provider key', e);
+      /* silently handled */
     }
   }
 

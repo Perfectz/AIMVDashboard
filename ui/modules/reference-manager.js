@@ -5,20 +5,71 @@
   function getSharedUtils() { return root.SharedUtils; }
   function getAppState() { return root.AppState; }
 
-  var el = getSharedUtils().el;
+  const el = getSharedUtils().el;
 
   // Module-local state
-  var charactersData = [];
-  var locationsData = [];
-  var activeGenerations = new Set();
+  let charactersData = [];
+  let locationsData = [];
+  const activeGenerations = new Set();
 
   // Prompt slot labels
-  var PROMPT_SLOT_LABELS = ['Front View', '3/4 View', 'Close-Up'];
+  const PROMPT_SLOT_LABELS = ['Front View', '3/4 View', 'Close-Up'];
+  const LOCATION_PROMPT_SLOT_LABELS = ['Wide Shot', 'Detail Shot', 'Atmosphere'];
+  const DEFAULT_REFERENCE_SLOT_COUNT = 4;
+  const MAX_REFERENCE_SLOT_COUNT = 14;
+
+  function fileListToArray(fileList) {
+    return Array.prototype.slice.call(fileList || []);
+  }
+
+  function normalizeFiles(fileCollection) {
+    if (!fileCollection) return [];
+    if (Array.isArray(fileCollection)) return fileCollection.filter(Boolean);
+    if (typeof fileCollection.length === 'number') return fileListToArray(fileCollection).filter(Boolean);
+    return [fileCollection];
+  }
+
+  function normalizeSlotNumber(value) {
+    const parsed = parseInt(value, 10);
+    if (!Number.isInteger(parsed) || parsed < 1) return 1;
+    if (parsed > MAX_REFERENCE_SLOT_COUNT) return MAX_REFERENCE_SLOT_COUNT;
+    return parsed;
+  }
+
+  function getHighestSlot(entity) {
+    let maxSlot = 0;
+    const collections = [entity && entity.images, entity && entity.generatedImages];
+    collections.forEach(function(collection) {
+      if (!Array.isArray(collection)) return;
+      collection.forEach(function(item) {
+        const slot = parseInt(item && item.slot, 10);
+        if (Number.isInteger(slot) && slot > maxSlot) {
+          maxSlot = slot;
+        }
+      });
+    });
+    return maxSlot;
+  }
+
+  function getVisibleSlotCount(entity) {
+    let highestSlot = getHighestSlot(entity);
+    if (highestSlot > MAX_REFERENCE_SLOT_COUNT) highestSlot = MAX_REFERENCE_SLOT_COUNT;
+    return Math.max(DEFAULT_REFERENCE_SLOT_COUNT, highestSlot);
+  }
+
+  function getReferenceSlotLabel(slotNum, labels) {
+    const explicit = labels && labels[slotNum - 1];
+    return explicit || ('Reference ' + slotNum);
+  }
+
+  function getReferenceInputId(characterName, slotNum) {
+    return 'refImg-' + encodeURIComponent(String(characterName || '')) + '-' + String(slotNum || '');
+  }
 
   // --- Service accessors (resolved lazily via window references set by app.js) ---
-  var _getReferenceLibraryService = null;
-  var _getReferenceFeature = null;
-  var _getGenerationState = null;
+  let _getReferenceLibraryService = null;
+  let _getReferenceFeature = null;
+  let _getGenerationState = null;
 
   function init(deps) {
     _getReferenceLibraryService = deps.getReferenceLibraryService;
@@ -45,12 +96,12 @@
   // --- Character References ---
 
   async function loadCharactersReferences() {
-    var projectState = getProjectState();
+    const projectState = getProjectState();
     if (!projectState.currentProject) return;
 
     try {
-      var libraryService = getReferenceLibraryService();
-      var result = await libraryService.listCharacters(projectState.currentProject.id);
+      const libraryService = getReferenceLibraryService();
+      const result = await libraryService.listCharacters(projectState.currentProject.id);
       if (result.ok) {
         charactersData = (result.data && result.data.characters) || [];
         renderCharactersReferences();
@@ -58,17 +109,17 @@
         getSharedUtils().showToast('Error', result.error || 'Failed to load character references', 'error', 3000);
       }
     } catch (err) {
-      console.error('Error loading character references:', err);
+      /* silently handled */
     }
   }
 
   async function loadLocationReferences() {
-    var projectState = getProjectState();
+    const projectState = getProjectState();
     if (!projectState.currentProject) return;
 
     try {
-      var libraryService = getReferenceLibraryService();
-      var result = await libraryService.listLocations(projectState.currentProject.id);
+      const libraryService = getReferenceLibraryService();
+      const result = await libraryService.listLocations(projectState.currentProject.id);
       if (result.ok) {
         locationsData = (result.data && result.data.locations) || [];
         renderLocationReferences();
@@ -76,45 +127,104 @@
         getSharedUtils().showToast('Error', result.error || 'Failed to load location references', 'error', 3000);
       }
     } catch (err) {
-      console.error('Error loading location references:', err);
+      /* silently handled */
     }
   }
 
-  async function uploadLocationReferenceImage(locationName, slotNum, file) {
-    if (!file) return;
-    var projectState = getProjectState();
+  async function uploadLocationReferenceImage(locationName, slotNum, file, options) {
+    if (!file) return { ok: false, error: 'No file selected' };
+    const opts = options || {};
+    const projectState = getProjectState();
+    if (!projectState.currentProject) {
+      if (!opts.suppressToast) {
+        getSharedUtils().showToast('Upload failed', 'No active project', 'error', 4000);
+      }
+      return { ok: false, error: 'No active project' };
+    }
     try {
-      var result = await getReferenceFeature().uploadLocationReference({
+      const result = await getReferenceFeature().uploadLocationReference({
         projectId: projectState.currentProject.id,
         locationName: locationName,
         slotNum: slotNum,
         file: file
       });
       if (result.ok) {
-        getSharedUtils().showToast('Uploaded', 'Location reference ' + slotNum + ' uploaded', 'success', 2000);
-        await loadLocationReferences();
+        if (!opts.suppressToast) {
+          getSharedUtils().showToast('Uploaded', 'Location reference ' + slotNum + ' uploaded', 'success', 2000);
+        }
+        if (!opts.suppressReload) {
+          await loadLocationReferences();
+        }
+        return { ok: true };
       } else {
-        getSharedUtils().showToast('Upload failed', result.error || 'Unknown error', 'error', 4000);
+        if (!opts.suppressToast) {
+          getSharedUtils().showToast('Upload failed', result.error || 'Unknown error', 'error', 4000);
+        }
+        return { ok: false, error: result.error || 'Unknown error' };
       }
     } catch (err) {
-      getSharedUtils().showToast('Upload failed', err.message, 'error', 4000);
+      if (!opts.suppressToast) {
+        getSharedUtils().showToast('Upload failed', err.message, 'error', 4000);
+      }
+      return { ok: false, error: err.message };
+    }
+  }
+
+  async function uploadLocationReferenceImages(locationName, startSlotNum, files) {
+    const utils = getSharedUtils();
+    const startSlot = normalizeSlotNumber(startSlotNum);
+    const normalizedFiles = normalizeFiles(files);
+    if (normalizedFiles.length === 0) return;
+
+    const maxUploads = Math.max(0, MAX_REFERENCE_SLOT_COUNT - startSlot + 1);
+    const uploadQueue = normalizedFiles.slice(0, maxUploads);
+    let uploadedCount = 0;
+    let failedCount = 0;
+
+    for (let i = 0; i < uploadQueue.length; i++) {
+      const slot = startSlot + i;
+      const result = await uploadLocationReferenceImage(locationName, slot, uploadQueue[i], {
+        suppressToast: uploadQueue.length > 1,
+        suppressReload: true
+      });
+      if (result && result.ok) uploadedCount++;
+      else failedCount++;
+    }
+
+    if (uploadQueue.length > 0) {
+      await loadLocationReferences();
+    }
+
+    if (uploadQueue.length > 1) {
+      if (uploadedCount > 0) {
+        utils.showToast('Uploaded', uploadedCount + ' location reference image(s) uploaded', 'success', 2500);
+      }
+      if (failedCount > 0) {
+        utils.showToast('Partial upload', failedCount + ' image(s) failed to upload', 'warning', 3500);
+      }
+    }
+
+    if (normalizedFiles.length > uploadQueue.length) {
+      utils.showToast('Limit reached', 'Only slots 1-' + MAX_REFERENCE_SLOT_COUNT + ' are available', 'warning', 3500);
     }
   }
 
   function buildLocationImageSlot(location, slotNum) {
-    var projectState = getProjectState();
-    var image = location.images.find(function(img) { return img.slot === slotNum; });
-    var slot = document.createElement('div');
+    const projectState = getProjectState();
+    const image = location.images.find(function(img) { return Number(img.slot) === slotNum; });
+    const slot = document.createElement('div');
     slot.className = 'reference-image-slot' + (image ? ' has-image' : '');
     slot.style.position = 'relative';
 
     slot.addEventListener('click', function() {
-      var input = document.createElement('input');
+      const input = document.createElement('input');
       input.type = 'file';
-      input.accept = 'image/png,image/jpeg,image/jpg';
+      input.accept = 'image/png,image/jpeg,image/jpg,image/webp';
+      input.multiple = true;
       input.style.display = 'none';
       input.addEventListener('change', function() {
-        if (input.files[0]) uploadLocationReferenceImage(location.name, slotNum, input.files[0]);
+        const files = normalizeFiles(input.files);
+        if (files.length > 0) uploadLocationReferenceImages(location.name, slotNum, files);
         input.remove();
       });
       document.body.appendChild(input);
@@ -126,13 +236,13 @@
     slot.addEventListener('drop', function(e) {
       e.preventDefault();
       slot.classList.remove('drag-over');
-      var file = e.dataTransfer.files[0];
-      if (file) uploadLocationReferenceImage(location.name, slotNum, file);
+      const files = normalizeFiles(e.dataTransfer && e.dataTransfer.files);
+      if (files.length > 0) uploadLocationReferenceImages(location.name, slotNum, files);
     });
 
     if (image) {
-      var img = document.createElement('img');
-      img.src = '/projects/' + projectState.currentProject.id + '/reference/locations/' + encodeURIComponent(location.name) + '/' + image.filename;
+      const img = document.createElement('img');
+      img.src = '/projects/' + encodeURIComponent(projectState.currentProject.id) + '/reference/locations/' + encodeURIComponent(location.name) + '/' + encodeURIComponent(image.filename);
       img.alt = location.name + ' reference ' + slotNum;
       img.style.width = '100%';
       img.style.height = '100%';
@@ -140,23 +250,23 @@
       img.style.borderRadius = '8px';
       slot.appendChild(img);
 
-      var delBtn = document.createElement('button');
+      const delBtn = document.createElement('button');
       delBtn.className = 'reference-image-delete';
       delBtn.textContent = '\u00d7';
       delBtn.title = 'Delete image';
       delBtn.addEventListener('click', async function(e) {
         e.stopPropagation();
-        var libraryService = getReferenceLibraryService();
-        var result = await libraryService.deleteLocationImage(projectState.currentProject.id, location.name, slotNum);
+        const libraryService = getReferenceLibraryService();
+        const result = await libraryService.deleteLocationImage(projectState.currentProject.id, location.name, slotNum);
         if (result.ok) loadLocationReferences();
         else getSharedUtils().showToast('Error', result.error || 'Failed to delete image', 'error', 4000);
       });
       slot.appendChild(delBtn);
     } else {
-      var icon = document.createElement('div');
+      const icon = document.createElement('div');
       icon.className = 'upload-icon';
       icon.textContent = '+';
-      var label = document.createElement('div');
+      const label = document.createElement('div');
       label.className = 'upload-label';
       label.textContent = 'Ref ' + slotNum;
       slot.appendChild(icon);
@@ -166,9 +276,10 @@
     return slot;
   }
 
-  function renderLocationReferences() {
-    var projectState = getProjectState();
-    var container = el('locationsReferenceList');
+  function renderLocationReferences(generateImageFn) {
+    const genState = getGenerationState();
+    const projectState = getProjectState();
+    const container = el('locationsReferenceList');
     if (!container) return;
 
     if (locationsData.length === 0) {
@@ -179,36 +290,138 @@
     container.innerHTML = '';
 
     locationsData.forEach(function(location) {
-      var card = document.createElement('div');
+      const card = document.createElement('div');
       card.className = 'character-reference-card';
+      card.dataset.location = location.name;
 
-      var header = document.createElement('div');
+      // === Card Header ===
+      const header = document.createElement('div');
       header.className = 'character-reference-header';
 
-      var title = document.createElement('h3');
+      const title = document.createElement('h3');
       title.className = 'character-reference-title';
       title.textContent = '\ud83d\udccd ' + location.name;
 
-      var delBtn = document.createElement('button');
+      const delBtn = document.createElement('button');
       delBtn.className = 'character-reference-delete';
-      delBtn.textContent = 'Delete';
+      delBtn.textContent = '\ud83d\uddd1\ufe0f Delete Location';
       delBtn.addEventListener('click', async function() {
         if (!confirm('Delete location "' + location.name + '" and all references?')) return;
-        var libraryService = getReferenceLibraryService();
-        var result = await libraryService.deleteLocation(projectState.currentProject.id, location.name);
+        const libraryService = getReferenceLibraryService();
+        const result = await libraryService.deleteLocation(projectState.currentProject.id, location.name);
         if (result.ok) loadLocationReferences();
         else getSharedUtils().showToast('Error', result.error || 'Failed to delete location', 'error', 4000);
       });
 
       header.appendChild(title);
       header.appendChild(delBtn);
-
-      var slotsWrap = document.createElement('div');
-      slotsWrap.className = 'reference-images-grid';
-      for (var i = 1; i <= 3; i++) slotsWrap.appendChild(buildLocationImageSlot(location, i));
-
       card.appendChild(header);
-      card.appendChild(slotsWrap);
+
+      // === Section 1: Location Definition ===
+      const defSection = document.createElement('div');
+      defSection.className = 'character-definition-section';
+      defSection.appendChild(buildSectionHeader('\ud83d\udcdd', 'Location Definition'));
+
+      if (location.definition) {
+        const defText = document.createElement('div');
+        defText.className = 'character-definition-text';
+        defText.textContent = location.definition;
+        defSection.appendChild(defText);
+
+        const defActions = document.createElement('div');
+        defActions.className = 'character-definition-actions';
+        const copyDefBtn = document.createElement('button');
+        copyDefBtn.className = 'btn btn-secondary btn-sm';
+        copyDefBtn.textContent = '\ud83d\udccb Copy Definition';
+        copyDefBtn.addEventListener('click', function() { copyLocationDefinition(location.name); });
+        defActions.appendChild(copyDefBtn);
+        defSection.appendChild(defActions);
+      } else {
+        const defPlaceholder = document.createElement('div');
+        defPlaceholder.className = 'character-definition-placeholder';
+        defPlaceholder.textContent = 'No definition yet \u2014 use Claude Code to generate a location definition.';
+        defSection.appendChild(defPlaceholder);
+      }
+
+      card.appendChild(defSection);
+
+      // === Section 2: Reference Image Prompts ===
+      const promptsSection = document.createElement('div');
+      promptsSection.className = 'character-prompts-section';
+      promptsSection.appendChild(buildSectionHeader('\ud83c\udfa8', 'Reference Image Prompts'));
+
+      const promptsGrid = document.createElement('div');
+      promptsGrid.className = 'character-prompts-grid';
+
+      [1, 2, 3].forEach(function(slotNum) {
+        const promptCard = document.createElement('div');
+        promptCard.className = 'character-prompt-card';
+
+        const label = document.createElement('div');
+        label.className = 'character-prompt-label';
+        const numBadge = document.createElement('span');
+        numBadge.className = 'prompt-slot-num';
+        numBadge.textContent = slotNum;
+        const labelText = document.createElement('span');
+        labelText.textContent = LOCATION_PROMPT_SLOT_LABELS[slotNum - 1];
+        label.appendChild(numBadge);
+        label.appendChild(labelText);
+        promptCard.appendChild(label);
+
+        const promptContent = location.prompts && location.prompts[slotNum - 1];
+        if (promptContent) {
+          const promptTextEl = document.createElement('div');
+          promptTextEl.className = 'character-prompt-text';
+          promptTextEl.textContent = promptContent;
+          promptCard.appendChild(promptTextEl);
+
+          const promptActions = document.createElement('div');
+          promptActions.className = 'character-prompt-actions';
+          const copyPromptBtn = document.createElement('button');
+          copyPromptBtn.className = 'btn btn-secondary btn-sm';
+          copyPromptBtn.textContent = '\ud83d\udccb Copy';
+          (function(ln, sn) {
+            copyPromptBtn.addEventListener('click', function() { copyLocationPrompt(ln, sn); });
+          })(location.name, slotNum);
+          promptActions.appendChild(copyPromptBtn);
+
+          if (genState.canGenerate && generateImageFn) {
+            const genPromptBtn = document.createElement('button');
+            genPromptBtn.className = 'btn btn-generate btn-sm';
+            genPromptBtn.textContent = 'Generate';
+            (function(ln, sn) {
+              genPromptBtn.addEventListener('click', function() { generateImageFn(ln, sn); });
+            })(location.name, slotNum);
+            promptActions.appendChild(genPromptBtn);
+          }
+
+          promptCard.appendChild(promptActions);
+        } else {
+          const promptPlaceholder = document.createElement('div');
+          promptPlaceholder.className = 'character-prompt-placeholder';
+          promptPlaceholder.textContent = 'Not generated yet';
+          promptCard.appendChild(promptPlaceholder);
+        }
+
+        promptsGrid.appendChild(promptCard);
+      });
+
+      promptsSection.appendChild(promptsGrid);
+      card.appendChild(promptsSection);
+
+      // === Section 3: Reference Images ===
+      const imagesSection = document.createElement('div');
+      imagesSection.className = 'reference-images-section';
+      imagesSection.appendChild(buildSectionHeader('\ud83d\uddbc\ufe0f', 'Reference Images'));
+
+      const slotsWrap = document.createElement('div');
+      slotsWrap.className = 'reference-images-grid';
+      const locationSlotCount = getVisibleSlotCount(location);
+      for (let i = 1; i <= locationSlotCount; i++) slotsWrap.appendChild(buildLocationImageSlot(location, i));
+
+      imagesSection.appendChild(slotsWrap);
+      card.appendChild(imagesSection);
+
       container.appendChild(card);
     });
   }
@@ -216,8 +429,8 @@
   // --- Character definition/prompt copy ---
 
   async function copyCharacterDefinition(characterName) {
-    var utils = getSharedUtils();
-    var char = charactersData.find(function(c) { return c.name === characterName; });
+    const utils = getSharedUtils();
+    const char = charactersData.find(function(c) { return c.name === characterName; });
     if (!char || !char.definition) {
       utils.showToast('Empty', 'No definition to copy', 'warning', 2000);
       return;
@@ -231,8 +444,8 @@
   }
 
   async function copyCharacterPrompt(characterName, slot) {
-    var utils = getSharedUtils();
-    var char = charactersData.find(function(c) { return c.name === characterName; });
+    const utils = getSharedUtils();
+    const char = charactersData.find(function(c) { return c.name === characterName; });
     if (!char || !char.prompts || !char.prompts[slot - 1]) {
       utils.showToast('Empty', 'No prompt to copy', 'warning', 2000);
       return;
@@ -245,39 +458,132 @@
     }
   }
 
+  // --- Location definition/prompt copy ---
+
+  async function copyLocationDefinition(locationName) {
+    const utils = getSharedUtils();
+    const loc = locationsData.find(function(l) { return l.name === locationName; });
+    if (!loc || !loc.definition) {
+      utils.showToast('Empty', 'No definition to copy', 'warning', 2000);
+      return;
+    }
+    try {
+      await utils.copyText(loc.definition);
+      utils.showToast('Copied!', locationName + ' definition copied', 'success', 2000);
+    } catch (err) {
+      utils.showToast('Copy failed', 'Could not copy to clipboard', 'error', 3000);
+    }
+  }
+
+  async function copyLocationPrompt(locationName, slot) {
+    const utils = getSharedUtils();
+    const loc = locationsData.find(function(l) { return l.name === locationName; });
+    if (!loc || !loc.prompts || !loc.prompts[slot - 1]) {
+      utils.showToast('Empty', 'No prompt to copy', 'warning', 2000);
+      return;
+    }
+    try {
+      await utils.copyText(loc.prompts[slot - 1]);
+      utils.showToast('Copied!', 'Prompt ' + slot + ' (' + LOCATION_PROMPT_SLOT_LABELS[slot - 1] + ') copied', 'success', 2000);
+    } catch (err) {
+      utils.showToast('Copy failed', 'Could not copy to clipboard', 'error', 3000);
+    }
+  }
+
   // --- Drag-and-drop upload for character reference images ---
 
-  async function handleDragDropUpload(characterName, slotNum, file) {
-    if (!file) return;
-    var utils = getSharedUtils();
-    var projectState = getProjectState();
-    utils.showToast('Uploading', 'Uploading reference image...', 'info', 2000);
+  async function uploadCharacterReferenceImage(characterName, slotNum, file, options) {
+    if (!file) return { ok: false, error: 'No file selected' };
+    const opts = options || {};
+    const utils = getSharedUtils();
+    const projectState = getProjectState();
+    if (!projectState.currentProject) {
+      if (!opts.suppressToast) {
+        utils.showToast('Upload failed', 'No active project', 'error', 4000);
+      }
+      return { ok: false, error: 'No active project' };
+    }
 
     try {
-      var result = await getReferenceFeature().uploadCharacterReference({
+      const result = await getReferenceFeature().uploadCharacterReference({
         projectId: projectState.currentProject.id,
         characterName: characterName,
         slotNum: slotNum,
         file: file
       });
       if (result.ok) {
-        utils.showToast('Uploaded', 'Reference image ' + slotNum + ' uploaded', 'success', 2000);
-        await loadCharactersReferences();
-      } else {
+        if (!opts.suppressToast) {
+          utils.showToast('Uploaded', 'Reference image ' + slotNum + ' uploaded', 'success', 2000);
+        }
+        if (!opts.suppressReload) {
+          await loadCharactersReferences();
+        }
+        return { ok: true };
+      }
+      if (!opts.suppressToast) {
         utils.showToast('Upload failed', result.error || 'Unknown error', 'error', 4000);
       }
+      return { ok: false, error: result.error || 'Unknown error' };
     } catch (err) {
-      utils.showToast('Upload failed', err.message, 'error', 4000);
+      if (!opts.suppressToast) {
+        utils.showToast('Upload failed', err.message, 'error', 4000);
+      }
+      return { ok: false, error: err.message };
     }
   }
 
+  async function uploadCharacterReferenceImages(characterName, startSlotNum, files) {
+    const utils = getSharedUtils();
+    const startSlot = normalizeSlotNumber(startSlotNum);
+    const normalizedFiles = normalizeFiles(files);
+    if (normalizedFiles.length === 0) return;
+
+    const maxUploads = Math.max(0, MAX_REFERENCE_SLOT_COUNT - startSlot + 1);
+    const uploadQueue = normalizedFiles.slice(0, maxUploads);
+    let uploadedCount = 0;
+    let failedCount = 0;
+
+    for (let i = 0; i < uploadQueue.length; i++) {
+      const slot = startSlot + i;
+      const result = await uploadCharacterReferenceImage(characterName, slot, uploadQueue[i], {
+        suppressToast: uploadQueue.length > 1,
+        suppressReload: true
+      });
+      if (result && result.ok) uploadedCount++;
+      else failedCount++;
+    }
+
+    if (uploadQueue.length > 0) {
+      await loadCharactersReferences();
+    }
+
+    if (uploadQueue.length > 1) {
+      if (uploadedCount > 0) {
+        utils.showToast('Uploaded', uploadedCount + ' reference image(s) uploaded', 'success', 2500);
+      }
+      if (failedCount > 0) {
+        utils.showToast('Partial upload', failedCount + ' image(s) failed to upload', 'warning', 3500);
+      }
+    }
+
+    if (normalizedFiles.length > uploadQueue.length) {
+      utils.showToast('Limit reached', 'Only slots 1-' + MAX_REFERENCE_SLOT_COUNT + ' are available', 'warning', 3500);
+    }
+  }
+
+  async function handleDragDropUpload(characterName, slotNum, files) {
+    const normalizedFiles = normalizeFiles(files);
+    if (normalizedFiles.length === 0) return;
+    await uploadCharacterReferenceImages(characterName, slotNum, normalizedFiles);
+  }
+
   function buildSectionHeader(icon, titleText) {
-    var header = document.createElement('div');
+    const header = document.createElement('div');
     header.className = 'character-section-header';
-    var iconSpan = document.createElement('span');
+    const iconSpan = document.createElement('span');
     iconSpan.className = 'character-section-icon';
     iconSpan.textContent = icon;
-    var titleSpan = document.createElement('span');
+    const titleSpan = document.createElement('span');
     titleSpan.className = 'character-section-title';
     titleSpan.textContent = titleText;
     header.appendChild(iconSpan);
@@ -286,51 +592,34 @@
   }
 
   function openReferenceImageUpload(characterName, slotNum) {
-    var input = el('refImg-' + characterName + '-' + slotNum);
+    const input = el(getReferenceInputId(characterName, slotNum));
     if (input) input.click();
   }
 
   async function handleReferenceImageUpload(characterName, slotNum, inputEl) {
-    var file = inputEl.files[0];
-    if (!file) return;
-    var projectState = getProjectState();
-    var utils = getSharedUtils();
+    const files = normalizeFiles(inputEl && inputEl.files);
+    if (files.length === 0) return;
+    const projectState = getProjectState();
+    const utils = getSharedUtils();
 
     if (!projectState.currentProject) {
       utils.showToast('Error', 'No active project', 'error', 3000);
       return;
     }
 
-    try {
-      utils.showToast('Uploading', 'Uploading reference image...', 'info', 2000);
-      var result = await getReferenceFeature().uploadCharacterReference({
-        projectId: projectState.currentProject.id,
-        characterName: characterName,
-        slotNum: slotNum,
-        file: file
-      });
-
-      if (result.ok) {
-        utils.showToast('Success', 'Reference image uploaded', 'success', 3000);
-        await loadCharactersReferences();
-      } else {
-        utils.showToast('Error', result.error || 'Upload failed', 'error', 4000);
-      }
-    } catch (err) {
-      utils.showToast('Error', 'Failed to upload: ' + err.message, 'error', 4000);
-    }
+    await uploadCharacterReferenceImages(characterName, slotNum, files);
 
     inputEl.value = '';
   }
 
   async function deleteReferenceImage(characterName, slotNum) {
     if (!confirm('Delete reference image ' + slotNum + ' for ' + characterName + '?')) return;
-    var projectState = getProjectState();
-    var utils = getSharedUtils();
+    const projectState = getProjectState();
+    const utils = getSharedUtils();
 
     try {
-      var libraryService = getReferenceLibraryService();
-      var result = await libraryService.deleteCharacterImage(projectState.currentProject.id, characterName, slotNum);
+      const libraryService = getReferenceLibraryService();
+      const result = await libraryService.deleteCharacterImage(projectState.currentProject.id, characterName, slotNum);
       if (result.ok) {
         utils.showToast('Success', 'Reference image deleted', 'success', 3000);
         await loadCharactersReferences();
@@ -344,12 +633,12 @@
 
   async function deleteCharacterReference(characterName) {
     if (!confirm('Delete all reference images for ' + characterName + '?')) return;
-    var projectState = getProjectState();
-    var utils = getSharedUtils();
+    const projectState = getProjectState();
+    const utils = getSharedUtils();
 
     try {
-      var libraryService = getReferenceLibraryService();
-      var result = await libraryService.deleteCharacter(projectState.currentProject.id, characterName);
+      const libraryService = getReferenceLibraryService();
+      const result = await libraryService.deleteCharacter(projectState.currentProject.id, characterName);
       if (result.ok) {
         utils.showToast('Success', 'Character references deleted', 'success', 3000);
         await loadCharactersReferences();
@@ -364,14 +653,14 @@
   // --- Build image slot (with generation support) ---
 
   function buildImageSlot(char, slotNum, generateImageFn) {
-    var projectState = getProjectState();
-    var genState = getGenerationState();
-    var image = char.images.find(function(img) { return img.slot === slotNum; });
-    var generatedImage = char.generatedImages ? char.generatedImages.find(function(img) { return img.slot === slotNum; }) : null;
-    var displayImage = image || generatedImage;
-    var isGenerating = activeGenerations.has(char.name + '-' + slotNum);
+    const projectState = getProjectState();
+    const genState = getGenerationState();
+    const image = char.images.find(function(img) { return Number(img.slot) === slotNum; });
+    const generatedImage = char.generatedImages ? char.generatedImages.find(function(img) { return Number(img.slot) === slotNum; }) : null;
+    const displayImage = image || generatedImage;
+    const isGenerating = activeGenerations.has(char.name + '-' + slotNum);
 
-    var slot = document.createElement('div');
+    const slot = document.createElement('div');
     slot.className = 'reference-image-slot' + (displayImage ? ' has-image' : '') + (isGenerating ? ' generating' : '');
     slot.style.position = 'relative';
     if (!isGenerating) {
@@ -384,24 +673,24 @@
     slot.addEventListener('dragleave', function(e) { e.preventDefault(); e.stopPropagation(); slot.classList.remove('drag-over'); });
     slot.addEventListener('drop', function(e) {
       e.preventDefault(); e.stopPropagation(); slot.classList.remove('drag-over');
-      var file = e.dataTransfer.files[0];
-      if (file) handleDragDropUpload(char.name, slotNum, file);
+      const files = normalizeFiles(e.dataTransfer && e.dataTransfer.files);
+      if (files.length > 0) handleDragDropUpload(char.name, slotNum, files);
     });
 
     // Show spinner overlay when generating
     if (isGenerating) {
-      var overlay = document.createElement('div');
+      const overlay = document.createElement('div');
       overlay.className = 'generating-overlay';
-      var spinner = document.createElement('div');
+      const spinner = document.createElement('div');
       spinner.className = 'generating-spinner';
-      var text = document.createElement('div');
+      const text = document.createElement('div');
       text.className = 'generating-text';
       text.textContent = 'Generating...';
       overlay.appendChild(spinner);
       overlay.appendChild(text);
       slot.appendChild(overlay);
     } else if (displayImage) {
-      var img = document.createElement('img');
+      const img = document.createElement('img');
       img.src = '/projects/' + encodeURIComponent(projectState.currentProject.id) + '/reference/characters/' + encodeURIComponent(char.name) + '/' + encodeURIComponent(displayImage.filename);
       img.className = 'reference-image-preview';
       img.alt = char.name + ' reference ' + slotNum;
@@ -409,23 +698,23 @@
 
       // Badge for AI-generated images
       if (!image && generatedImage) {
-        var badge = document.createElement('div');
+        const badge = document.createElement('div');
         badge.className = 'ai-generated-badge';
         badge.textContent = 'AI Generated';
         slot.appendChild(badge);
       }
 
-      var overlayEl = document.createElement('div');
+      const overlayEl = document.createElement('div');
       overlayEl.className = 'reference-image-overlay';
-      var actions = document.createElement('div');
+      const actions = document.createElement('div');
       actions.className = 'reference-image-actions';
 
-      var delImgBtn = document.createElement('button');
+      const delImgBtn = document.createElement('button');
       delImgBtn.className = 'btn btn-secondary btn-sm';
       delImgBtn.textContent = '\ud83d\uddd1\ufe0f Delete';
       delImgBtn.addEventListener('click', function(e) { e.stopPropagation(); deleteReferenceImage(char.name, slotNum); });
 
-      var replaceBtn = document.createElement('button');
+      const replaceBtn = document.createElement('button');
       replaceBtn.className = 'btn btn-primary btn-sm';
       replaceBtn.textContent = '\ud83d\udce4 Replace';
       replaceBtn.addEventListener('click', function(e) { e.stopPropagation(); openReferenceImageUpload(char.name, slotNum); });
@@ -434,7 +723,7 @@
       actions.appendChild(replaceBtn);
 
       if (genState.canGenerate && generateImageFn) {
-        var regenBtn = document.createElement('button');
+        const regenBtn = document.createElement('button');
         regenBtn.className = 'btn btn-generate btn-sm';
         regenBtn.textContent = 'Regenerate';
         regenBtn.addEventListener('click', function(e) { e.stopPropagation(); generateImageFn(char.name, slotNum); });
@@ -444,13 +733,13 @@
       overlayEl.appendChild(actions);
       slot.appendChild(overlayEl);
     } else {
-      var iconDiv = document.createElement('div');
+      const iconDiv = document.createElement('div');
       iconDiv.className = 'reference-slot-icon';
       iconDiv.textContent = '\ud83d\udcf7';
-      var labelDiv = document.createElement('div');
+      const labelDiv = document.createElement('div');
       labelDiv.className = 'reference-slot-label';
-      labelDiv.textContent = PROMPT_SLOT_LABELS[slotNum - 1];
-      var hintDiv = document.createElement('div');
+      labelDiv.textContent = getReferenceSlotLabel(slotNum, PROMPT_SLOT_LABELS);
+      const hintDiv = document.createElement('div');
       hintDiv.className = 'reference-slot-hint';
       hintDiv.textContent = 'Click or drag & drop';
       slot.appendChild(iconDiv);
@@ -458,9 +747,9 @@
       slot.appendChild(hintDiv);
 
       if (genState.canGenerate && generateImageFn) {
-        var hasPrompt = char.prompts && char.prompts[slotNum - 1];
+        const hasPrompt = char.prompts && char.prompts[slotNum - 1];
         if (hasPrompt) {
-          var genBtn = document.createElement('button');
+          const genBtn = document.createElement('button');
           genBtn.className = 'btn btn-generate btn-sm reference-slot-generate';
           genBtn.textContent = 'AI Generate';
           genBtn.addEventListener('click', function(e) { e.stopPropagation(); generateImageFn(char.name, slotNum); });
@@ -469,10 +758,11 @@
       }
     }
 
-    var fileInput = document.createElement('input');
+    const fileInput = document.createElement('input');
     fileInput.type = 'file';
-    fileInput.id = 'refImg-' + char.name + '-' + slotNum;
-    fileInput.accept = 'image/png,image/jpeg,image/jpg';
+    fileInput.id = getReferenceInputId(char.name, slotNum);
+    fileInput.accept = 'image/png,image/jpeg,image/jpg,image/webp';
+    fileInput.multiple = true;
     fileInput.style.display = 'none';
     fileInput.addEventListener('change', function() { handleReferenceImageUpload(char.name, slotNum, this); });
     slot.appendChild(fileInput);
@@ -481,16 +771,16 @@
   }
 
   function renderCharactersReferences(generateImageFn) {
-    var genState = getGenerationState();
-    var container = el('charactersReferenceList');
+    const genState = getGenerationState();
+    const container = el('charactersReferenceList');
     if (!container) return;
 
     container.innerHTML = '';
 
     if (charactersData.length === 0) {
-      var placeholder = document.createElement('div');
+      const placeholder = document.createElement('div');
       placeholder.className = 'placeholder-content';
-      var p = document.createElement('p');
+      const p = document.createElement('p');
       p.textContent = 'No characters added yet. Add a character above to get started.';
       placeholder.appendChild(p);
       container.appendChild(placeholder);
@@ -498,17 +788,17 @@
     }
 
     charactersData.forEach(function(char) {
-      var card = document.createElement('div');
+      const card = document.createElement('div');
       card.className = 'character-reference-card';
       card.dataset.character = char.name;
 
       // === Card Header ===
-      var header = document.createElement('div');
+      const header = document.createElement('div');
       header.className = 'character-reference-header';
-      var title = document.createElement('h3');
+      const title = document.createElement('h3');
       title.className = 'character-reference-title';
       title.textContent = '\ud83d\udc64 ' + char.name;
-      var deleteBtn = document.createElement('button');
+      const deleteBtn = document.createElement('button');
       deleteBtn.className = 'character-reference-delete';
       deleteBtn.textContent = '\ud83d\uddd1\ufe0f Delete Character';
       deleteBtn.addEventListener('click', function() { deleteCharacterReference(char.name); });
@@ -517,26 +807,26 @@
       card.appendChild(header);
 
       // === Section 1: Character Definition ===
-      var defSection = document.createElement('div');
+      const defSection = document.createElement('div');
       defSection.className = 'character-definition-section';
       defSection.appendChild(buildSectionHeader('\ud83d\udcdd', 'Character Definition'));
 
       if (char.definition) {
-        var defText = document.createElement('div');
+        const defText = document.createElement('div');
         defText.className = 'character-definition-text';
         defText.textContent = char.definition;
         defSection.appendChild(defText);
 
-        var defActions = document.createElement('div');
+        const defActions = document.createElement('div');
         defActions.className = 'character-definition-actions';
-        var copyDefBtn = document.createElement('button');
+        const copyDefBtn = document.createElement('button');
         copyDefBtn.className = 'btn btn-secondary btn-sm';
         copyDefBtn.textContent = '\ud83d\udccb Copy Definition';
         copyDefBtn.addEventListener('click', function() { copyCharacterDefinition(char.name); });
         defActions.appendChild(copyDefBtn);
         defSection.appendChild(defActions);
       } else {
-        var defPlaceholder = document.createElement('div');
+        const defPlaceholder = document.createElement('div');
         defPlaceholder.className = 'character-definition-placeholder';
         defPlaceholder.textContent = 'No definition yet \u2014 use Claude Code to generate a character definition.';
         defSection.appendChild(defPlaceholder);
@@ -545,38 +835,38 @@
       card.appendChild(defSection);
 
       // === Section 2: Reference Image Prompts ===
-      var promptsSection = document.createElement('div');
+      const promptsSection = document.createElement('div');
       promptsSection.className = 'character-prompts-section';
       promptsSection.appendChild(buildSectionHeader('\ud83c\udfa8', 'Reference Image Prompts'));
 
-      var promptsGrid = document.createElement('div');
+      const promptsGrid = document.createElement('div');
       promptsGrid.className = 'character-prompts-grid';
 
       [1, 2, 3].forEach(function(slotNum) {
-        var promptCard = document.createElement('div');
+        const promptCard = document.createElement('div');
         promptCard.className = 'character-prompt-card';
 
-        var label = document.createElement('div');
+        const label = document.createElement('div');
         label.className = 'character-prompt-label';
-        var numBadge = document.createElement('span');
+        const numBadge = document.createElement('span');
         numBadge.className = 'prompt-slot-num';
         numBadge.textContent = slotNum;
-        var labelText = document.createElement('span');
+        const labelText = document.createElement('span');
         labelText.textContent = PROMPT_SLOT_LABELS[slotNum - 1];
         label.appendChild(numBadge);
         label.appendChild(labelText);
         promptCard.appendChild(label);
 
-        var promptContent = char.prompts && char.prompts[slotNum - 1];
+        const promptContent = char.prompts && char.prompts[slotNum - 1];
         if (promptContent) {
-          var promptTextEl = document.createElement('div');
+          const promptTextEl = document.createElement('div');
           promptTextEl.className = 'character-prompt-text';
           promptTextEl.textContent = promptContent;
           promptCard.appendChild(promptTextEl);
 
-          var promptActions = document.createElement('div');
+          const promptActions = document.createElement('div');
           promptActions.className = 'character-prompt-actions';
-          var copyPromptBtn = document.createElement('button');
+          const copyPromptBtn = document.createElement('button');
           copyPromptBtn.className = 'btn btn-secondary btn-sm';
           copyPromptBtn.textContent = '\ud83d\udccb Copy';
           (function(cn, sn) {
@@ -585,7 +875,7 @@
           promptActions.appendChild(copyPromptBtn);
 
           if (genState.canGenerate && generateImageFn) {
-            var genPromptBtn = document.createElement('button');
+            const genPromptBtn = document.createElement('button');
             genPromptBtn.className = 'btn btn-generate btn-sm';
             genPromptBtn.textContent = 'Generate';
             (function(cn, sn) {
@@ -596,7 +886,7 @@
 
           promptCard.appendChild(promptActions);
         } else {
-          var promptPlaceholder = document.createElement('div');
+          const promptPlaceholder = document.createElement('div');
           promptPlaceholder.className = 'character-prompt-placeholder';
           promptPlaceholder.textContent = 'Not generated yet';
           promptCard.appendChild(promptPlaceholder);
@@ -609,16 +899,17 @@
       card.appendChild(promptsSection);
 
       // === Section 3: Reference Images (with drag-and-drop) ===
-      var imagesSection = document.createElement('div');
+      const imagesSection = document.createElement('div');
       imagesSection.className = 'reference-images-section';
       imagesSection.appendChild(buildSectionHeader('\ud83d\uddbc\ufe0f', 'Reference Images'));
 
-      var grid = document.createElement('div');
+      const grid = document.createElement('div');
       grid.className = 'reference-images-grid';
 
-      [1, 2, 3].forEach(function(slotNum) {
+      const charSlotCount = getVisibleSlotCount(char);
+      for (let slotNum = 1; slotNum <= charSlotCount; slotNum++) {
         grid.appendChild(buildImageSlot(char, slotNum, generateImageFn));
-      });
+      }
 
       imagesSection.appendChild(grid);
       card.appendChild(imagesSection);
@@ -655,6 +946,7 @@
     getActiveGenerations: getActiveGenerations,
     getCharactersData: getCharactersData,
     getLocationsData: getLocationsData,
-    PROMPT_SLOT_LABELS: PROMPT_SLOT_LABELS
+    PROMPT_SLOT_LABELS: PROMPT_SLOT_LABELS,
+    LOCATION_PROMPT_SLOT_LABELS: LOCATION_PROMPT_SLOT_LABELS
   };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -141,22 +141,35 @@ function registerGenerationJobRoutes(router, ctx) {
       timestamp: new Date().toISOString()
     });
 
+    const safeSseWrite = (data) => {
+      if (res.writableEnded || res.destroyed) return false;
+      try { res.write(data); return true; } catch { return false; }
+    };
+
     (job.events || []).forEach((evt) => sendSseEvent(res, evt));
+
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      clearInterval(heartbeatId);
+      unsubscribe();
+    };
+
     const unsubscribe = generationJobs.subscribe(jobId, (evt) => {
+      if (res.writableEnded || res.destroyed) { cleanup(); return; }
       sendSseEvent(res, evt);
       if (evt.event === 'job_completed' || evt.event === 'job_failed' || evt.event === 'job_canceled') {
-        res.write(': done\n\n');
+        safeSseWrite(': done\n\n');
       }
     });
 
     const heartbeatId = setInterval(() => {
-      res.write(': ping\n\n');
+      if (!safeSseWrite(': ping\n\n')) cleanup();
     }, 15000);
 
-    req.on('close', () => {
-      clearInterval(heartbeatId);
-      unsubscribe();
-    });
+    req.on('close', cleanup);
+    res.on('error', cleanup);
   });
 
   router.get('/api/generation-jobs/:jobId', (req, res) => {

@@ -17,6 +17,10 @@ let currentReadinessData = null;
 let currentReadinessFilter = 'all';
 let commentsModalShot = null;
 let reorderModeEnabled = false;
+let bulkSelectedIds = new Set();
+let filmstripIndex = 0;
+let filmstripPlayInterval = null;
+let filmstripShots = [];
 let storyboardUploadService = null;
 let projectService = null;
 let reviewService = null;
@@ -95,6 +99,9 @@ let assetTypeFilter, assetStatusFilter, assetShotFilter, assetTableBody, assetCo
 let reviewFilterChips, readinessPanel, readinessCounts, readinessLists, readinessRecommendations, clearReadinessFilterBtn;
 let timelineRuler, timelineCurrentIndicator, storyboardAudio;
 let readinessBar, readinessSummary, readinessBarToggle, manifestToggleBtn, manifestBody, musicStatusPill, musicStatusAction;
+let filmstripView, filmstripScrollTrack, filmstripPlayerStage, filmstripPlayerImage, filmstripPlayerVideo;
+let filmstripPlayerLabel, filmstripPlayerCounter, filmstripPlayerEmpty, filmstripPlayBtn, filmstripSpeedSelect;
+let filmstripMusicBar, filmstripMusicToggle, filmstripMusicProgress, filmstripMusicFill, filmstripMusicTime, filmstripMusicName;
 
 /**
  * Initialize DOM element references
@@ -136,6 +143,22 @@ function initializeDOMElements() {
   manifestBody = document.getElementById('manifestBody');
   musicStatusPill = document.getElementById('musicStatusPill');
   musicStatusAction = document.getElementById('musicStatusAction');
+  filmstripView = document.getElementById('filmstripView');
+  filmstripScrollTrack = document.getElementById('filmstripScrollTrack');
+  filmstripPlayerStage = document.getElementById('filmstripPlayerStage');
+  filmstripPlayerImage = document.getElementById('filmstripPlayerImage');
+  filmstripPlayerVideo = document.getElementById('filmstripPlayerVideo');
+  filmstripPlayerLabel = document.getElementById('filmstripPlayerLabel');
+  filmstripPlayerCounter = document.getElementById('filmstripPlayerCounter');
+  filmstripPlayerEmpty = document.getElementById('filmstripPlayerEmpty');
+  filmstripPlayBtn = document.getElementById('filmstripPlayBtn');
+  filmstripSpeedSelect = document.getElementById('filmstripSpeedSelect');
+  filmstripMusicBar = document.getElementById('filmstripMusicBar');
+  filmstripMusicToggle = document.getElementById('filmstripMusicToggle');
+  filmstripMusicProgress = document.getElementById('filmstripMusicProgress');
+  filmstripMusicFill = document.getElementById('filmstripMusicFill');
+  filmstripMusicTime = document.getElementById('filmstripMusicTime');
+  filmstripMusicName = document.getElementById('filmstripMusicName');
 }
 
 function normalizeAssetManifest(data) {
@@ -162,7 +185,7 @@ async function loadAssetManifest() {
     assetManifest = normalizeAssetManifest(result.data);
     renderAssetPanel();
   } catch (err) {
-    console.warn('Failed to load asset manifest:', err);
+    /* silently handled */
     assetManifest = [];
     renderAssetPanel();
   }
@@ -457,7 +480,6 @@ async function uploadMusicFile(file) {
     await loadSequence();
 
   } catch (err) {
-    console.error('Music upload error:', err);
     showToast('Upload failed', err.message, 'error', 4000);
   } finally {
     hideUploadProgress(progressBar);
@@ -629,7 +651,7 @@ async function loadProjects() {
 
     return true;
   } catch (err) {
-    console.error('Failed to load projects:', err);
+    /* silently handled */
     return false;
   }
 }
@@ -676,7 +698,6 @@ async function createNewProject(name, description) {
     try { localStorage.setItem('activeProject', result.data.project.id); } catch {}
     requireProjectContext().navigateWithProject(result.data.project.id);
   } catch (err) {
-    console.error('Failed to create project:', err);
     throw err;
   }
 }
@@ -699,7 +720,6 @@ async function deleteActiveProject(projectId) {
       requireProjectContext().navigateWithProject('');
     }
   } catch (err) {
-    console.error('Failed to delete project:', err);
     throw err;
   }
 }
@@ -714,7 +734,7 @@ async function loadPrevisMap() {
     }
     previsMap = result.data.previsMap || {};
   } catch (err) {
-    console.warn('Failed to load previs map:', err);
+    /* silently handled */
     previsMap = {};
   }
 }
@@ -735,7 +755,7 @@ async function loadPromptLintSummary() {
       totalShots: Number.isFinite(data.totalShots) ? data.totalShots : 0
     };
   } catch (err) {
-    console.error('[Storyboard] Failed to load prompt lint summary', err);
+    /* silently handled */
     promptLintSummary = { passed: 0, failed: 0, totalShots: 0 };
   }
 }
@@ -849,7 +869,6 @@ async function loadSequence() {
       showToast('No shots found', 'Add or save shot_list.json in Step 3', 'info', 4000);
     }
   } catch (err) {
-    console.error('Failed to load storyboard context:', err);
     showEmptyState();
     showToast('Load failed', 'Could not load shot list/reference context', 'error', 4000);
   } finally {
@@ -872,7 +891,7 @@ async function loadReviewMetadata() {
       normalizeShotReviewData(shot);
     });
   } catch (err) {
-    console.warn('Failed to load review metadata:', err);
+    /* silently handled */
   }
 }
 
@@ -1314,7 +1333,6 @@ async function saveStoryboardSequence() {
       throw new Error(result.error || 'Failed to save storyboard sequence');
     }
   } catch (err) {
-    console.error('Failed to persist storyboard sequence:', err);
     showToast('Save failed', err.message, 'error', 4000);
   }
 }
@@ -1348,11 +1366,20 @@ function renderView() {
 
   if (currentView === 'grid') {
     gridView.style.display = 'block';
+    if (filmstripView) filmstripView.style.display = 'none';
     timelineView.style.display = 'none';
+    stopFilmstripSlideshow();
     renderGridView();
+  } else if (currentView === 'filmstrip') {
+    gridView.style.display = 'none';
+    if (filmstripView) filmstripView.style.display = 'flex';
+    timelineView.style.display = 'none';
+    renderFilmstripView();
   } else {
     gridView.style.display = 'none';
+    if (filmstripView) filmstripView.style.display = 'none';
     timelineView.style.display = 'block';
+    stopFilmstripSlideshow();
     renderTimelineView();
   }
 }
@@ -1360,6 +1387,53 @@ function renderView() {
 /**
  * Render grid view
  */
+function renderBulkBar() {
+  let bar = document.getElementById('bulkSelectBar');
+  if (bulkSelectedIds.size === 0) {
+    if (bar) bar.style.display = 'none';
+    return;
+  }
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'bulkSelectBar';
+    bar.className = 'bulk-select-bar';
+    shotGrid.parentElement.insertBefore(bar, shotGrid);
+  }
+  bar.style.display = 'flex';
+  bar.innerHTML = '<span class="bulk-count">' + bulkSelectedIds.size + '</span> selected' +
+    '<button class="btn btn-sm btn-secondary" id="bulkSelectAll">Select All</button>' +
+    '<button class="btn btn-sm btn-secondary" id="bulkDeselectAll">Deselect All</button>' +
+    '<button class="btn btn-sm btn-primary" id="bulkPinSelected">Pin Selected</button>' +
+    '<button class="btn btn-sm btn-secondary" id="bulkUnpinSelected">Unpin Selected</button>';
+  document.getElementById('bulkSelectAll').addEventListener('click', function() {
+    var shots = getFilteredShotsForCurrentReadinessFilter(getFilteredShots());
+    shots.forEach(function(s) { bulkSelectedIds.add(s.shotId); });
+    renderGridView();
+  });
+  document.getElementById('bulkDeselectAll').addEventListener('click', function() {
+    bulkSelectedIds.clear();
+    renderGridView();
+  });
+  document.getElementById('bulkPinSelected').addEventListener('click', function() {
+    if (!sequenceData || !sequenceData.selections) return;
+    sequenceData.selections.forEach(function(s) {
+      if (bulkSelectedIds.has(s.shotId)) s.locked = true;
+    });
+    bulkSelectedIds.clear();
+    renderView();
+    queueStoryboardSave();
+  });
+  document.getElementById('bulkUnpinSelected').addEventListener('click', function() {
+    if (!sequenceData || !sequenceData.selections) return;
+    sequenceData.selections.forEach(function(s) {
+      if (bulkSelectedIds.has(s.shotId)) s.locked = false;
+    });
+    bulkSelectedIds.clear();
+    renderView();
+    queueStoryboardSave();
+  });
+}
+
 function renderGridView() {
   shotGrid.innerHTML = '';
   const shots = getFilteredShotsForCurrentReadinessFilter(getFilteredShots());
@@ -1375,6 +1449,8 @@ function renderGridView() {
     empty.textContent = 'No shots match this readiness filter.';
     shotGrid.appendChild(empty);
   }
+
+  renderBulkBar();
 }
 
 /**
@@ -1383,7 +1459,22 @@ function renderGridView() {
 function createShotCard(shot) {
   const card = document.createElement('div');
   card.className = 'shot-card';
+  if (bulkSelectedIds.has(shot.shotId)) card.classList.add('bulk-selected');
   card.addEventListener('click', () => openShotModal(shot));
+
+  // Bulk checkbox
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.className = 'bulk-checkbox';
+  checkbox.checked = bulkSelectedIds.has(shot.shotId);
+  checkbox.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (checkbox.checked) bulkSelectedIds.add(shot.shotId);
+    else bulkSelectedIds.delete(shot.shotId);
+    card.classList.toggle('bulk-selected', checkbox.checked);
+    renderBulkBar();
+  });
+  card.appendChild(checkbox);
 
   // Thumbnail
   const thumbnail = document.createElement('div');
@@ -1449,6 +1540,33 @@ function createShotCard(shot) {
   const shotId = document.createElement('div');
   shotId.className = 'shot-id';
   shotId.textContent = shot.shotId;
+  shotId.setAttribute('data-editable', '');
+  shotId.title = 'Double-click to edit';
+  shotId.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    const original = shot.shotId;
+    const input = document.createElement('input');
+    input.className = 'inline-edit-input';
+    input.type = 'text';
+    input.value = original;
+    shotId.textContent = '';
+    shotId.appendChild(input);
+    input.focus();
+    input.select();
+    function commit() {
+      const val = input.value.trim();
+      if (val && val !== original) {
+        shot.shotId = val;
+        queueStoryboardSave();
+      }
+      shotId.textContent = shot.shotId;
+    }
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (ke) => {
+      if (ke.key === 'Enter') { ke.preventDefault(); input.blur(); }
+      if (ke.key === 'Escape') { input.value = original; input.blur(); }
+    });
+  });
   header.appendChild(shotId);
 
   const lockBtn = document.createElement('button');
@@ -1576,7 +1694,7 @@ async function loadShotListTiming() {
 
     return Object.keys(timingByShotId).length > 0 ? timingByShotId : null;
   } catch (err) {
-    console.warn('Could not load shot_list timing:', err);
+    /* silently handled */
     return null;
   }
 }
@@ -2136,7 +2254,6 @@ async function uploadShotFile(file, shotId, variation) {
     }
 
   } catch (err) {
-    console.error('Shot upload error:', err);
     dismissToast(loadingToast);
     showToast('Upload failed', err.message, 'error', 4000);
   }
@@ -2225,7 +2342,6 @@ async function updateShotReviewMetadata(shotId, updates) {
   try {
     await saveReviewUpdate(shotId, updates);
   } catch (err) {
-    console.error('Failed to save review metadata:', err);
     showToast('Save failed', err.message, 'error', 4000);
     return false;
   }
@@ -2269,8 +2385,6 @@ async function saveSelection() {
 
   // In a real implementation, this would save to the server
   // For now, just update local state and re-render
-  console.log(`Selected variation ${selectedVariation} for ${selectedShot.shotId}`);
-
   queueStoryboardSave();
   showToast('Selection saved', `${selectedShot.shotId}: Option ${selectedVariation}`, 'success', 2000);
   closeModal();
@@ -2351,6 +2465,456 @@ async function addCommentToCurrentShot() {
   }
 }
 
+// ===== FILMSTRIP VIEW =====
+
+/**
+ * Fetch first/last frame render paths for a single shot from the API.
+ * Returns { first: string|null, last: string|null } for the selected variation.
+ */
+async function fetchShotFrames(shotId, variation) {
+  const projectId = currentProject ? currentProject.id : '';
+  const params = new URLSearchParams({ shot: shotId, project: projectId });
+  try {
+    const res = await fetch('/api/shot-renders?' + params.toString());
+    if (!res.ok) return { first: null, last: null };
+    const data = await res.json();
+    if (!data.success) return { first: null, last: null };
+
+    const renders = data.renders || {};
+    const v = variation || 'A';
+
+    // Check seedream first (primary), then kling
+    const seedream = renders.seedream && renders.seedream[v];
+    if (seedream) {
+      return { first: seedream.first || null, last: seedream.last || null };
+    }
+
+    const kling = renders.kling && renders.kling[v];
+    if (kling) {
+      return { first: kling.first || null, last: kling.last || null };
+    }
+
+    return { first: null, last: null };
+  } catch {
+    return { first: null, last: null };
+  }
+}
+
+/**
+ * Build the ordered frame list for the filmstrip.
+ * Each entry: { shotId, variation, frame ('first'|'last'), path, shotIndex }
+ * Fetches renders from the API for each shot with a selected variation.
+ */
+async function collectFilmstripFrames() {
+  const shots = getOrderedShots();
+  const selected = shots.filter(shot =>
+    shot.selectedVariation && shot.selectedVariation !== 'none'
+  );
+
+  if (selected.length === 0) return [];
+
+  // Fetch renders for all selected shots in parallel
+  const renderResults = await Promise.all(
+    selected.map(shot => fetchShotFrames(shot.shotId, shot.selectedVariation))
+  );
+
+  const frames = [];
+  selected.forEach((shot, i) => {
+    const renders = renderResults[i];
+    if (renders.first) {
+      frames.push({
+        shotId: shot.shotId,
+        variation: shot.selectedVariation,
+        frame: 'first',
+        path: renders.first,
+        shotIndex: i
+      });
+    }
+    if (renders.last) {
+      frames.push({
+        shotId: shot.shotId,
+        variation: shot.selectedVariation,
+        frame: 'last',
+        path: renders.last,
+        shotIndex: i
+      });
+    }
+    // If neither first nor last exists, try the legacy preview path as a fallback
+    if (!renders.first && !renders.last) {
+      const preview = getShotPreviewAsset(shot);
+      if (preview.path) {
+        frames.push({
+          shotId: shot.shotId,
+          variation: shot.selectedVariation,
+          frame: 'preview',
+          path: preview.path,
+          shotIndex: i
+        });
+      }
+    }
+  });
+
+  return frames;
+}
+
+/**
+ * Render the entire filmstrip view: scroll track + player stage.
+ */
+async function renderFilmstripView() {
+  if (!filmstripScrollTrack || !filmstripPlayerStage) return;
+
+  const loadingOverlay = showLoading(filmstripPlayerStage, 'Loading frames...');
+
+  try {
+    const frames = await collectFilmstripFrames();
+    // Store as the flat frame list used by the player
+    filmstripShots = frames;
+    filmstripScrollTrack.innerHTML = '';
+
+    if (frames.length === 0) {
+      if (filmstripPlayerEmpty) filmstripPlayerEmpty.style.display = 'flex';
+      if (filmstripPlayerImage) filmstripPlayerImage.classList.remove('active');
+      if (filmstripPlayerVideo) filmstripPlayerVideo.classList.remove('active');
+      if (filmstripPlayerLabel) filmstripPlayerLabel.textContent = '';
+      if (filmstripPlayerCounter) filmstripPlayerCounter.textContent = '';
+      return;
+    }
+
+    if (filmstripPlayerEmpty) filmstripPlayerEmpty.style.display = 'none';
+
+    frames.forEach((entry, index) => {
+      const frameEl = document.createElement('div');
+      frameEl.className = 'filmstrip-frame';
+      if (index === filmstripIndex) frameEl.classList.add('active');
+      frameEl.addEventListener('click', () => {
+        filmstripIndex = index;
+        updateFilmstripPlayer();
+        updateFilmstripActiveFrame();
+      });
+
+      const indexBadge = document.createElement('div');
+      indexBadge.className = 'filmstrip-frame-index';
+      indexBadge.textContent = String(index + 1);
+      frameEl.appendChild(indexBadge);
+
+      const thumb = document.createElement('div');
+      thumb.className = 'filmstrip-frame-thumb';
+
+      if (entry.path && /\.(mp4|mov)$/i.test(entry.path)) {
+        const video = document.createElement('video');
+        video.src = `/${entry.path}`;
+        video.muted = true;
+        video.preload = 'metadata';
+        thumb.appendChild(video);
+      } else if (entry.path) {
+        const img = document.createElement('img');
+        img.src = `/${entry.path}`;
+        img.alt = entry.shotId;
+        thumb.appendChild(img);
+      } else {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'filmstrip-frame-placeholder';
+        placeholder.textContent = entry.shotId;
+        thumb.appendChild(placeholder);
+      }
+
+      const label = document.createElement('div');
+      label.className = 'filmstrip-frame-label';
+      const frameLabel = entry.frame === 'first' ? 'First'
+        : entry.frame === 'last' ? 'Last'
+        : 'Preview';
+      label.textContent = `${entry.shotId} ${frameLabel}`;
+
+      frameEl.appendChild(thumb);
+      frameEl.appendChild(label);
+      filmstripScrollTrack.appendChild(frameEl);
+    });
+
+    // Clamp index
+    if (filmstripIndex >= frames.length) filmstripIndex = 0;
+    updateFilmstripPlayer();
+    updateFilmstripActiveFrame();
+    syncFilmstripMusicSource();
+  } finally {
+    hideLoading(loadingOverlay);
+  }
+}
+
+/**
+ * Update the main player stage to show the current filmstrip frame.
+ */
+function updateFilmstripPlayer() {
+  if (!filmstripPlayerImage || !filmstripPlayerVideo || filmstripShots.length === 0) return;
+
+  const entry = filmstripShots[filmstripIndex];
+  if (!entry) return;
+
+  const isVideo = entry.path && /\.(mp4|mov)$/i.test(entry.path);
+
+  if (isVideo) {
+    filmstripPlayerVideo.src = `/${entry.path}`;
+    filmstripPlayerVideo.classList.add('active');
+    filmstripPlayerImage.classList.remove('active');
+    filmstripPlayerVideo.currentTime = 0;
+    filmstripPlayerVideo.play().catch(() => {});
+  } else if (entry.path) {
+    filmstripPlayerImage.src = `/${entry.path}`;
+    filmstripPlayerImage.classList.add('active');
+    filmstripPlayerVideo.classList.remove('active');
+    filmstripPlayerVideo.pause();
+  }
+
+  if (filmstripPlayerLabel) {
+    const frameLabel = entry.frame === 'first' ? 'First Frame'
+      : entry.frame === 'last' ? 'Last Frame'
+      : 'Preview';
+    filmstripPlayerLabel.textContent = `${entry.shotId} — ${frameLabel} (${entry.variation})`;
+  }
+
+  if (filmstripPlayerCounter) {
+    filmstripPlayerCounter.textContent = `${filmstripIndex + 1} / ${filmstripShots.length}`;
+  }
+}
+
+/**
+ * Highlight the active frame in the scroll track and scroll it into view.
+ */
+function updateFilmstripActiveFrame() {
+  if (!filmstripScrollTrack) return;
+  const frames = filmstripScrollTrack.querySelectorAll('.filmstrip-frame');
+  frames.forEach((frame, i) => {
+    frame.classList.toggle('active', i === filmstripIndex);
+  });
+
+  const activeFrame = frames[filmstripIndex];
+  if (activeFrame) {
+    activeFrame.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }
+}
+
+/**
+ * Advance to the next filmstrip frame (wraps around).
+ */
+function filmstripNext() {
+  if (filmstripShots.length === 0) return;
+  filmstripIndex = (filmstripIndex + 1) % filmstripShots.length;
+  updateFilmstripPlayer();
+  updateFilmstripActiveFrame();
+}
+
+/**
+ * Go to the previous filmstrip frame (wraps around).
+ */
+function filmstripPrev() {
+  if (filmstripShots.length === 0) return;
+  filmstripIndex = (filmstripIndex - 1 + filmstripShots.length) % filmstripShots.length;
+  updateFilmstripPlayer();
+  updateFilmstripActiveFrame();
+}
+
+/**
+ * Start the auto-play slideshow.
+ */
+function startFilmstripSlideshow() {
+  stopFilmstripSlideshow();
+  if (filmstripShots.length <= 1) return;
+
+  const speed = Number(filmstripSpeedSelect?.value) || 4000;
+
+  if (filmstripPlayBtn) {
+    filmstripPlayBtn.textContent = 'Pause';
+    filmstripPlayBtn.classList.add('playing');
+  }
+
+  // Start music playback if available
+  if (storyboardAudio && storyboardAudio.src && storyboardAudio.src !== window.location.href && storyboardAudio.paused) {
+    storyboardAudio.play().catch(() => {});
+  }
+
+  filmstripPlayInterval = setInterval(() => {
+    filmstripNext();
+  }, speed);
+}
+
+/**
+ * Stop the auto-play slideshow.
+ */
+function stopFilmstripSlideshow() {
+  if (filmstripPlayInterval) {
+    clearInterval(filmstripPlayInterval);
+    filmstripPlayInterval = null;
+  }
+  if (filmstripPlayBtn) {
+    filmstripPlayBtn.textContent = 'Play';
+    filmstripPlayBtn.classList.remove('playing');
+  }
+  // Pause music when slideshow stops
+  if (storyboardAudio && !storyboardAudio.paused) {
+    storyboardAudio.pause();
+  }
+}
+
+/**
+ * Toggle slideshow play/pause.
+ */
+function toggleFilmstripSlideshow() {
+  if (filmstripPlayInterval) {
+    stopFilmstripSlideshow();
+  } else {
+    startFilmstripSlideshow();
+  }
+}
+
+// ===== FILMSTRIP MUSIC PLAYBACK =====
+
+function formatMusicTime(seconds) {
+  const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+  const mins = Math.floor(safe / 60);
+  const secs = Math.floor(safe % 60).toString().padStart(2, '0');
+  return `${mins}:${secs}`;
+}
+
+/**
+ * Set up the music bar with the current music file from sequence data.
+ */
+function syncFilmstripMusicSource() {
+  if (!storyboardAudio) return;
+
+  const musicFile = sequenceData?.musicFile;
+  if (!musicFile) {
+    storyboardAudio.removeAttribute('src');
+    storyboardAudio.load();
+    if (filmstripMusicBar) filmstripMusicBar.classList.remove('has-music', 'playing');
+    if (filmstripMusicName) filmstripMusicName.textContent = 'No music';
+    if (filmstripMusicTime) filmstripMusicTime.textContent = '0:00 / 0:00';
+    if (filmstripMusicFill) filmstripMusicFill.style.width = '0%';
+    return;
+  }
+
+  const normalized = musicFile.startsWith('/') ? musicFile : `/${musicFile}`;
+  if (storyboardAudio.getAttribute('src') !== normalized) {
+    storyboardAudio.src = normalized;
+    storyboardAudio.load();
+  }
+
+  if (filmstripMusicBar) filmstripMusicBar.classList.add('has-music');
+  if (filmstripMusicName) {
+    filmstripMusicName.textContent = musicFile.split('/').pop() || 'Music';
+  }
+}
+
+function updateFilmstripMusicTime() {
+  if (!storyboardAudio || !filmstripMusicTime) return;
+  const current = storyboardAudio.currentTime || 0;
+  const duration = storyboardAudio.duration || 0;
+  filmstripMusicTime.textContent = `${formatMusicTime(current)} / ${formatMusicTime(duration)}`;
+
+  if (filmstripMusicFill && duration > 0) {
+    filmstripMusicFill.style.width = `${(current / duration) * 100}%`;
+  }
+}
+
+function toggleFilmstripMusic() {
+  if (!storyboardAudio) return;
+  if (!storyboardAudio.src || storyboardAudio.src === window.location.href) {
+    showToast('No music', 'Upload an MP3 file first using the Upload button above', 'warning', 3000);
+    return;
+  }
+
+  if (storyboardAudio.paused) {
+    storyboardAudio.play().catch(() => {
+      showToast('Playback blocked', 'Click the music button again to play', 'warning', 2500);
+    });
+  } else {
+    storyboardAudio.pause();
+  }
+}
+
+function bindFilmstripMusicEvents() {
+  if (!storyboardAudio) return;
+
+  storyboardAudio.addEventListener('play', () => {
+    if (filmstripMusicBar) filmstripMusicBar.classList.add('playing');
+    if (filmstripMusicToggle) filmstripMusicToggle.textContent = 'Pause';
+  });
+
+  storyboardAudio.addEventListener('pause', () => {
+    if (filmstripMusicBar) filmstripMusicBar.classList.remove('playing');
+    if (filmstripMusicToggle) filmstripMusicToggle.textContent = 'Music';
+  });
+
+  storyboardAudio.addEventListener('ended', () => {
+    if (filmstripMusicBar) filmstripMusicBar.classList.remove('playing');
+    if (filmstripMusicToggle) filmstripMusicToggle.textContent = 'Music';
+    if (filmstripMusicFill) filmstripMusicFill.style.width = '0%';
+  });
+
+  storyboardAudio.addEventListener('timeupdate', updateFilmstripMusicTime);
+
+  storyboardAudio.addEventListener('loadedmetadata', () => {
+    updateFilmstripMusicTime();
+  });
+
+  // Click on progress bar to seek
+  if (filmstripMusicProgress) {
+    filmstripMusicProgress.addEventListener('click', (e) => {
+      if (!storyboardAudio.duration) return;
+      const rect = filmstripMusicProgress.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      storyboardAudio.currentTime = ratio * storyboardAudio.duration;
+    });
+  }
+
+  if (filmstripMusicToggle) {
+    filmstripMusicToggle.addEventListener('click', toggleFilmstripMusic);
+  }
+}
+
+/**
+ * Initialize filmstrip button event listeners.
+ */
+function initializeFilmstripControls() {
+  const prevBtn = document.getElementById('filmstripPrevBtn');
+  const nextBtn = document.getElementById('filmstripNextBtn');
+  const playBtn = document.getElementById('filmstripPlayBtn');
+  const speedSelect = document.getElementById('filmstripSpeedSelect');
+
+  if (prevBtn) prevBtn.addEventListener('click', () => { stopFilmstripSlideshow(); filmstripPrev(); });
+  if (nextBtn) nextBtn.addEventListener('click', () => { stopFilmstripSlideshow(); filmstripNext(); });
+  if (playBtn) playBtn.addEventListener('click', toggleFilmstripSlideshow);
+  if (speedSelect) {
+    speedSelect.addEventListener('change', () => {
+      if (filmstripPlayInterval) {
+        startFilmstripSlideshow(); // restart with new speed
+      }
+    });
+  }
+
+  bindFilmstripMusicEvents();
+
+  // Keyboard navigation when filmstrip view is active
+  document.addEventListener('keydown', (e) => {
+    if (currentView !== 'filmstrip') return;
+    // Don't capture when typing in inputs
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      stopFilmstripSlideshow();
+      filmstripNext();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      stopFilmstripSlideshow();
+      filmstripPrev();
+    } else if (e.key === ' ') {
+      e.preventDefault();
+      toggleFilmstripSlideshow();
+    } else if (e.key === 'm' || e.key === 'M') {
+      toggleFilmstripMusic();
+    }
+  });
+}
+
 /**
  * Export storyboard as PDF
  */
@@ -2381,7 +2945,6 @@ async function copyContextForAI() {
     await navigator.clipboard.writeText(contextText);
     showToast('Copied', 'Context bundle copied to clipboard', 'success', 3000);
   } catch (err) {
-    console.error('Copy context error:', err);
     showToast('Copy failed', err.message, 'error', 4000);
   }
 }
@@ -2401,7 +2964,6 @@ async function downloadContextBundle() {
     URL.revokeObjectURL(url);
     showToast('Downloaded', 'Context bundle JSON downloaded', 'success', 3000);
   } catch (err) {
-    console.error('Download context error:', err);
     showToast('Download failed', err.message, 'error', 4000);
   }
 }
@@ -2591,6 +3153,7 @@ function setupPageChatBridge() {
   if (projectsLoaded) {
     initializeViewTabs();
     initializeButtons();
+    initializeFilmstripControls();
     initializeAssetFilters();
     await loadSequence();
     await loadAssetManifest();

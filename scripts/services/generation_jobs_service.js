@@ -301,7 +301,19 @@ class GenerationJobsService {
         });
       } finally {
         this.releaseLockForJob(job);
-        this.saveJob(job);
+        try {
+          this.saveJob(job);
+        } catch (saveErr) {
+          // Log but don't throw — the job result/error is already set
+          console.error('Failed to persist job state:', job.jobId, saveErr.message);
+        }
+        // Clean up listeners for terminal jobs
+        if (this.listeners.has(job.jobId)) {
+          // Defer cleanup to let SSE subscribers receive the final event
+          setTimeout(() => {
+            this.listeners.delete(job.jobId);
+          }, 5000);
+        }
       }
     });
   }

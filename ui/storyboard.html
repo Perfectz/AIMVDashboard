@@ -23,7 +23,7 @@
   </script>
   <div class="container">
     <div class="main-layout">
-      <nav class="left-nav">
+      <nav class="left-nav" aria-label="Workflow navigation">
         <div class="nav-brand" data-ui-nav-brand data-ui-mode="standard"></div>
 
         <div class="project-selector-section" data-ui-project-selector data-ui-mode="standard"></div>
@@ -53,7 +53,8 @@
         <div class="view-controls">
           <div class="view-mode-tabs">
             <button class="view-tab active" data-view="grid"><span>Grid View</span></button>
-            <button class="view-tab" data-view="timeline"><span>Storyboard Preview</span></button>
+            <button class="view-tab" data-view="filmstrip"><span>Filmstrip</span></button>
+            <button class="view-tab" data-view="timeline"><span>Timeline</span></button>
           </div>
           <div class="view-actions">
             <span class="music-status-pill" id="musicStatusPill">No music uploaded</span>
@@ -84,6 +85,44 @@
         </div>
 
         <div class="grid-view" id="gridView" style="display: none;"><div class="shot-grid" id="shotGrid"></div></div>
+
+        <div class="filmstrip-view" id="filmstripView" style="display: none;">
+          <div class="filmstrip-player">
+            <div class="filmstrip-player-stage" id="filmstripPlayerStage">
+              <img id="filmstripPlayerImage" class="filmstrip-player-image" alt="Current shot" />
+              <video id="filmstripPlayerVideo" class="filmstrip-player-video" muted preload="metadata"></video>
+              <div class="filmstrip-player-overlay" id="filmstripPlayerOverlay">
+                <div class="filmstrip-player-shot-label" id="filmstripPlayerLabel"></div>
+                <div class="filmstrip-player-counter" id="filmstripPlayerCounter"></div>
+              </div>
+              <div class="filmstrip-player-empty" id="filmstripPlayerEmpty">No selected shots with preview assets</div>
+            </div>
+            <div class="filmstrip-player-controls">
+              <button class="filmstrip-ctrl-btn" id="filmstripPrevBtn" title="Previous shot">&larr;</button>
+              <button class="filmstrip-ctrl-btn filmstrip-play-btn" id="filmstripPlayBtn" title="Auto-play slideshow">Play</button>
+              <button class="filmstrip-ctrl-btn" id="filmstripNextBtn" title="Next shot">&rarr;</button>
+              <div class="filmstrip-speed-control">
+                <label for="filmstripSpeedSelect">Speed:</label>
+                <select id="filmstripSpeedSelect">
+                  <option value="2000">2s</option>
+                  <option value="4000" selected>4s</option>
+                  <option value="6000">6s</option>
+                  <option value="8000">8s (real-time)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="filmstrip-music-bar" id="filmstripMusicBar">
+            <audio id="storyboardAudio" preload="metadata"></audio>
+            <button class="filmstrip-ctrl-btn filmstrip-music-toggle" id="filmstripMusicToggle" title="Play/pause music">Music</button>
+            <div class="filmstrip-music-progress" id="filmstripMusicProgress">
+              <div class="filmstrip-music-progress-fill" id="filmstripMusicFill"></div>
+            </div>
+            <span class="filmstrip-music-time" id="filmstripMusicTime">0:00 / 0:00</span>
+            <span class="filmstrip-music-name" id="filmstripMusicName">No music</span>
+          </div>
+          <div class="filmstrip-scroll-track" id="filmstripScrollTrack"></div>
+        </div>
 
         <div class="timeline-view" id="timelineView" style="display: none;">
           <div class="timeline-filmstrip" id="timelineFilmstrip"></div>
@@ -209,6 +248,7 @@
   <script src="modules/project-actions.js"></script>
   <script src="ui-layer.js"></script>
   <script>window.UILayer && window.UILayer.init();</script>
+  <script src="modules/command-palette.js"></script>
   <script src="domain/upload-domain.js"></script>
   <script src="services/http-client.js"></script>
   <script src="services/service-base.js"></script>

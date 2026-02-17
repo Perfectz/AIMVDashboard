@@ -30,8 +30,8 @@ function parsePromptMetadata(content, filename) {
   if (variationMatch) metadata.variation = variationMatch[1];
 
   if (!metadata.shotId) {
-    const fromFilename = filename.match(/(SHOT_\d+)/);
-    if (fromFilename) metadata.shotId = fromFilename[1];
+    const fromFilename = filename.match(/(shot_\d+)/i);
+    if (fromFilename) metadata.shotId = 'SHOT_' + fromFilename[1].replace(/^shot_/i, '');
   }
 
   if (!metadata.variation) {

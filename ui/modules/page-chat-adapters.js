@@ -1,7 +1,7 @@
 (function(root) {
   'use strict';
 
-  var PAGE_PATH_MAP = {
+  const PAGE_PATH_MAP = {
     '/': 'home',
     '/home.html': 'home',
     '/step1.html': 'step1',
@@ -14,7 +14,7 @@
   };
 
   function detectPageId(pathname) {
-    var path = String(pathname || root.location.pathname || '/').toLowerCase();
+    const path = String(pathname || root.location.pathname || '/').toLowerCase();
     if (PAGE_PATH_MAP[path]) return PAGE_PATH_MAP[path];
     if (path.endsWith('/home.html')) return 'home';
     if (path.endsWith('/step1.html')) return 'step1';
@@ -32,7 +32,7 @@
   }
 
   function collectDefaultState(pageId) {
-    var state = {
+    const state = {
       pageId: pageId,
       url: root.location.pathname + (root.location.search || ''),
       selection: {},
@@ -40,16 +40,22 @@
     };
 
     if (pageId === 'index' && root.AppState && typeof root.AppState.get === 'function') {
-      var currentShot = root.AppState.get('currentShot');
+      const currentShot = root.AppState.get('currentShot');
       state.selection = {
         shotId: currentShot && currentShot.shotId ? String(currentShot.shotId) : '',
         variation: String(root.AppState.get('currentVariation') || 'A'),
         tool: String(root.AppState.get('currentTool') || 'seedream')
       };
-      var promptText = document.getElementById('promptText');
+      const promptText = document.getElementById('promptText');
       if (promptText) {
         state.fields.promptText = String(promptText.textContent || '');
       }
+      return state;
+    }
+
+    if (pageId === 'step3') {
+      const activeTabBtn = document.querySelector('.canon-tab.active');
+      state.activeCanonTab = activeTabBtn ? String(activeTabBtn.getAttribute('data-tab') || 'script') : 'script';
       return state;
     }
 
@@ -57,7 +63,7 @@
   }
 
   function getDefaultBridge() {
-    var pageId = detectPageId(root.location.pathname);
+    const pageId = detectPageId(root.location.pathname);
     return {
       pageId: pageId,
       getProjectId: function() {

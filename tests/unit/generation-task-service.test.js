@@ -134,7 +134,15 @@ async function run() {
     isConfigured() {
       return true;
     },
-    async createPrediction() {
+    async createPrediction(_prompt, options) {
+      const maxImages = Number(options && options.max_images);
+      if (Number.isFinite(maxImages) && maxImages >= 2) {
+        return {
+          output: ['https://example.com/img1.png', 'https://example.com/img2.png'],
+          predictionId: 'pred_pair',
+          duration: 1.4
+        };
+      }
       return {
         output: ['https://example.com/img1.png'],
         predictionId: 'pred_test',
@@ -169,12 +177,33 @@ async function run() {
   });
 
   assert.ok(Array.isArray(result.images));
+  assert.ok(Array.isArray(result.frameAssignments));
+  assert.strictEqual(result.frameAssignments.length, 1);
+  assert.strictEqual(result.frameAssignments[0].frame, 'first');
+  assert.strictEqual(result.isFirstLastPair, false);
   assert.ok(Array.isArray(result.referenceManifest));
   assert.ok(result.referenceManifest.length >= 2);
   assert.strictEqual(result.referenceManifest[0].sourceType, 'continuity');
   assert.strictEqual(result.referenceManifest[1].sourceType, 'uploaded_ref_set');
   assert.ok(result.preflightSnapshot);
   assert.strictEqual(result.preflightSnapshot.options.referencePolicy, 'continuity_then_uploaded_then_canon');
+
+  const pairResult = await serviceGenerate.executeGenerateShotTask({
+    project: 'default',
+    shotId: 'SHOT_01',
+    variation: 'A',
+    maxImages: 2,
+    requireReference: true,
+    previewOnly: true
+  });
+  assert.ok(Array.isArray(pairResult.images));
+  assert.strictEqual(pairResult.images.length, 2);
+  assert.ok(Array.isArray(pairResult.frameAssignments));
+  assert.strictEqual(pairResult.frameAssignments.length, 2);
+  assert.strictEqual(pairResult.frameAssignments[0].frame, 'first');
+  assert.strictEqual(pairResult.frameAssignments[1].frame, 'last');
+  assert.strictEqual(pairResult.isFirstLastPair, true);
+  assert.strictEqual(pairResult.generationMode, 'first_last_pair');
 
   fs.rmSync(tmpRoot, { recursive: true, force: true });
   console.log('generation-task-service.test.js passed');

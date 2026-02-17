@@ -12,6 +12,7 @@
   var _renderPromptFn = null;
   var generationJobsService = null;
   var generationReadinessService = null;
+  var reviewService = null;
 
   function init(deps) {
     _getReferenceFeature = deps.getReferenceFeature || null;
@@ -38,6 +39,15 @@
     }
     generationReadinessService = root.GenerationReadinessService.createGenerationReadinessService();
     return generationReadinessService;
+  }
+
+  function getReviewService() {
+    if (reviewService) return reviewService;
+    if (!root.ReviewService || !root.ReviewService.createReviewService) {
+      throw new Error('ReviewService.createReviewService is required');
+    }
+    reviewService = root.ReviewService.createReviewService();
+    return reviewService;
   }
 
   function classifyError(error, fallbackCode) {
@@ -347,10 +357,12 @@
     return new Promise(function(resolve, reject) {
       var settled = false;
       var timeoutId = null;
+      var pollTimerId = null;
       var source = null;
 
       var cleanup = function() {
         if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+        if (pollTimerId) { clearTimeout(pollTimerId); pollTimerId = null; }
         if (source) {
           source.close();
           if (gs.generationJobEventSource === source) gs.generationJobEventSource = null;
@@ -362,6 +374,14 @@
         }
         loadGenerationMetrics();
         loadShotGenerationHistory();
+      };
+
+      var schedulePoll = function() {
+        if (settled || pollTimerId) return;
+        pollTimerId = setTimeout(function() {
+          pollTimerId = null;
+          finishWithState();
+        }, 3000);
       };
 
       var finishWithState = async function() {
@@ -407,15 +427,11 @@
             reject(new Error((job.error && job.error.message) || 'Generation ' + job.status));
             return;
           }
+          // Job still running — poll again as fallback in case SSE drops
+          schedulePoll();
         } catch (stateErr) {
-          settled = true;
-          setGenerationJobStatus('Generation error: ' + (stateErr.message || 'Unknown error'), 'error');
-          dispatchShotFlowEvent('ERROR_SET', {
-            code: stateErr.code || 'SERVER_ERROR',
-            message: stateErr.message || 'Generation error'
-          });
-          cleanup();
-          reject(stateErr);
+          // Transient fetch error — retry instead of failing immediately
+          schedulePoll();
         }
       };
 
@@ -476,6 +492,11 @@
     var utils = getSharedUtils();
     if (!promptsState.currentShot || !promptsState.currentTool || promptsState.currentTool !== 'seedream') return;
 
+    // Wait for any pending reference selection save to complete
+    if (_pendingReferenceSave) {
+      await _pendingReferenceSave;
+    }
+
     var generateShotBtn = el('generateShotBtn');
     if (generateShotBtn) {
       generateShotBtn.disabled = true;
@@ -521,7 +542,8 @@
         shotId: promptsState.currentShot.shotId,
         variation: promptsState.currentVariation,
         tool: 'seedream',
-        images: result.images || []
+        images: result.images || [],
+        frameAssignments: result.frameAssignments || []
       });
     } catch (err) {
       utils.dismissToast(loadingToastId);
@@ -543,6 +565,11 @@
     var projectState = getProjectState();
     var utils = getSharedUtils();
     if (!promptsState.currentShot || !promptsState.currentTool || promptsState.currentTool !== 'seedream') return;
+
+    // Wait for any pending reference selection save to complete
+    if (_pendingReferenceSave) {
+      await _pendingReferenceSave;
+    }
 
     var generateRefImageBtn = el('generateRefImageBtn');
     if (generateRefImageBtn) {
@@ -590,7 +617,8 @@
         shotId: promptsState.currentShot.shotId,
         variation: promptsState.currentVariation,
         tool: 'seedream',
-        images: result.images || []
+        images: result.images || [],
+        frameAssignments: result.frameAssignments || []
       });
     } catch (err) {
       utils.dismissToast(loadingToastId);
@@ -660,7 +688,7 @@
         throw clearErr;
       }
       if (root.AgentIntegration) await root.AgentIntegration.checkGenerateStatus();
-      utils.showToast('Replicate session key cleared', 'Now using .env key if available.', 'info', 3000);
+      utils.showToast('Replicate session key cleared', 'Now using configured default key (.env/local) if available.', 'info', 3000);
       if (_renderPromptFn) _renderPromptFn();
     } catch (err) {
       var classified = classifyError(err, 'CONFIG_MISSING');
@@ -670,6 +698,65 @@
   }
 
   // --- Generation Choice Modal ---
+
+  function normalizeFrameAssignments(images, assignments) {
+    var imageList = Array.isArray(images) ? images.filter(Boolean) : [];
+    var normalized = [];
+    var seen = new Set();
+    var byPath = new Map();
+
+    if (Array.isArray(assignments)) {
+      assignments.forEach(function(item) {
+        if (!item) return;
+        var path = String(item.path || '').trim();
+        if (!path || seen.has(path)) return;
+        var frame = String(item.frame || '').trim().toLowerCase();
+        if (frame !== 'first' && frame !== 'last') frame = '';
+        var entry = { frame: frame, path: path };
+        normalized.push(entry);
+        seen.add(path);
+        byPath.set(path, entry);
+      });
+    }
+
+    if (imageList.length === 2) {
+      var firstPath = imageList[0];
+      var lastPath = imageList[1];
+      if (!byPath.has(firstPath)) {
+        var firstEntry = { frame: 'first', path: firstPath };
+        normalized.unshift(firstEntry);
+        byPath.set(firstPath, firstEntry);
+      } else if (!byPath.get(firstPath).frame) {
+        byPath.get(firstPath).frame = 'first';
+      }
+      if (!byPath.has(lastPath)) {
+        var lastEntry = { frame: 'last', path: lastPath };
+        normalized.push(lastEntry);
+        byPath.set(lastPath, lastEntry);
+      } else if (!byPath.get(lastPath).frame) {
+        byPath.get(lastPath).frame = 'last';
+      }
+    }
+
+    imageList.forEach(function(path) {
+      if (!byPath.has(path)) {
+        var entry = { frame: '', path: path };
+        normalized.push(entry);
+        byPath.set(path, entry);
+      }
+    });
+
+    return normalized.filter(function(item) {
+      return imageList.includes(item.path);
+    });
+  }
+
+  function hasFirstLastPair(assignments) {
+    if (!Array.isArray(assignments) || assignments.length < 2) return false;
+    var hasFirst = assignments.some(function(item) { return item && item.frame === 'first'; });
+    var hasLast = assignments.some(function(item) { return item && item.frame === 'last'; });
+    return hasFirst && hasLast;
+  }
 
   function closeGenerationChoiceModal() {
     var gs = getGenerationState();
@@ -703,6 +790,11 @@
       }
 
       gs.pendingGeneratedPreviews.paths = gs.pendingGeneratedPreviews.paths.filter(function(p) { return p !== previewPath; });
+      if (Array.isArray(gs.pendingGeneratedPreviews.frameAssignments)) {
+        gs.pendingGeneratedPreviews.frameAssignments = gs.pendingGeneratedPreviews.frameAssignments.filter(function(item) {
+          return item && item.path !== previewPath;
+        });
+      }
       utils.showToast('Saved', 'Saved as ' + frame + ' frame', 'success', 2500);
       dispatchShotFlowEvent('PREVIEWS_SAVED', { frame: frame });
       await loadShotRenders();
@@ -713,7 +805,8 @@
           shotId: gs.pendingGeneratedPreviews.shotId,
           variation: gs.pendingGeneratedPreviews.variation,
           tool: gs.pendingGeneratedPreviews.tool,
-          images: gs.pendingGeneratedPreviews.paths
+          images: gs.pendingGeneratedPreviews.paths,
+          frameAssignments: gs.pendingGeneratedPreviews.frameAssignments
         });
       }
     } catch (err) {
@@ -758,22 +851,28 @@
       utils.showToast('No previews', 'No generated image was returned to review.', 'warning', 3000);
       return;
     }
+    var frameAssignments = normalizeFrameAssignments(images, payload.frameAssignments);
+    var isFirstLastPair = hasFirstLastPair(frameAssignments);
 
     gs.pendingGeneratedPreviews = {
       shotId: payload.shotId,
       variation: payload.variation,
       tool: payload.tool || 'seedream',
-      paths: images.slice()
+      paths: images.slice(),
+      frameAssignments: frameAssignments
     };
 
     var projectState = getProjectState();
     var projectQuery = projectState.currentProject ? '?project=' + encodeURIComponent(projectState.currentProject.id) : '';
     generationChoiceGrid.innerHTML = '';
     if (generationChoiceMeta) {
-      generationChoiceMeta.textContent = payload.shotId + ' \u00b7 Variation ' + payload.variation + ' \u00b7 ' + images.length + ' option(s)';
+      generationChoiceMeta.textContent = payload.shotId + ' \u00b7 Variation ' + payload.variation + ' \u00b7 '
+        + (isFirstLastPair ? 'First + Last pair ready' : (images.length + ' option(s)'));
     }
 
-    images.forEach(function(previewPath, index) {
+    frameAssignments.forEach(function(assignment, index) {
+      var previewPath = assignment.path;
+      var mappedFrame = assignment.frame;
       var card = document.createElement('div');
       card.className = 'shot-render-card';
 
@@ -786,7 +885,10 @@
 
       var label = document.createElement('div');
       label.className = 'shot-render-label';
-      label.innerHTML = '<span class="render-frame-label">Option ' + (index + 1) + '</span><span class="render-variation-badge variation-' + utils.escapeHtml(payload.variation) + '">Var ' + utils.escapeHtml(payload.variation) + '</span>';
+      var cardLabel = mappedFrame === 'first'
+        ? 'First Frame Candidate'
+        : (mappedFrame === 'last' ? 'Last Frame Candidate' : ('Option ' + (index + 1)));
+      label.innerHTML = '<span class="render-frame-label">' + cardLabel + '</span><span class="render-variation-badge variation-' + utils.escapeHtml(payload.variation) + '">Var ' + utils.escapeHtml(payload.variation) + '</span>';
 
       var actions = document.createElement('div');
       actions.className = 'prompt-actions';
@@ -795,14 +897,14 @@
 
       var saveFirstBtn = document.createElement('button');
       saveFirstBtn.className = 'btn btn-primary btn-sm';
-      saveFirstBtn.textContent = 'Save as First';
+      saveFirstBtn.textContent = mappedFrame === 'first' ? 'Save First' : 'Save as First';
       (function(pp) {
         saveFirstBtn.addEventListener('click', function() { saveGeneratedPreview(pp, 'first'); });
       })(previewPath);
 
       var saveLastBtn = document.createElement('button');
       saveLastBtn.className = 'btn btn-secondary btn-sm';
-      saveLastBtn.textContent = 'Save as Last';
+      saveLastBtn.textContent = mappedFrame === 'last' ? 'Save Last' : 'Save as Last';
       (function(pp) {
         saveLastBtn.addEventListener('click', function() { saveGeneratedPreview(pp, 'last'); });
       })(previewPath);
@@ -816,60 +918,6 @@
     });
 
     generationChoiceModal.style.display = 'flex';
-  }
-
-  // --- Auto-Upload Shot Reference Set ---
-
-  async function autoUploadShotReferenceSet() {
-    var promptsState = getPromptsState();
-    var projectState = getProjectState();
-    var utils = getSharedUtils();
-    if (!projectState.currentProject || !promptsState.currentShot || promptsState.currentTool !== 'seedream') return;
-
-    var autoUploadRefSetBtn = el('autoUploadRefSetBtn');
-    if (autoUploadRefSetBtn) {
-      autoUploadRefSetBtn.disabled = true;
-      autoUploadRefSetBtn.textContent = 'Uploading...';
-    }
-
-    var loadingToastId = utils.showToast(
-      'Uploading Reference Set...',
-      promptsState.currentShot.shotId + ' - Variation ' + promptsState.currentVariation,
-      'info', 0
-    );
-
-    try {
-      var result = await getGenerationReadinessService().uploadShotReferenceSet({
-        project: projectState.currentProject.id,
-        shotId: promptsState.currentShot.shotId,
-        variation: promptsState.currentVariation,
-        tool: 'seedream',
-        limit: 14
-      });
-      utils.dismissToast(loadingToastId);
-
-      if (result.ok) {
-        var payload = result.data || {};
-        utils.showToast(
-          'Reference Set Ready',
-          promptsState.currentShot.shotId + ' ' + promptsState.currentVariation + ': ' + Number(payload.uploadedCount || payload.uploaded || 0) + ' image(s)',
-          'success', 4000
-        );
-        await loadShotRenders();
-      } else {
-        throw new Error(result.error || 'Unknown error');
-      }
-    } catch (err) {
-      utils.dismissToast(loadingToastId);
-      var classified = classifyError(err, 'REF_MISSING');
-      utils.showToast('Upload Failed', toUserMessage(classified), 'error', 5000);
-      dispatchShotFlowEvent('ERROR_SET', { code: classified.code, message: classified.message });
-    } finally {
-      if (autoUploadRefSetBtn) {
-        autoUploadRefSetBtn.disabled = false;
-        autoUploadRefSetBtn.textContent = 'Auto-prepare Ref Set (up to 14)';
-      }
-    }
   }
 
   // --- Previs Map & Continuity ---
@@ -888,7 +936,7 @@
     return reviewState.previsMapCache;
   }
 
-  async function saveShotContinuityToggle(shotId, enabled) {
+  async function saveShotReferenceMode(shotId, mode) {
     var projectState = getProjectState();
     var reviewState = getReviewState();
     if (!projectState.currentProject || !shotId) return;
@@ -900,17 +948,321 @@
         sourceRef: entry.sourceRef || '',
         notes: entry.notes || '',
         locked: Boolean(entry.locked),
-        continuityDisabled: !enabled
+        referenceMode: mode || 'continuity'
       }
     };
 
     var result = await getGenerationReadinessService().savePrevisMapEntry(projectState.currentProject.id, shotId, payload.entry);
     if (!result.ok) {
-      var saveErr = new Error(result.error || 'Failed to save continuity setting');
+      var saveErr = new Error(result.error || 'Failed to save reference mode');
       saveErr.code = result.code || 'SERVER_ERROR';
       throw saveErr;
     }
     reviewState.previsMapCache[shotId] = (result.data && result.data.entry) || payload.entry;
+  }
+
+  async function saveShotContinuityToggle(shotId, enabled) {
+    return saveShotReferenceMode(shotId, enabled ? 'continuity' : 'none');
+  }
+
+  // --- Variation Chosen ---
+
+  async function loadVariationChosenState() {
+    var promptsState = getPromptsState();
+    var projectState = getProjectState();
+    var checkbox = el('variationChosenCheckbox');
+    var label = el('variationChosenLabel');
+    if (!checkbox || !label) return;
+
+    if (!promptsState.currentShot) {
+      label.style.display = 'none';
+      return;
+    }
+
+    label.style.display = 'flex';
+    try {
+      var result = await getReviewService().loadReviewSequence(projectState.currentProject ? projectState.currentProject.id : undefined);
+      if (result.ok && result.data && Array.isArray(result.data.selections)) {
+        var shotEntry = result.data.selections.find(function(s) { return s.shotId === promptsState.currentShot.shotId; });
+        var isChosen = shotEntry && shotEntry.selectedVariation === promptsState.currentVariation;
+        checkbox.checked = Boolean(isChosen);
+        label.classList.toggle('is-chosen', Boolean(isChosen));
+      } else {
+        checkbox.checked = false;
+        label.classList.remove('is-chosen');
+      }
+    } catch (err) {
+      /* silently handled */
+      checkbox.checked = false;
+      label.classList.remove('is-chosen');
+    }
+  }
+
+  async function saveVariationChosen(chosen) {
+    var promptsState = getPromptsState();
+    var projectState = getProjectState();
+    if (!promptsState.currentShot) return;
+
+    var payload = {
+      selections: [{
+        shotId: promptsState.currentShot.shotId,
+        selectedVariation: chosen ? promptsState.currentVariation : 'none'
+      }]
+    };
+
+    var result = await getReviewService().saveStoryboardSequence({
+      projectId: projectState.currentProject ? projectState.currentProject.id : undefined,
+      payload: payload
+    });
+    if (!result.ok) {
+      throw new Error(result.error || 'Failed to save chosen variation');
+    }
+  }
+
+  // --- Reference Selector ---
+
+  var _referenceOptionsCache = null;
+  var _pendingReferenceSave = null;
+
+  async function loadReferenceOptions() {
+    var promptsState = getPromptsState();
+    var projectState = getProjectState();
+    var reviewState = getReviewState();
+    var referenceSelector = el('referenceSelector');
+    var referenceSelectorList = el('referenceSelectorList');
+
+    if (!referenceSelector || !referenceSelectorList) return;
+    if (!promptsState.currentShot || promptsState.currentTool !== 'seedream') {
+      referenceSelector.style.display = 'none';
+      return;
+    }
+
+    referenceSelector.style.display = 'block';
+
+    try {
+      var result = await getGenerationReadinessService().loadReferenceOptions({
+        projectId: projectState.currentProject ? projectState.currentProject.id : '',
+        shotId: promptsState.currentShot.shotId
+      });
+
+      if (!result.ok || !result.data) {
+        referenceSelectorList.innerHTML = '<div style="padding:0.5rem 0.75rem;color:var(--text-muted);font-size:12px;">No reference data available.</div>';
+        return;
+      }
+
+      var options = result.data.options || [];
+      var maxSelectable = result.data.maxSelectable || 13;
+      _referenceOptionsCache = { options: options, maxSelectable: maxSelectable };
+
+      // Get current selections from previs map
+      var cachedEntry = reviewState.previsMapCache && reviewState.previsMapCache[promptsState.currentShot.shotId];
+      var currentMode = (cachedEntry && cachedEntry.referenceMode) || 'continuity';
+      var savedSelections = (cachedEntry && Array.isArray(cachedEntry.selectedReferences)) ? cachedEntry.selectedReferences : [];
+
+      var activeSelections;
+      if (currentMode === 'custom') {
+        // Custom mode: use exactly what the user saved (even if empty)
+        activeSelections = new Set(savedSelections);
+      } else if (currentMode === 'none') {
+        activeSelections = new Set();
+      } else {
+        // Default (continuity): select all available
+        activeSelections = new Set();
+        for (var i = 0; i < options.length; i++) {
+          if (options[i].available) activeSelections.add(options[i].id);
+        }
+      }
+
+      renderReferenceSelectorList(options, activeSelections, maxSelectable);
+    } catch (err) {
+      /* silently handled */
+      referenceSelectorList.innerHTML = '<div style="padding:0.5rem 0.75rem;color:var(--text-muted);font-size:12px;">Failed to load references.</div>';
+    }
+  }
+
+  function renderReferenceSelectorList(options, activeSelections, maxSelectable) {
+    var referenceSelectorList = el('referenceSelectorList');
+    if (!referenceSelectorList) return;
+    var projectState = getProjectState();
+    var projectParam = projectState.currentProject ? '?project=' + projectState.currentProject.id : '';
+
+    referenceSelectorList.innerHTML = '';
+    var lastCategory = '';
+    var lastEntityId = '';
+    var currentThumbGrid = null;
+
+    for (var i = 0; i < options.length; i++) {
+      var opt = options[i];
+
+      // Category header (Continuity, Characters, Locations)
+      if (opt.category !== lastCategory) {
+        lastCategory = opt.category;
+        lastEntityId = '';
+        var catHeader = document.createElement('div');
+        catHeader.className = 'reference-category-header';
+        catHeader.textContent = opt.category === 'continuity' ? 'Continuity' : opt.category === 'character' ? 'Characters' : 'Locations';
+        referenceSelectorList.appendChild(catHeader);
+      }
+
+      // Entity sub-group (e.g., CHAR_HOST, LOC_NEON_ALLEY)
+      var entityKey = opt.entityId || opt.id;
+      if (entityKey !== lastEntityId) {
+        lastEntityId = entityKey;
+        var entityGroup = document.createElement('div');
+        entityGroup.className = 'reference-entity-group';
+
+        if (opt.entityId) {
+          var entityLabel = document.createElement('div');
+          entityLabel.className = 'reference-entity-label';
+          entityLabel.textContent = opt.label;
+          entityGroup.appendChild(entityLabel);
+        }
+
+        var thumbGrid = document.createElement('div');
+        thumbGrid.className = 'reference-thumb-grid';
+        entityGroup.appendChild(thumbGrid);
+        currentThumbGrid = thumbGrid;
+        referenceSelectorList.appendChild(entityGroup);
+      }
+
+      // Thumbnail tile
+      var tile = document.createElement('div');
+      tile.className = 'reference-thumb-tile';
+      tile.dataset.refId = opt.id;
+
+      if (!opt.available) {
+        tile.classList.add('unavailable');
+      } else if (activeSelections.has(opt.id)) {
+        tile.classList.add('selected');
+      }
+
+      // Hidden checkbox for save/count logic compatibility
+      var checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = opt.id;
+      checkbox.checked = opt.available && activeSelections.has(opt.id);
+      checkbox.disabled = !opt.available;
+      checkbox.className = 'reference-hidden-checkbox';
+      tile.appendChild(checkbox);
+
+      // Thumbnail image or placeholder
+      if (opt.path && opt.available) {
+        var thumb = document.createElement('img');
+        thumb.className = 'reference-tile-img';
+        thumb.loading = 'lazy';
+        thumb.src = '/' + opt.path + projectParam;
+        thumb.alt = opt.label + ' - ' + (opt.sublabel || '');
+        thumb.onerror = function() { this.style.display = 'none'; };
+        tile.appendChild(thumb);
+      } else {
+        var placeholder = document.createElement('div');
+        placeholder.className = 'reference-tile-placeholder';
+        placeholder.textContent = 'N/A';
+        tile.appendChild(placeholder);
+      }
+
+      // Checkmark overlay
+      var checkOverlay = document.createElement('div');
+      checkOverlay.className = 'reference-tile-check';
+      checkOverlay.innerHTML = '&#10003;';
+      tile.appendChild(checkOverlay);
+
+      // Sublabel
+      var sublabel = document.createElement('div');
+      sublabel.className = 'reference-tile-sublabel';
+      sublabel.textContent = opt.sublabel || opt.label;
+      tile.appendChild(sublabel);
+
+      currentThumbGrid.appendChild(tile);
+    }
+
+    updateReferenceSelectorCount();
+  }
+
+  function updateReferenceSelectorCount() {
+    var referenceSelectorList = el('referenceSelectorList');
+    var countEl = el('referenceSelectorCount');
+    if (!referenceSelectorList || !countEl) return;
+    var checkboxes = referenceSelectorList.querySelectorAll('input[type="checkbox"]');
+    var checked = 0;
+    for (var i = 0; i < checkboxes.length; i++) {
+      if (checkboxes[i].checked) checked++;
+    }
+    var max = (_referenceOptionsCache && _referenceOptionsCache.maxSelectable) || 13;
+    countEl.textContent = checked + ' / ' + max + ' selected';
+  }
+
+  async function saveSelectedReferences() {
+    var promptsState = getPromptsState();
+    var projectState = getProjectState();
+    var reviewState = getReviewState();
+    var utils = getSharedUtils();
+    var referenceSelectorList = el('referenceSelectorList');
+    if (!referenceSelectorList || !promptsState.currentShot || !projectState.currentProject) return;
+
+    var checkboxes = referenceSelectorList.querySelectorAll('input[type="checkbox"]');
+    var selectedIds = [];
+    for (var i = 0; i < checkboxes.length; i++) {
+      if (checkboxes[i].checked) selectedIds.push(checkboxes[i].value);
+    }
+
+    var entry = (reviewState.previsMapCache && reviewState.previsMapCache[promptsState.currentShot.shotId]) || {};
+    var payload = {
+      sourceType: entry.sourceType || 'manual',
+      sourceRef: entry.sourceRef || '',
+      notes: entry.notes || '',
+      locked: Boolean(entry.locked),
+      referenceMode: 'custom',
+      selectedReferences: selectedIds
+    };
+
+    var savePromise = (async function() {
+      try {
+        var result = await getGenerationReadinessService().savePrevisMapEntry(
+          projectState.currentProject.id,
+          promptsState.currentShot.shotId,
+          payload
+        );
+        if (result.ok) {
+          reviewState.previsMapCache[promptsState.currentShot.shotId] = (result.data && result.data.entry) || payload;
+        } else {
+          utils.showToast('Reference save failed', 'Your selection may not be used during generation.', 'warning', 3000);
+        }
+      } catch (err) {
+        utils.showToast('Reference save failed', 'Your selection may not be used during generation.', 'warning', 3000);
+      }
+    })();
+    _pendingReferenceSave = savePromise;
+    await savePromise;
+    if (_pendingReferenceSave === savePromise) {
+      _pendingReferenceSave = null;
+    }
+
+    updateReferenceSelectorCount();
+  }
+
+  function refSelectAll() {
+    var referenceSelectorList = el('referenceSelectorList');
+    if (!referenceSelectorList) return;
+    var tiles = referenceSelectorList.querySelectorAll('.reference-thumb-tile:not(.unavailable)');
+    for (var i = 0; i < tiles.length; i++) {
+      var cb = tiles[i].querySelector('input[type="checkbox"]');
+      if (cb) cb.checked = true;
+      tiles[i].classList.add('selected');
+    }
+    saveSelectedReferences();
+  }
+
+  function refClearAll() {
+    var referenceSelectorList = el('referenceSelectorList');
+    if (!referenceSelectorList) return;
+    var tiles = referenceSelectorList.querySelectorAll('.reference-thumb-tile');
+    for (var i = 0; i < tiles.length; i++) {
+      var cb = tiles[i].querySelector('input[type="checkbox"]');
+      if (cb) cb.checked = false;
+      tiles[i].classList.remove('selected');
+    }
+    saveSelectedReferences();
   }
 
   // --- Shot Renders ---
@@ -925,14 +1277,11 @@
     var shotRenders = el('shotRenders');
     var shotRendersGrid = el('shotRendersGrid');
     var shotGenerationLayout = el('shotGenerationLayout');
-    var continuityToggle = el('continuityToggle');
     var continuityNote = el('continuityNote');
-    var refSetNote = el('refSetNote');
+    var referenceSelector = el('referenceSelector');
     var generationHistorySection = el('generationHistorySection');
     var generationHistoryList = el('generationHistoryList');
     var generationMetrics = el('generationMetrics');
-    var agentRunPanel = el('agentRunPanel');
-
     if (!shotRenders || !shotRendersGrid) return;
 
     if (!promptsState.currentShot || (promptsState.currentTool !== 'seedream' && promptsState.currentTool !== 'kling')) {
@@ -942,8 +1291,7 @@
         shotGenerationLayout.style.gridTemplateColumns = '1fr';
       }
       if (continuityNote) { continuityNote.textContent = ''; continuityNote.classList.remove('warning'); }
-      if (refSetNote) refSetNote.textContent = '';
-      if (continuityToggle) continuityToggle.disabled = true;
+      if (referenceSelector) referenceSelector.style.display = 'none';
       if (!gs.activeGenerationJobId) setGenerationControlsForActiveJob(false);
       setGenerationHistoryAutoRefresh(false);
       if (generationHistorySection) generationHistorySection.style.display = 'none';
@@ -957,7 +1305,7 @@
       var projectParam = projectState.currentProject ? projectState.currentProject.id : 'default';
       if (promptsState.currentTool === 'seedream') {
         try { await loadPrevisMap(); } catch (mapErr) {
-          console.warn('Could not load previs map for continuity:', mapErr);
+          /* silently handled */
           reviewState.previsMapCache = {};
         }
       }
@@ -972,10 +1320,8 @@
       var toolRenders = (data.renders && data.renders[promptsState.currentTool]) || {};
 
       if (shotGenerationLayout) { shotGenerationLayout.style.display = 'grid'; shotGenerationLayout.style.gridTemplateColumns = ''; }
-      if (agentRunPanel) agentRunPanel.style.display = 'block';
       shotRenders.style.display = 'block';
       shotRendersGrid.innerHTML = '';
-      if (continuityToggle) continuityToggle.disabled = promptsState.currentTool !== 'seedream';
 
       var projectParam2 = projectState.currentProject ? '?project=' + projectState.currentProject.id : '';
 
@@ -1002,21 +1348,16 @@
           firstSlotMeta = { source: 'none', text: 'Missing', canDelete: true };
         }
 
-        if (continuityToggle) {
-          continuityToggle.checked = !(reviewState.previsMapCache && reviewState.previsMapCache[promptsState.currentShot.shotId] && reviewState.previsMapCache[promptsState.currentShot.shotId].continuityDisabled);
-        }
-
         if (continuityNote) {
           var reason = continuityForVariation && continuityForVariation.reason || '';
           continuityNote.classList.remove('warning');
-          if (reason === 'disabled_by_shot') {
-            continuityNote.textContent = 'Auto continuity is off for this shot.';
-          } else if (resolvedFirst && resolvedFirst.source === 'inherited') {
-            continuityNote.textContent = 'Using ' + ((resolvedFirst && resolvedFirst.inheritedFromShotId) || 'previous shot') + ' variation A last frame.';
+          if (resolvedFirst && resolvedFirst.source === 'inherited') {
+            var inheritVar = (resolvedFirst.inheritedFromVariation || 'A');
+            continuityNote.textContent = 'Using ' + ((resolvedFirst && resolvedFirst.inheritedFromShotId) || 'previous shot') + ' variation ' + inheritVar + ' last frame.';
           } else if (resolvedFirst && resolvedFirst.source === 'direct') {
             continuityNote.textContent = 'Manual first frame override is active.';
           } else if (reason === 'missing_previous_last') {
-            continuityNote.textContent = 'Missing continuity source: previous shot has no variation A last frame.';
+            continuityNote.textContent = 'Missing continuity source: previous shot has no last frame for chosen variation.';
             continuityNote.classList.add('warning');
           } else if (reason === 'no_previous_shot') {
             continuityNote.textContent = 'No previous shot found in order.';
@@ -1024,16 +1365,10 @@
             continuityNote.textContent = '';
           }
         }
-        if (refSetNote) {
-          var refCount = Array.isArray(currentRenders.refs) ? currentRenders.refs.length : 0;
-          refSetNote.textContent = refCount > 0
-            ? 'Reference set for first frame: ' + refCount + '/14 image(s) attached.'
-            : 'Reference set for first frame: 0/14. Click "Auto-prepare Ref Set (up to 14)" to attach references.';
-        }
-      } else if (continuityNote) {
-        continuityNote.textContent = '';
-        continuityNote.classList.remove('warning');
-        if (refSetNote) refSetNote.textContent = '';
+        await loadReferenceOptions();
+      } else {
+        if (continuityNote) { continuityNote.textContent = ''; continuityNote.classList.remove('warning'); }
+        if (referenceSelector) referenceSelector.style.display = 'none';
       }
 
       var firstSlot = createFrameUploadSlot(
@@ -1052,30 +1387,22 @@
       );
       shotRendersGrid.appendChild(lastSlot);
 
-      // Other variations
-      var otherVariations = Object.keys(toolRenders).filter(function(v) { return v !== promptsState.currentVariation; });
-      for (var i = 0; i < otherVariations.length; i++) {
-        var variation = otherVariations[i];
-        var renders = toolRenders[variation];
-        if (!renders) continue;
-        if (renders.first) shotRendersGrid.appendChild(createRenderCard(renders.first, 'First Frame', variation, projectParam2));
-        if (renders.last) shotRendersGrid.appendChild(createRenderCard(renders.last, 'Last Frame', variation, projectParam2));
-      }
-
       await loadShotGenerationHistory();
       loadGenerationMetrics();
+      loadVariationChosenState();
 
     } catch (err) {
-      console.error('Failed to load shot renders:', err);
+      /* silently handled */
       shotRenders.style.display = 'none';
       if (shotGenerationLayout) {
         shotGenerationLayout.style.display = promptsState.currentShot ? 'grid' : 'none';
         shotGenerationLayout.style.gridTemplateColumns = '1fr';
       }
       if (continuityNote) { continuityNote.textContent = ''; continuityNote.classList.remove('warning'); }
-      if (refSetNote) refSetNote.textContent = '';
+      if (referenceSelector) referenceSelector.style.display = 'none';
       await loadShotGenerationHistory();
       loadGenerationMetrics();
+      loadVariationChosenState();
     }
   }
 
@@ -1274,7 +1601,11 @@
       var status = String(job.status || '').toLowerCase();
       var variation = String((job.input && job.input.variation) || 'A').toUpperCase();
       var requireReference = Boolean(job.input && job.input.requireReference);
-      var modeLabel = requireReference ? 'Ref image' : 'First+Last';
+      var requestedMaxImages = Number(job.input && job.input.maxImages);
+      var frameAssignments = Array.isArray(job.result && job.result.frameAssignments) ? job.result.frameAssignments : [];
+      var modeLabel = hasFirstLastPair(frameAssignments) || requestedMaxImages === 2
+        ? 'First+Last'
+        : (requireReference ? 'Ref image' : 'Single image');
       var duration = formatJobDuration(job);
       var refCount = Number((job.result && job.result.referenceCount) || 0);
       var refMeta = refCount > 0 ? ' \u00b7 refs ' + refCount : '';
@@ -1487,7 +1818,8 @@
           shotId: output.shotId || (promptsState.currentShot && promptsState.currentShot.shotId) || '',
           variation: output.variation || promptsState.currentVariation,
           tool: 'seedream',
-          images: output.images
+          images: output.images,
+          frameAssignments: output.frameAssignments || []
         });
       }
 
@@ -1584,7 +1916,11 @@
     clearSessionReplicateKey: clearSessionReplicateKey,
     loadPrevisMap: loadPrevisMap,
     saveShotContinuityToggle: saveShotContinuityToggle,
-    autoUploadShotReferenceSet: autoUploadShotReferenceSet,
+    saveShotReferenceMode: saveShotReferenceMode,
+    loadReferenceOptions: loadReferenceOptions,
+    saveSelectedReferences: saveSelectedReferences,
+    refSelectAll: refSelectAll,
+    refClearAll: refClearAll,
     loadShotGenerationHistory: loadShotGenerationHistory,
     loadGenerationMetrics: loadGenerationMetrics,
     refreshGenerationMetrics: loadGenerationMetrics,
@@ -1597,6 +1933,8 @@
     discardPendingGeneratedPreviews: discardPendingGeneratedPreviews,
     saveGeneratedPreview: saveGeneratedPreview,
     setGenerationJobStatus: setGenerationJobStatus,
-    setGenerationControlsForActiveJob: setGenerationControlsForActiveJob
+    setGenerationControlsForActiveJob: setGenerationControlsForActiveJob,
+    saveVariationChosen: saveVariationChosen,
+    loadVariationChosenState: loadVariationChosenState
   };
 })(typeof window !== 'undefined' ? window : globalThis);

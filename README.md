@@ -135,10 +135,11 @@ The UI also exposes pipeline controls (`run-all`, status).
 
 ## Replicate Key Usage
 
-You can configure Replicate token in two ways:
+You can configure Replicate token in three ways:
 
-1. `.env` key (`REPLICATE_API_TOKEN`) for persistent local default.
-2. Session key in the Step 5 modal (`Replicate Key`) for current server session.
+1. Local-only default token (auto-used when running locally).
+2. `.env` key (`REPLICATE_API_TOKEN`) for persistent default outside local fallback.
+3. Session key in the Step 5 modal (`Replicate Key`) for current server session.
 
 ## Documentation Map
 

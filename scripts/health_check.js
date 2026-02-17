@@ -168,6 +168,43 @@ async function checkProjectScopedEndpoints() {
   const locRefs = await requestJSON(`/api/references/locations?project=${encodeURIComponent(project)}`);
   assert(locRefs.response.ok && locRefs.json.success, 'GET /api/references/locations failed');
 
+  const spacedCharacterName = 'Main Character';
+  const addCharacterWithSpaces = await requestJSON(
+    `/api/add-character?project=${encodeURIComponent(project)}&character=${encodeURIComponent(spacedCharacterName)}`,
+    { method: 'POST' }
+  );
+  assert(
+    addCharacterWithSpaces.response.ok && addCharacterWithSpaces.json.success,
+    'POST /api/add-character should accept character names with spaces'
+  );
+
+  const characterRefForm = new FormData();
+  characterRefForm.set('project', project);
+  characterRefForm.set('character', spacedCharacterName);
+  characterRefForm.set('slot', '1');
+  characterRefForm.set(
+    'image',
+    new Blob([Buffer.from(TINY_PNG_BASE64, 'base64')], { type: 'image/png' }),
+    'health-character-ref.png'
+  );
+  const characterRefUpload = await requestJSON('/api/upload/reference-image', {
+    method: 'POST',
+    body: characterRefForm
+  });
+  assert(
+    characterRefUpload.response.ok && characterRefUpload.json.success,
+    'POST /api/upload/reference-image failed for character with spaces in name'
+  );
+
+  const charRefsAfterUpload = await requestJSON(`/api/references/characters?project=${encodeURIComponent(project)}`);
+  assert(charRefsAfterUpload.response.ok && charRefsAfterUpload.json.success, 'GET /api/references/characters after upload failed');
+  const uploadedCharacter = (charRefsAfterUpload.json.characters || []).find((entry) => entry.name === spacedCharacterName);
+  assert(uploadedCharacter, 'Character with spaces was not returned by references listing');
+  assert(
+    Array.isArray(uploadedCharacter.images) && uploadedCharacter.images.some((image) => Number(image.slot) === 1),
+    'Uploaded character reference image slot was not returned in references listing'
+  );
+
   const reviewSequence = await requestJSON(`/api/review/sequence?project=${encodeURIComponent(project)}`);
   assert(reviewSequence.response.ok, 'GET /api/review/sequence failed');
 
@@ -386,7 +423,7 @@ async function checkProjectScopedEndpoints() {
         sourceRef: 'HEALTH',
         notes: 'Health check previs override',
         locked: false,
-        continuityDisabled: true
+        referenceMode: 'none'
       }
     })
   });

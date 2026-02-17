@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const Busboy = require('busboy');
+const { GENERATION_SOCKET_TIMEOUT_MS } = require('../config');
 
 function registerGenerationRoutes(router, ctx) {
   const {
@@ -25,8 +26,11 @@ function registerGenerationRoutes(router, ctx) {
     listShotRenderEntries,
     readPrevisMapFile,
     resolveSeedreamContinuityForShot,
+    resolvePreviousShotLastFrame,
+    getOrderedReferenceFiles,
     collectShotReferenceImagePaths,
-    syncShotReferenceSetFiles
+    syncShotReferenceSetFiles,
+    readSequenceFile
   } = ctx;
 
   router.get('/api/generate-status', (_req, res) => {
@@ -35,6 +39,83 @@ function registerGenerationRoutes(router, ctx) {
       tokenSource: replicate.getTokenSource()
     });
   });
+
+  router.get('/api/shot-reference-options', wrapAsync(async (req, res) => {
+    const projectId = resolveProjectId(req.query.project || projectManager.getActiveProject(), { required: true });
+    const shotId = sanitizePathSegment(String(req.query.shot || ''), SHOT_ID_REGEX, 'shotId');
+    const projectPath = projectManager.getProjectPath(projectId);
+
+    const options = [];
+
+    // 1. Continuity: previous shot's chosen variation last frame
+    const continuityInfo = resolvePreviousShotLastFrame(projectId, shotId);
+    if (continuityInfo.previousShotId) {
+      options.push({
+        id: 'continuity:prev_last',
+        category: 'continuity',
+        label: 'Previous Shot Last Frame',
+        sublabel: continuityInfo.previousShotId + ' Var ' + (continuityInfo.variation || 'A'),
+        path: continuityInfo.path || null,
+        available: Boolean(continuityInfo.available)
+      });
+    }
+
+    // 2. All character references in project
+    const charsDir = path.join(projectPath, 'reference', 'characters');
+    if (fs.existsSync(charsDir)) {
+      const charDirs = fs.readdirSync(charsDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name)
+        .sort();
+      for (const charId of charDirs) {
+        const charDir = path.join(charsDir, charId);
+        const files = getOrderedReferenceFiles(charDir);
+        for (const file of files) {
+          options.push({
+            id: 'char:' + charId + '/' + file,
+            category: 'character',
+            entityId: charId,
+            label: charId,
+            sublabel: file,
+            path: 'reference/characters/' + charId + '/' + file,
+            available: true
+          });
+        }
+      }
+    }
+
+    // 3. All location references in project
+    const locsDir = path.join(projectPath, 'reference', 'locations');
+    if (fs.existsSync(locsDir)) {
+      const locDirs = fs.readdirSync(locsDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name)
+        .sort();
+      for (const locId of locDirs) {
+        const locDir = path.join(locsDir, locId);
+        const files = getOrderedReferenceFiles(locDir);
+        for (const file of files) {
+          options.push({
+            id: 'loc:' + locId + '/' + file,
+            category: 'location',
+            entityId: locId,
+            label: locId,
+            sublabel: file,
+            path: 'reference/locations/' + locId + '/' + file,
+            available: true
+          });
+        }
+      }
+    }
+
+    sendJSON(res, 200, {
+      success: true,
+      projectId,
+      shotId,
+      options,
+      maxSelectable: MAX_REFERENCE_IMAGES - 1
+    });
+  }));
 
   router.post('/api/session/replicate-key', wrapAsync(async (req, res) => {
     const data = await jsonBody(req, MAX_BODY_SIZE);
@@ -60,8 +141,8 @@ function registerGenerationRoutes(router, ctx) {
   }));
 
   router.post('/api/generate-image', wrapAsync(async (req, res) => {
-    req.setTimeout(300000);
-    res.setTimeout(300000);
+    req.setTimeout(GENERATION_SOCKET_TIMEOUT_MS);
+    res.setTimeout(GENERATION_SOCKET_TIMEOUT_MS);
 
     const data = await jsonBody(req, MAX_BODY_SIZE);
     try {
@@ -79,18 +160,19 @@ function registerGenerationRoutes(router, ctx) {
   }));
 
   router.post('/api/generate-shot', wrapAsync(async (req, res) => {
-    req.setTimeout(300000);
-    res.setTimeout(300000);
+    req.setTimeout(GENERATION_SOCKET_TIMEOUT_MS);
+    res.setTimeout(GENERATION_SOCKET_TIMEOUT_MS);
     res.setHeader('Deprecation', 'true');
     res.setHeader('Sunset', 'Wed, 30 Sep 2026 00:00:00 GMT');
-    console.warn('[DEPRECATION] POST /api/generate-shot is deprecated and will be removed after 2026-09-30. Use POST /api/generation-jobs instead.');
-
     const data = await jsonBody(req, MAX_BODY_SIZE);
     try {
       const result = await executeGenerateShotTask(data);
       sendJSON(res, 200, {
         success: true,
         images: result.images,
+        frameAssignments: result.frameAssignments || [],
+        generationMode: result.generationMode || '',
+        isFirstLastPair: Boolean(result.isFirstLastPair),
         predictionId: result.predictionId,
         duration: result.duration,
         hasReferenceImage: result.hasReferenceImage,
@@ -354,8 +436,8 @@ function registerGenerationRoutes(router, ctx) {
     busboy.on('file', (_name, file, info) => {
       fileExt = path.extname(info.filename);
       file.on('data', (chunk) => { fileChunks.push(chunk); });
-      file.on('error', (streamErr) => {
-        console.error('File stream error:', streamErr);
+      file.on('error', () => {
+        /* ignored — file stream error; clear chunks */
         fileChunks.length = 0;
       });
     });

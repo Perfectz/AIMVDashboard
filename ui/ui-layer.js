@@ -281,7 +281,27 @@
       button.appendChild(count);
     }
 
+    // Step completion badge placeholder
+    if (item.key && item.key.startsWith('step') || item.key === 'index' || item.key === 'storyboard') {
+      const badge = createElement('span', 'step-badge badge-empty');
+      badge.dataset.stepKey = item.key;
+      button.appendChild(badge);
+    }
+
     return button;
+  }
+
+  /**
+   * Update step completion badges.
+   * @param {Object} statuses - e.g. { step1: 'complete', step2: 'partial', step3: 'empty' }
+   */
+  function updateStepBadges(statuses) {
+    Object.keys(statuses || {}).forEach(function(key) {
+      var badges = document.querySelectorAll('.step-badge[data-step-key="' + key + '"]');
+      badges.forEach(function(badge) {
+        badge.className = 'step-badge badge-' + (statuses[key] || 'empty');
+      });
+    });
   }
 
   function getWorkflowItems(mode) {
@@ -398,7 +418,7 @@
         });
       }
     } catch (err) {
-      console.error('[UILayer] Failed to hydrate project selector', err);
+      /* silently handled */
     }
   }
 
@@ -478,6 +498,101 @@
     scope.body.appendChild(mount);
   }
 
+  // ── Page Transition ──
+  function applyPageTransition() {
+    var main = document.querySelector('main');
+    if (main) main.classList.add('page-transition');
+  }
+
+  // ── Step Progress Bar ──
+  var STEP_MAP = {
+    'step1.html': { num: 1, label: 'Theme' },
+    'step2.html': { num: 2, label: 'Music' },
+    'step3.html': { num: 3, label: 'Canon' },
+    'step4.html': { num: 4, label: 'References' },
+    'index.html': { num: 5, label: 'Shots' }
+  };
+
+  function renderProgressBar() {
+    var path = window.location.pathname.split('/').pop() || '';
+    var current = STEP_MAP[path];
+    if (!current) return;
+
+    var bar = createElement('div', 'step-progress-bar');
+    bar.setAttribute('role', 'navigation');
+    bar.setAttribute('aria-label', 'Workflow progress');
+
+    var steps = Object.keys(STEP_MAP);
+    steps.forEach(function(key, idx) {
+      var step = STEP_MAP[key];
+      var segment = createElement('div', 'step-progress-segment');
+      if (step.num < current.num) segment.classList.add('completed');
+      if (step.num === current.num) segment.classList.add('active');
+
+      var dot = createElement('div', 'step-progress-dot', String(step.num));
+      dot.setAttribute('aria-label', 'Step ' + step.num + ': ' + step.label);
+      if (step.num === current.num) dot.setAttribute('aria-current', 'step');
+      segment.appendChild(dot);
+
+      var label = createElement('span', 'step-progress-label', step.label);
+      segment.appendChild(label);
+
+      if (idx < steps.length - 1) {
+        segment.appendChild(createElement('div', 'step-progress-line'));
+      }
+
+      bar.appendChild(segment);
+    });
+
+    var target = document.querySelector('.content-area') || document.querySelector('main');
+    if (target) target.insertBefore(bar, target.firstChild);
+  }
+
+  // ── Focus Trap (for modals) ──
+  function trapFocus(modalElement) {
+    var focusable = modalElement.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusable.length === 0) return null;
+    var first = focusable[0];
+    var last = focusable[focusable.length - 1];
+
+    function handler(e) {
+      if (e.key !== 'Tab') return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+    modalElement.addEventListener('keydown', handler);
+    first.focus();
+    return function release() {
+      modalElement.removeEventListener('keydown', handler);
+    };
+  }
+
+  // ── Aria-live region for announcements ──
+  function renderAriaLiveRegion() {
+    if (document.getElementById('uiAriaLive')) return;
+    var region = createElement('div', 'sr-only');
+    region.id = 'uiAriaLive';
+    region.setAttribute('aria-live', 'polite');
+    region.setAttribute('aria-atomic', 'true');
+    document.body.appendChild(region);
+  }
+
+  function announce(message) {
+    var region = document.getElementById('uiAriaLive');
+    if (region) region.textContent = message;
+  }
+
   function init() {
     document.documentElement.setAttribute('data-ui-layer', '1');
     persistProjectFromQuery();
@@ -495,6 +610,9 @@
     renderPageChatMount(document);
     wireDataNav(document);
     hydrateGuideProjectSelector(document);
+    applyPageTransition();
+    renderProgressBar();
+    renderAriaLiveRegion();
   }
 
   window.UILayer = {
@@ -516,6 +634,9 @@
     renderNewProjectModal,
     renderAnalysisPromptModal,
     renderToastContainer,
-    renderPageChatMount
+    renderPageChatMount,
+    trapFocus,
+    announce,
+    updateStepBadges
   };
 })();

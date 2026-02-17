@@ -16,7 +16,7 @@
 
   function getToast() {
     if (typeof window.showToast === 'function') return window.showToast;
-    return (title, message) => console.log(`${title}: ${message}`);
+    return () => {};
   }
 
   function formatTime(iso) {
@@ -100,7 +100,7 @@
         try {
           await window.loadIndex();
         } catch (refreshErr) {
-          console.error('[Pipeline] Failed to refresh page state after', action, refreshErr);
+          /* silently handled */
         }
       }
       return result;

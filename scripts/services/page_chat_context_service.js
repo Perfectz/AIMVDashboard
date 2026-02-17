@@ -14,6 +14,7 @@ const STEP3_CANON_TYPES = ['script', 'youtubeScript', 'transcript', 'assets', 'c
 const READ_ONLY_PAGES = new Set(['home', 'step4', 'storyboard', 'guide']);
 const PAGE_IDS = new Set(['home', 'step1', 'step2', 'step3', 'step4', 'index', 'storyboard', 'guide']);
 const MAX_DOC_CHARS = 12000;
+const MAX_BG_DOC_CHARS = 3000;
 
 function truncate(value, maxChars = MAX_DOC_CHARS) {
   const text = String(value || '');
@@ -141,6 +142,79 @@ function createPageChatContextService({ projectManager, canonFilename }) {
     return contentTypes.map((canonType) => resolveCanonTarget(projectId, canonType));
   }
 
+  function loadBackgroundDocs(projectId, pageId, activeCanonTab) {
+    const docs = [];
+    const focusKeys = new Set();
+
+    // Determine which keys are already the primary focus (skip those)
+    if (pageId === 'step1') {
+      STEP1_CONTENT_TYPES.forEach((t) => focusKeys.add(`content:${t}`));
+    } else if (pageId === 'step2') {
+      STEP2_CONTENT_TYPES.forEach((t) => focusKeys.add(`content:${t}`));
+    } else if (pageId === 'step3' && activeCanonTab) {
+      focusKeys.add(`canon:${activeCanonTab}`);
+    }
+
+    // Step 1 content as background
+    STEP1_CONTENT_TYPES.forEach((contentType) => {
+      const key = `content:${contentType}`;
+      if (focusKeys.has(key)) return;
+      try {
+        const raw = contentService.load(projectId, contentType);
+        if (!raw) return;
+        const clipped = truncate(raw, MAX_BG_DOC_CHARS);
+        docs.push({
+          id: `bg:${key}`,
+          label: `Step 1 — ${contentType}`,
+          kind: 'background',
+          content: clipped.text,
+          truncated: clipped.truncated,
+          exists: true
+        });
+      } catch (_) { /* skip missing */ }
+    });
+
+    // Step 2 content as background
+    STEP2_CONTENT_TYPES.forEach((contentType) => {
+      const key = `content:${contentType}`;
+      if (focusKeys.has(key)) return;
+      try {
+        const raw = contentService.load(projectId, contentType);
+        if (!raw) return;
+        const clipped = truncate(raw, MAX_BG_DOC_CHARS);
+        docs.push({
+          id: `bg:${key}`,
+          label: `Step 2 — ${contentType}`,
+          kind: 'background',
+          content: clipped.text,
+          truncated: clipped.truncated,
+          exists: true
+        });
+      } catch (_) { /* skip missing */ }
+    });
+
+    // Step 3 canon as background (all tabs except current focus)
+    STEP3_CANON_TYPES.forEach((canonType) => {
+      const key = `canon:${canonType}`;
+      if (focusKeys.has(key)) return;
+      try {
+        const raw = readCanonContent(projectId, canonType);
+        if (!raw) return;
+        const clipped = truncate(raw, MAX_BG_DOC_CHARS);
+        docs.push({
+          id: `bg:${key}`,
+          label: `Canon — ${canonType}`,
+          kind: 'background',
+          content: clipped.text,
+          truncated: clipped.truncated,
+          exists: true
+        });
+      } catch (_) { /* skip missing */ }
+    });
+
+    return docs;
+  }
+
   function buildContext(params = {}) {
     const projectId = String(params.projectId || '').trim();
     const pageId = validatePageId(params.pageId);
@@ -148,13 +222,18 @@ function createPageChatContextService({ projectManager, canonFilename }) {
     const warnings = [];
     const contextDocs = [];
     let allowedTargets = [];
+    let activeCanonTab = '';
 
     if (pageId === 'step1') {
       allowedTargets = buildStepTargets(projectId, STEP1_CONTENT_TYPES, 'content');
     } else if (pageId === 'step2') {
       allowedTargets = buildStepTargets(projectId, STEP2_CONTENT_TYPES, 'content');
     } else if (pageId === 'step3') {
-      allowedTargets = buildStepTargets(projectId, STEP3_CANON_TYPES, 'canon');
+      activeCanonTab = pageState.activeCanonTab ? String(pageState.activeCanonTab).trim() : '';
+      var step3Types = activeCanonTab && STEP3_CANON_TYPES.includes(activeCanonTab)
+        ? [activeCanonTab]
+        : STEP3_CANON_TYPES;
+      allowedTargets = buildStepTargets(projectId, step3Types, 'canon');
     } else if (pageId === 'index') {
       const selection = pageState.selection && typeof pageState.selection === 'object'
         ? pageState.selection
@@ -173,6 +252,7 @@ function createPageChatContextService({ projectManager, canonFilename }) {
       allowedTargets = [];
     }
 
+    // Primary focus docs (editable)
     allowedTargets.forEach((target) => {
       const clipped = truncate(target.currentContent || '');
       contextDocs.push({
@@ -187,6 +267,10 @@ function createPageChatContextService({ projectManager, canonFilename }) {
         warnings.push(`No existing content found for ${target.targetKey}; proposal may create first version.`);
       }
     });
+
+    // Background context from other steps (read-only)
+    const bgDocs = loadBackgroundDocs(projectId, pageId, activeCanonTab);
+    bgDocs.forEach((doc) => contextDocs.push(doc));
 
     const liveStateText = truncate(JSON.stringify(pageState, null, 2), 10000);
     contextDocs.push({

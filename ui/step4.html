@@ -15,7 +15,7 @@
   <div class="container">
     <div class="main-layout">
       <!-- Left Navigation -->
-      <nav class="left-nav">
+      <nav class="left-nav" aria-label="Workflow navigation">
         <!-- Brand Header -->
         <div class="nav-brand" data-ui-nav-brand data-ui-mode="standard"></div>
 
@@ -43,11 +43,6 @@
 
       <!-- Main Content -->
       <main class="content content-full-width">
-        <!-- Breadcrumbs -->
-        <nav class="breadcrumbs" id="breadcrumbs" style="display: none;">
-          <!-- Populated by JavaScript -->
-        </nav>
-
         <div class="section-header">
           <h2>Step 4: References & Assets</h2>
           <p class="section-subtitle">Manage both character and location visual references for faster prompt generation</p>
@@ -68,7 +63,7 @@
 
         <div class="section-header" style="margin-top: 28px;">
           <h2>Location References</h2>
-          <p class="section-subtitle">Location names and visual anchors (3 reference slots each)</p>
+          <p class="section-subtitle">Location names and visual anchors (4+ reference slots each)</p>
         </div>
 
         <div class="add-character-form">
@@ -83,7 +78,8 @@
         </div>
 
         <div class="step-footer">
-          <a href="index.html" class="btn btn-primary">Continue to Step 5: Shots</a>
+          <a href="step3.html" class="btn-back">&larr; Step 3: Canon</a>
+          <a href="index.html" class="btn btn-primary">Continue to Step 5: Shots &rarr;</a>
         </div>
       </main>
     </div>
@@ -98,6 +94,7 @@
   <script src="modules/project-actions.js"></script>
   <script src="ui-layer.js"></script>
   <script>window.UILayer && window.UILayer.init();</script>
+  <script src="modules/command-palette.js"></script>
   <script src="modules/state.js"></script>
   <script src="modules/shot-flow-state.js"></script>
   <script src="modules/error-taxonomy.js"></script>
@@ -134,10 +131,6 @@
   <script src="modules/page-chat.js"></script>
 </body>
 </html>
-
-
-
-
 
 
 

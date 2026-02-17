@@ -2,6 +2,7 @@
 @import url("styles/base.css");
 @import url("styles/layout.css");
 @import url("styles/components.css");
+@import url("styles/animations.css");
 @import url("styles/pages/home.css");
 @import url("styles/pages/index.css");
 @import url("styles/pages/storyboard.css");
