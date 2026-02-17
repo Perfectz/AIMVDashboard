@@ -200,7 +200,7 @@ async function loadAssetManifest() {
     assetManifest = normalizeAssetManifest(result.data);
     renderAssetPanel();
   } catch (err) {
-    /* silently handled */
+    console.warn('Asset manifest load failed:', err.message);
     assetManifest = [];
     renderAssetPanel();
   }
@@ -666,7 +666,7 @@ async function loadProjects() {
 
     return true;
   } catch (err) {
-    /* silently handled */
+    console.warn('Project load failed:', err.message);
     return false;
   }
 }
@@ -749,7 +749,7 @@ async function loadPrevisMap() {
     }
     previsMap = result.data.previsMap || {};
   } catch (err) {
-    /* silently handled */
+    console.warn('Previs map load failed:', err.message);
     previsMap = {};
   }
 }
@@ -770,7 +770,7 @@ async function loadPromptLintSummary() {
       totalShots: Number.isFinite(data.totalShots) ? data.totalShots : 0
     };
   } catch (err) {
-    /* silently handled */
+    console.warn('Prompt lint summary load failed:', err.message);
     promptLintSummary = { passed: 0, failed: 0, totalShots: 0 };
   }
 }
@@ -906,7 +906,7 @@ async function loadReviewMetadata() {
       normalizeShotReviewData(shot);
     });
   } catch (err) {
-    /* silently handled */
+    console.warn('Review metadata load failed:', err.message);
   }
 }
 
@@ -1420,9 +1420,15 @@ function renderBulkBar() {
     shotGrid.parentElement.insertBefore(bar, shotGrid);
   }
   bar.style.display = 'flex';
+  bar.setAttribute('role', 'region');
+  bar.setAttribute('aria-live', 'polite');
   bar.innerHTML = '<span class="bulk-count">' + bulkSelectedIds.size + '</span> selected' +
     '<button class="btn btn-sm btn-secondary" id="bulkSelectAll">Select All</button>' +
     '<button class="btn btn-sm btn-secondary" id="bulkDeselectAll">Deselect All</button>' +
+    '<select class="bulk-status-select" id="bulkStatusSelect">' +
+      '<option value="">Set Status...</option>' +
+      REVIEW_STATUSES.map(function(s) { return '<option value="' + s + '">' + REVIEW_STATUS_LABELS[s] + '</option>'; }).join('') +
+    '</select>' +
     '<button class="btn btn-sm btn-primary" id="bulkPinSelected">Pin Selected</button>' +
     '<button class="btn btn-sm btn-secondary" id="bulkUnpinSelected">Unpin Selected</button>';
   document.getElementById('bulkSelectAll').addEventListener('click', function() {
@@ -1433,6 +1439,22 @@ function renderBulkBar() {
   document.getElementById('bulkDeselectAll').addEventListener('click', function() {
     bulkSelectedIds.clear();
     renderGridView();
+  });
+  document.getElementById('bulkStatusSelect').addEventListener('change', async function(e) {
+    var newStatus = e.target.value;
+    if (!newStatus || !sequenceData?.selections) return;
+    var ids = Array.from(bulkSelectedIds);
+    var count = 0;
+    for (var i = 0; i < ids.length; i++) {
+      try {
+        await saveReviewUpdate(ids[i], { reviewStatus: newStatus });
+        count++;
+      } catch (err) { /* continue with remaining */ }
+    }
+    showToast('Batch update', count + ' shots set to ' + formatReviewStatus(newStatus), 'success', 3000);
+    bulkSelectedIds.clear();
+    renderReviewFilterChips();
+    renderView();
   });
   document.getElementById('bulkPinSelected').addEventListener('click', function() {
     if (!sequenceData || !sequenceData.selections) return;
@@ -1479,8 +1501,15 @@ function renderGridView() {
 function createShotCard(shot) {
   const card = document.createElement('div');
   card.className = 'shot-card';
+  if (shot.reviewStatus) card.classList.add(`status-${shot.reviewStatus}`);
   if (bulkSelectedIds.has(shot.shotId)) card.classList.add('bulk-selected');
+  card.setAttribute('tabindex', '0');
+  card.setAttribute('role', 'button');
+  card.setAttribute('aria-label', `Shot ${shot.shotId}, ${formatReviewStatus(shot.reviewStatus)}`);
   card.addEventListener('click', () => openShotModal(shot));
+  card.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openShotModal(shot); }
+  });
 
   // Bulk checkbox
   const checkbox = document.createElement('input');
@@ -1676,7 +1705,7 @@ async function loadShotListTiming() {
 
     return Object.keys(timingByShotId).length > 0 ? timingByShotId : null;
   } catch (err) {
-    /* silently handled */
+    console.warn('Shot timing load failed:', err.message);
     return null;
   }
 }
@@ -1937,12 +1966,34 @@ function renderTimelineFilmstrip() {
 /**
  * Create timeline section element
  */
+const SECTION_COLORS = {
+  'Intro': '#FF6B6B', 'intro': '#FF6B6B',
+  'Verse': '#4ECDC4', 'verse': '#4ECDC4', 'Verse 1': '#4ECDC4', 'Verse 2': '#5BD8D0',
+  'Pre-Chorus': '#FFD93D', 'pre-chorus': '#FFD93D', 'Pre-chorus': '#FFD93D',
+  'Chorus': '#45B7D1', 'chorus': '#45B7D1', 'Chorus 1': '#45B7D1', 'Chorus 2': '#52C4DE',
+  'Bridge': '#FFA07A', 'bridge': '#FFA07A',
+  'Outro': '#98D8C8', 'outro': '#98D8C8',
+  'Instrumental': '#C19EF5', 'instrumental': '#C19EF5',
+  'Unknown': '#666'
+};
+
+function getSectionColor(name) {
+  return SECTION_COLORS[name] || SECTION_COLORS[name?.toLowerCase()] || '#666';
+}
+
 function createTimelineSection(sectionName, ranges) {
   const section = document.createElement('div');
   section.className = 'timeline-section';
+  const sectionColor = getSectionColor(sectionName);
+  section.style.borderLeft = `4px solid ${sectionColor}`;
 
   const header = document.createElement('div');
   header.className = 'section-header';
+
+  const colorDot = document.createElement('span');
+  colorDot.className = 'section-color-dot';
+  colorDot.style.backgroundColor = sectionColor;
+  header.appendChild(colorDot);
 
   const name = document.createElement('div');
   name.className = 'section-name';
@@ -2918,6 +2969,33 @@ function exportPDF() {
   }, 300);
 }
 
+function exportSelectionsJson() {
+  if (!sequenceData?.selections?.length) {
+    showToast('No selections', 'Load a storyboard first', 'warning', 3000);
+    return;
+  }
+  const selections = sequenceData.selections.map(s => ({
+    shotId: s.shotId,
+    selectedVariation: s.selectedVariation || 'none',
+    reviewStatus: s.reviewStatus || 'draft',
+    duration: s.timing?.duration || null,
+    musicSection: s.timing?.musicSection || null,
+    locked: !!s.locked,
+    assignee: s.assignee || '',
+    commentsCount: Array.isArray(s.comments) ? s.comments.length : 0
+  }));
+  const data = {
+    projectId: currentProject?.id || 'unknown',
+    exportedAt: new Date().toISOString(),
+    totalShots: selections.length,
+    approved: selections.filter(s => s.reviewStatus === 'approved').length,
+    editorialOrder: sequenceData.editorialOrder || selections.map(s => s.shotId),
+    selections
+  };
+  downloadJson(`storyboard-selections-${currentProject?.id || 'project'}.json`, data);
+  showToast('Exported', `${selections.length} shot selections saved as JSON`, 'success', 3000);
+}
+
 async function fetchContextBundle(includePromptTemplates = true) {
   const result = await getStoryboardPageService().exportContextBundle({
     projectId: currentProject && currentProject.id,
@@ -2966,6 +3044,59 @@ async function downloadContextBundle() {
 /**
  * Initialize view tabs
  */
+let gridFocusIndex = -1;
+
+function initializeGridKeyboardNav() {
+  document.addEventListener('keydown', (e) => {
+    if (currentView !== 'grid') return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+    if (shotModal && shotModal.style.display === 'flex') return;
+
+    const cards = [...document.querySelectorAll('.shot-card')];
+    if (cards.length === 0) return;
+
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      gridFocusIndex = Math.min(gridFocusIndex + 1, cards.length - 1);
+      cards[gridFocusIndex]?.focus();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      gridFocusIndex = Math.max(gridFocusIndex - 1, 0);
+      cards[gridFocusIndex]?.focus();
+    } else if (e.key === 'r' || e.key === 'R') {
+      if (gridFocusIndex >= 0 && gridFocusIndex < cards.length) {
+        const shots = getFilteredShotsForCurrentReadinessFilter(getFilteredShots());
+        const shot = shots[gridFocusIndex];
+        if (shot) updateShotReviewMetadata(shot.shotId, { reviewStatus: 'in_review' });
+      }
+    } else if (e.key === 'a' && !e.ctrlKey && !e.metaKey) {
+      if (gridFocusIndex >= 0 && gridFocusIndex < cards.length) {
+        const shots = getFilteredShotsForCurrentReadinessFilter(getFilteredShots());
+        const shot = shots[gridFocusIndex];
+        if (shot) updateShotReviewMetadata(shot.shotId, { reviewStatus: 'approved' });
+      }
+    } else if (e.key === 'p' || e.key === 'P') {
+      if (gridFocusIndex >= 0 && gridFocusIndex < cards.length) {
+        const shots = getFilteredShotsForCurrentReadinessFilter(getFilteredShots());
+        const shot = shots[gridFocusIndex];
+        if (shot) {
+          shot.locked = !shot.locked;
+          renderView();
+          queueStoryboardSave();
+        }
+      }
+    } else if (e.key === 'c') {
+      if (gridFocusIndex >= 0 && gridFocusIndex < cards.length) {
+        const shots = getFilteredShotsForCurrentReadinessFilter(getFilteredShots());
+        const shot = shots[gridFocusIndex];
+        if (shot) openCommentsModal(shot);
+      }
+    } else if (e.key === '?') {
+      showToast('Keyboard shortcuts', 'Arrows: navigate | Enter: open | R: review | A: approve | P: pin | C: comments', 'info', 5000);
+    }
+  });
+}
+
 function initializeViewTabs() {
   const viewTabs = document.querySelectorAll('.view-tab');
   if (!viewTabs || viewTabs.length === 0) return;
@@ -2973,6 +3104,7 @@ function initializeViewTabs() {
   viewTabs.forEach(tab => {
     tab.addEventListener('click', () => {
       currentView = tab.dataset.view;
+      gridFocusIndex = -1;
       viewTabs.forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       if (currentView !== 'timeline' && reorderModeEnabled) {
@@ -2989,6 +3121,7 @@ function initializeViewTabs() {
  */
 function initializeButtons() {
   const exportBtn = document.getElementById('exportBtn');
+  const exportSelectionsBtn = document.getElementById('exportSelectionsBtn');
   const copyContextBtn = document.getElementById('copyContextBtn');
   const downloadContextBtn = document.getElementById('downloadContextBtn');
   const refreshBtn = document.getElementById('refreshBtn');
@@ -3009,6 +3142,7 @@ function initializeButtons() {
   const clearReadinessFilterBtnLocal = document.getElementById('clearReadinessFilterBtn');
 
   if (exportBtn) exportBtn.addEventListener('click', exportPDF);
+  if (exportSelectionsBtn) exportSelectionsBtn.addEventListener('click', exportSelectionsJson);
   if (copyContextBtn) copyContextBtn.addEventListener('click', copyContextForAI);
   if (downloadContextBtn) downloadContextBtn.addEventListener('click', downloadContextBundle);
   if (refreshBtn) refreshBtn.addEventListener('click', loadSequence);
@@ -3070,6 +3204,22 @@ function initializeButtons() {
       if (!latestContextBundle) return;
       downloadJson(`context-bundle-${currentProject?.id || 'project'}.json`, latestContextBundle);
       showToast('Downloaded', 'Context bundle JSON saved', 'success', 2000);
+    });
+  }
+
+  // Empty state navigation buttons
+  const goToStep3Btn = document.getElementById('goToStep3Btn');
+  const goToStep5Btn = document.getElementById('goToStep5Btn');
+  if (goToStep3Btn) {
+    goToStep3Btn.addEventListener('click', () => {
+      const projectId = currentProject?.id || '';
+      window.location.href = projectId ? `step3.html?project=${encodeURIComponent(projectId)}` : 'step3.html';
+    });
+  }
+  if (goToStep5Btn) {
+    goToStep5Btn.addEventListener('click', () => {
+      const projectId = currentProject?.id || '';
+      window.location.href = projectId ? `index.html?project=${encodeURIComponent(projectId)}` : 'index.html';
     });
   }
 
@@ -3147,6 +3297,7 @@ function setupPageChatBridge() {
     initializeViewTabs();
     initializeButtons();
     initializeFilmstripControls();
+    initializeGridKeyboardNav();
     initializeAssetFilters();
     await loadSequence();
     await loadAssetManifest();

@@ -282,6 +282,25 @@
   opacity: 0.6;
 }
 
+.shot-card:focus-visible {
+  outline: 2px solid var(--accent-primary, #6c5ce7);
+  outline-offset: 2px;
+}
+
+/* Review status card borders */
+.shot-card.status-approved {
+  border-left: 4px solid var(--color-success, #34a853);
+}
+.shot-card.status-changes_requested {
+  border-left: 4px solid var(--color-error, #ea4335);
+}
+.shot-card.status-in_review {
+  border-left: 4px solid var(--color-warning, #fbbc04);
+}
+.shot-card.status-draft {
+  border-left: 4px solid var(--border, #333);
+}
+
 .shot-thumbnail {
   width: 100%;
   aspect-ratio: 16 / 9;
@@ -1785,4 +1804,42 @@ body.focus-mode .main-layout {
   width: 100%;
   max-width: 140px;
   box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.2);
+}
+
+/* Timeline section color coding */
+.section-color-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Bulk status select */
+.bulk-status-select {
+  background: var(--bg-elevated, #1e2433);
+  color: var(--text-primary, #e0e0e0);
+  border: 1px solid var(--border, #333);
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.bulk-status-select:focus {
+  border-color: var(--accent-primary, #6c5ce7);
+  outline: none;
+}
+
+/* Empty state actions */
+.empty-state-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.empty-state-actions .btn {
+  text-decoration: none;
 }

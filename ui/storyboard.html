@@ -46,6 +46,7 @@
           <div class="page-toolbar-title"><h1>Storyboard Builder</h1><p>Review renders and finalize shot choices quickly.</p></div>
           <div class="page-toolbar-actions">
             <span class="dirty-state-indicator" id="dirtyStateIndicator" style="display: none;">Saving...</span>
+            <button class="btn btn-secondary" id="exportSelectionsBtn">Export JSON</button>
             <button class="btn btn-secondary" id="previewContextBtn">Preview AI Context</button>
             <button class="btn btn-secondary" id="storyboardFocusBtn">Focus Mode</button>
           </div>
@@ -73,15 +74,20 @@
 
         <div class="empty-state" id="emptyState">
           <h2>No Shot Assets Found</h2>
-          <p>Add rendered shot videos and reference images to <code>rendered/shots/</code>, then click Refresh.</p>
+          <p>Complete the earlier workflow steps first, then come back here to review and finalize your storyboard.</p>
           <div class="empty-instructions">
-            <h3>Quick Start:</h3>
+            <h3>Next Steps</h3>
             <ol>
-              <li>Render at least one shot in Kling 3.0 or Nano Banana Pro 3</li>
-              <li>Create folder: <code>rendered/shots/SHOT_01/</code></li>
-              <li>Add files such as <code>kling_option_A.mp4</code> and <code>nano_first_frame.png</code> as references</li>
-              <li>Click "Refresh" to load assets</li>
+              <li><strong>Step 3</strong> — Define your shot list with timing and music sections</li>
+              <li><strong>Step 5</strong> — Generate platform prompts and render shots</li>
+              <li>Place rendered files in <code>rendered/shots/SHOT_XX/</code></li>
+              <li>Return here and click <strong>Refresh</strong></li>
             </ol>
+          </div>
+          <div class="empty-state-actions">
+            <button class="btn btn-primary" id="goToStep3Btn">Go to Step 3</button>
+            <button class="btn btn-secondary" id="goToStep5Btn">Go to Step 5</button>
+            <a href="guide.html" class="btn btn-secondary">Read Guide</a>
           </div>
         </div>
 
