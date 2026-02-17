@@ -299,7 +299,8 @@ registerStoryboardRoutes(router, {
   normalizeShotReviewFields: storyboardPersistence.normalizeShotReviewFields,
   normalizeAssignee: storyboardPersistence.normalizeAssignee,
   getReviewMetadataMap, sanitizeReviewMetadata,
-  writeJsonPreserveEol
+  writeJsonPreserveEol,
+  listShotRenderEntries: renderManagement.listShotRenderEntries
 });
 
 registerContentRoutes(router, {

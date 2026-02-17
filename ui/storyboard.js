@@ -807,6 +807,23 @@ function getFallbackPreviewAsset(shot) {
   }
 
   const selectedVar = shot.selectedVariation || 'A';
+
+  // Check seedream renders (first frame for the selected variation, then any variation)
+  const seedreamFirst = shot.renderFiles?.seedream?.[selectedVar]?.first;
+  if (seedreamFirst) {
+    return { path: seedreamFirst, sourceType: 'rendered_first_frame', isOverride: false, locked: false, notes: '' };
+  }
+  // Try any seedream variation if selected doesn't have one
+  const seedreamVariations = shot.renderFiles?.seedream;
+  if (seedreamVariations) {
+    for (const v of ['A', 'B', 'C', 'D']) {
+      const firstPath = seedreamVariations[v]?.first;
+      if (firstPath) {
+        return { path: firstPath, sourceType: 'rendered_first_frame', isOverride: false, locked: false, notes: '' };
+      }
+    }
+  }
+
   const videoPath = shot.renderFiles?.kling?.[selectedVar];
   if (videoPath) {
     return { path: videoPath, sourceType: 'rendered_video', isOverride: false, locked: false, notes: '' };
@@ -961,6 +978,13 @@ function updateStats() {
 
 
 function shotHasPreviewSource(shot) {
+  // Check seedream variations
+  const seedream = shot?.renderFiles?.seedream;
+  if (seedream) {
+    for (const v of ['A', 'B', 'C', 'D']) {
+      if (seedream[v]?.first || seedream[v]?.last) return true;
+    }
+  }
   return Boolean(
     shot?.renderFiles?.thumbnail ||
     shot?.renderFiles?.kling?.A ||
@@ -1919,18 +1943,7 @@ function renderTimelineFilmstrip() {
 
     const thumb = document.createElement('div');
     thumb.className = 'filmstrip-thumb';
-    const thumbnailPath = shot.renderFiles?.thumbnail;
-    if (thumbnailPath) {
-      const img = document.createElement('img');
-      img.src = `/${thumbnailPath}`;
-      img.alt = shot.shotId;
-      thumb.appendChild(img);
-    } else {
-      const placeholder = document.createElement('div');
-      placeholder.className = 'filmstrip-placeholder';
-      placeholder.textContent = shot.shotId;
-      thumb.appendChild(placeholder);
-    }
+    applyPreviewNode(thumb, shot);
 
     const meta = document.createElement('div');
     meta.className = 'filmstrip-meta';

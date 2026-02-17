@@ -24,7 +24,8 @@ function registerStoryboardRoutes(router, ctx) {
     normalizeAssignee,
     getReviewMetadataMap,
     sanitizeReviewMetadata,
-    writeJsonPreserveEol
+    writeJsonPreserveEol,
+    listShotRenderEntries
   } = ctx;
 
   router.get('/api/storyboard/previs-map', wrapAsync(async (req, res) => {
@@ -72,6 +73,22 @@ function registerStoryboardRoutes(router, ctx) {
       sequence.editorialOrder = sequence.selections.map((shot) => shot.shotId);
     }
     sequence.totalShots = sequence.selections.length;
+
+    // Enrich each shot's renderFiles with discovered renders from disk
+    if (listShotRenderEntries) {
+      for (const shot of sequence.selections) {
+        const discovered = listShotRenderEntries(projectId, shot.shotId);
+        if (!shot.renderFiles) shot.renderFiles = {};
+        shot.renderFiles.seedream = discovered.seedream || {};
+        // Merge kling discovered files into existing (prefer disk over empty stored entries)
+        const storedKling = shot.renderFiles.kling || {};
+        const discoveredKling = discovered.kling || {};
+        shot.renderFiles.kling = Object.keys(discoveredKling).length > 0 ? discoveredKling : storedKling;
+        // Preserve nano from stored data (nano not discovered by listShotRenderEntries)
+        if (!shot.renderFiles.nano) shot.renderFiles.nano = {};
+      }
+    }
+
     writeSequenceFile(sequence, projectId);
     sendJSON(res, 200, sequence);
   }));

@@ -534,7 +534,8 @@
   object-fit: cover;
 }
 
-.filmstrip-placeholder {
+.filmstrip-placeholder,
+.filmstrip-thumb .placeholder {
   width: 100%;
   height: 100%;
   display: flex;
