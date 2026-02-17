@@ -86,6 +86,9 @@
       return normalizeResult(result, 'Failed to upload shot reference set');
     }
 
+    // Note: loadPrevisMap and savePrevisMapEntry also exist in review-service.js.
+    // Both call the same server endpoints. Storyboard page uses ReviewService,
+    // generation workflow uses this service. Kept in both for backwards compatibility.
     async function loadPrevisMap(projectId) {
       const result = await httpClient.request('/api/storyboard/previs-map?project=' + encodeURIComponent(String(projectId || '')), {
         method: 'GET'

@@ -1727,3 +1727,62 @@ body.focus-mode .main-layout {
     flex-direction: column;
   }
 }
+
+/* =========================================================
+   Storyboard Bug Fixes & UX Improvements
+   ========================================================= */
+
+/* Dirty state indicator */
+.dirty-state-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-warning, #fbbc04);
+  background: rgba(251, 188, 4, 0.1);
+  border: 1px solid rgba(251, 188, 4, 0.25);
+  border-radius: 6px;
+  animation: dirty-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes dirty-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Comment header with author */
+.comment-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.35rem;
+}
+
+.comment-author {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #e0e0e0);
+}
+
+.comment-time {
+  font-size: 11px;
+  color: var(--text-tertiary, #888);
+}
+
+/* Inline edit input for shot IDs */
+.inline-edit-input {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  color: var(--text-primary, #e0e0e0);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--accent, #6c5ce7);
+  border-radius: 4px;
+  padding: 2px 6px;
+  outline: none;
+  width: 100%;
+  max-width: 140px;
+  box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.2);
+}

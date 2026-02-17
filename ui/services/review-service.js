@@ -26,6 +26,9 @@
     }
     var httpClient = serviceBase.resolveHttpClient(opts);
 
+    // Note: loadPrevisMap and savePrevisMapEntry also exist in generation-readiness-service.js.
+    // Both call the same server endpoints. Storyboard page uses this service,
+    // generation workflow uses GenerationReadinessService.
     async function loadPrevisMap(projectId) {
       var result = await httpClient.request('/api/storyboard/previs-map' + toProjectQuery(projectId), { method: 'GET' });
       if (!result.response.ok) {

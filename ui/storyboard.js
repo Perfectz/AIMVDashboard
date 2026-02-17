@@ -41,6 +41,21 @@ const REVIEW_STATUS_LABELS = {
 };
 const activeReviewFilters = new Set(REVIEW_STATUSES);
 
+function formatReviewStatus(status) {
+  return REVIEW_STATUS_LABELS[status] || status || 'Draft';
+}
+
+function resolveShotPreviewAsset(shot) {
+  const preview = getShotPreviewAsset(shot);
+  return {
+    path: preview.path,
+    source: preview.sourceType || null,
+    isOverride: preview.isOverride,
+    locked: preview.locked,
+    notes: preview.notes
+  };
+}
+
 function requireProjectContext() {
   if (!projectContext || typeof projectContext.getProjectIdFromQuery !== 'function' || typeof projectContext.navigateWithProject !== 'function') {
     throw new Error('ProjectContext is unavailable. Ensure ui/modules/project-context.js is loaded before storyboard.js');
@@ -1039,12 +1054,9 @@ function renderReadinessPanel() {
     const missingSelection = data.categories.missingSelection.length;
     readinessSummary.textContent = `${data.ready}/${data.total} shots ready | ${missingRenders} missing renders | ${missingSelection} not selected`;
   }
+  const panelExpanded = readinessPanel.style.display === 'block';
   if (readinessBarToggle) {
-    const expanded = readinessPanel.style.display !== 'none';
-    readinessBarToggle.textContent = expanded ? 'Hide Details' : 'Show Details';
-  }
-  if (readinessPanel.style.display === '') {
-    readinessPanel.style.display = 'none';
+    readinessBarToggle.textContent = panelExpanded ? 'Hide Details' : 'Show Details';
   }
 
   readinessCounts.innerHTML = '';
@@ -1300,12 +1312,20 @@ async function saveReviewUpdate(shotId, updates = {}) {
   return shot;
 }
 
+function setDirtyState(dirty) {
+  const indicator = document.getElementById('dirtyStateIndicator');
+  if (!indicator) return;
+  indicator.style.display = dirty ? 'inline-flex' : 'none';
+}
+
 function queueStoryboardSave() {
   if (saveStoryboardTimer) {
     clearTimeout(saveStoryboardTimer);
   }
-  saveStoryboardTimer = setTimeout(() => {
-    saveStoryboardSequence();
+  setDirtyState(true);
+  saveStoryboardTimer = setTimeout(async () => {
+    await saveStoryboardSequence();
+    setDirtyState(false);
   }, 150);
 }
 
@@ -1489,44 +1509,6 @@ function createShotCard(shot) {
     badge.textContent = `Option ${shot.selectedVariation}`;
     thumbnail.appendChild(badge);
   }
-
-  // Review status dropdown
-  const reviewStatus = document.createElement('select');
-  reviewStatus.className = 'shot-status-select';
-  REVIEW_STATUS_OPTIONS.forEach(status => {
-    const option = document.createElement('option');
-    option.value = status;
-    option.textContent = formatReviewStatus(status);
-    reviewStatus.appendChild(option);
-  });
-  reviewStatus.value = shot.reviewStatus || 'draft';
-  reviewStatus.addEventListener('click', (e) => e.stopPropagation());
-  reviewStatus.addEventListener('change', async (e) => {
-    e.stopPropagation();
-    try {
-      const updatedShot = await saveReviewUpdate(shot.shotId, { reviewStatus: e.target.value });
-      Object.assign(shot, updatedShot);
-      normalizeShotReviewData(shot);
-      showToast('Review status updated', `${shot.shotId} → ${formatReviewStatus(shot.reviewStatus)}`, 'success', 2000);
-      if (selectedShot?.shotId === shot.shotId) {
-        selectedShot = shot;
-        renderShotDetails();
-      }
-      renderView();
-    } catch (err) {
-      showToast('Failed to update status', err.message, 'error', 3500);
-    }
-  });
-  thumbnail.appendChild(reviewStatus);
-
-  const thumbnailCommentsBtn = document.createElement('button');
-  thumbnailCommentsBtn.className = 'shot-comments-btn';
-  thumbnailCommentsBtn.textContent = `Comments (${shot.comments?.length || 0})`;
-  thumbnailCommentsBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    openCommentsModal(shot);
-  });
-  thumbnail.appendChild(thumbnailCommentsBtn);
 
   card.appendChild(thumbnail);
 
@@ -2425,16 +2407,25 @@ function renderCommentsList() {
     const item = document.createElement('div');
     item.className = 'comment-item';
 
+    const header = document.createElement('div');
+    header.className = 'comment-header';
+
+    const author = document.createElement('span');
+    author.className = 'comment-author';
+    author.textContent = comment.author || 'Reviewer';
+    header.appendChild(author);
+
+    const timestamp = document.createElement('span');
+    timestamp.className = 'comment-time';
+    timestamp.textContent = new Date(comment.timestamp).toLocaleString();
+    header.appendChild(timestamp);
+
     const text = document.createElement('div');
     text.className = 'comment-text';
     text.textContent = comment.text;
 
-    const timestamp = document.createElement('div');
-    timestamp.className = 'comment-time';
-    timestamp.textContent = new Date(comment.timestamp).toLocaleString();
-
+    item.appendChild(header);
     item.appendChild(text);
-    item.appendChild(timestamp);
     commentsList.appendChild(item);
   });
 }
@@ -2884,6 +2875,8 @@ function initializeFilmstripControls() {
   if (playBtn) playBtn.addEventListener('click', toggleFilmstripSlideshow);
   if (speedSelect) {
     speedSelect.addEventListener('change', () => {
+      const label = speedSelect.options[speedSelect.selectedIndex]?.text || '';
+      showToast('Speed changed', `Playback speed: ${label}`, 'info', 1500);
       if (filmstripPlayInterval) {
         startFilmstripSlideshow(); // restart with new speed
       }
