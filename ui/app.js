@@ -242,7 +242,7 @@ const { checkGenerateStatus, isTerminalRunStatus, closeAgentEventStream, resetAg
 const { loadCharactersReferences, loadLocationReferences, renderCharactersReferences, renderLocationReferences, buildImageSlot, buildLocationImageSlot, handleDragDropUpload, openReferenceImageUpload, handleReferenceImageUpload, deleteReferenceImage, deleteCharacterReference, PROMPT_SLOT_LABELS } = window.ReferenceManager;
 
 // CanonEditor module
-const { setupCanonTabs, normalizeShotLinks, normalizeScriptData, parseScriptJsonFromEditor, getTranscriptBlocksFromScriptData, jumpToTranscriptSegment, renderTranscriptBlocks, renderShotCards, syncScriptEditorViews, buildScriptJsonFromViews, setupCanonShortcutLinks } = window.CanonEditor;
+const { setupCanonTabs, normalizeShotLinks, normalizeScriptData, parseScriptJsonFromEditor, getTranscriptBlocksFromScriptData, jumpToTranscriptSegment, renderTranscriptBlocks, renderShotCards, syncScriptEditorViews, buildScriptJsonFromViews, setupCanonShortcutLinks, setupPipelineActions } = window.CanonEditor;
 
 function getFilteredShots() {
   return getFilteredShotsFromModule(promptsState);
@@ -1587,6 +1587,7 @@ function initializeUploads() {
 function initializeCanon() {
   if (document.querySelector('.canon-tab')) {
     setupCanonTabs();
+    setupPipelineActions();
     loadCanonData();
 
     const scriptTextarea = document.getElementById('scriptJson');

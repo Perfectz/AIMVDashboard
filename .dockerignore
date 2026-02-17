@@ -1,0 +1,9 @@
+node_modules
+.git
+.env
+data/
+projects/*/rendered/
+projects/*/music/*.mp3
+*.log
+.claude/
+tests/

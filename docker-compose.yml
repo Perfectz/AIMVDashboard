@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - PORT=8000
+      - HOST=0.0.0.0
+      - NODE_ENV=production
+      - AUTH_ENABLED=${AUTH_ENABLED:-true}
+      - REPLICATE_API_TOKEN=${REPLICATE_API_TOKEN:-}
+      - GITHUB_OAUTH_CLIENT_ID=${GITHUB_OAUTH_CLIENT_ID:-}
+      - GITHUB_OAUTH_CLIENT_SECRET=${GITHUB_OAUTH_CLIENT_SECRET:-}
+    volumes:
+      - project-data:/app/projects
+      - db-data:/app/data
+      - export-data:/app/projects/default/rendered/export
+    restart: unless-stopped
+
+volumes:
+  project-data:
+  db-data:
+  export-data:

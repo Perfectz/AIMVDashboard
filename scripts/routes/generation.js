@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const Busboy = require('busboy');
 const { GENERATION_SOCKET_TIMEOUT_MS } = require('../config');
+const klingClient = require('../kling_client');
 
 function registerGenerationRoutes(router, ctx) {
   const {
@@ -549,6 +550,98 @@ function registerGenerationRoutes(router, ctx) {
       sendJSON(res, 200, { success: true, message: 'Render deleted' });
     } else {
       sendJSON(res, 404, { success: false, error: 'Render file not found' });
+    }
+  }));
+  // --- Kling Video Generation ---
+  router.post('/api/generate-kling-video', wrapAsync(async (req, res) => {
+    req.setTimeout(GENERATION_SOCKET_TIMEOUT_MS * 2); // video takes longer
+    res.setTimeout(GENERATION_SOCKET_TIMEOUT_MS * 2);
+
+    const data = await jsonBody(req, MAX_BODY_SIZE);
+    const projectId = resolveProjectId(data.project || projectManager.getActiveProject(), { required: true });
+    const shotId = sanitizePathSegment(data.shotId, SHOT_ID_REGEX, 'shot');
+    const variation = sanitizePathSegment((data.variation || 'A').toUpperCase(), VARIATION_REGEX, 'variation');
+    const projectPath = projectManager.getProjectPath(projectId);
+
+    // Load prompt from kling prompts or use provided prompt
+    let prompt = String(data.prompt || '').trim();
+    if (!prompt) {
+      const shotNum = String(shotId).replace(/^SHOT_/i, '');
+      const promptPath = path.join(projectPath, 'prompts', 'kling', `shot_${shotNum}_${variation}.txt`);
+      if (fs.existsSync(promptPath)) {
+        prompt = fs.readFileSync(promptPath, 'utf-8').trim();
+      }
+    }
+    if (!prompt) {
+      // Fallback: try seedream prompt
+      const shotNum = String(shotId).replace(/^SHOT_/i, '');
+      const seedreamPath = path.join(projectPath, 'prompts', 'seedream', `shot_${shotNum}_${variation}.txt`);
+      if (fs.existsSync(seedreamPath)) {
+        const content = fs.readFileSync(seedreamPath, 'utf-8');
+        const promptStart = content.indexOf('--- SEEDREAM PROMPT ---');
+        const negStart = content.indexOf('--- NEGATIVE PROMPT');
+        if (promptStart !== -1 && negStart !== -1) {
+          prompt = content.substring(promptStart + '--- SEEDREAM PROMPT ---'.length, negStart).trim();
+        } else {
+          prompt = content.trim();
+        }
+      }
+    }
+    if (!prompt) {
+      sendJSON(res, 400, { success: false, error: 'No prompt found for this shot. Compile prompts first.' });
+      return;
+    }
+
+    // Load first/last frame images as data URIs for start_image/end_image
+    const options = {
+      duration: data.duration || 5,
+      aspect_ratio: data.aspect_ratio || '16:9'
+    };
+
+    const shotDir = path.join(projectPath, 'rendered', 'shots', shotId);
+    if (fs.existsSync(shotDir)) {
+      const files = fs.readdirSync(shotDir);
+      const firstFrame = files.find((f) => f.startsWith('seedream_' + variation + '_first.'));
+      const lastFrame = files.find((f) => f.startsWith('seedream_' + variation + '_last.'));
+      if (firstFrame) {
+        const imgPath = path.join(shotDir, firstFrame);
+        const ext = path.extname(firstFrame).slice(1);
+        const mime = ext === 'jpg' ? 'image/jpeg' : 'image/' + ext;
+        options.start_image = 'data:' + mime + ';base64,' + fs.readFileSync(imgPath).toString('base64');
+      }
+      if (lastFrame) {
+        const imgPath = path.join(shotDir, lastFrame);
+        const ext = path.extname(lastFrame).slice(1);
+        const mime = ext === 'jpg' ? 'image/jpeg' : 'image/' + ext;
+        options.end_image = 'data:' + mime + ';base64,' + fs.readFileSync(imgPath).toString('base64');
+      }
+    }
+
+    try {
+      const result = await klingClient.generateVideo(prompt, options);
+      // Download the video
+      const outputUrl = Array.isArray(result.output) ? result.output[0] : result.output;
+      if (!outputUrl) {
+        sendJSON(res, 500, { success: false, error: 'No video URL returned from Kling' });
+        return;
+      }
+
+      if (!fs.existsSync(shotDir)) fs.mkdirSync(shotDir, { recursive: true });
+      const videoFilename = `kling_${variation}.mp4`;
+      const videoPath = path.join(shotDir, videoFilename);
+      await klingClient.downloadVideo(outputUrl, videoPath);
+
+      sendJSON(res, 200, {
+        success: true,
+        projectId,
+        shotId,
+        variation,
+        videoPath: `rendered/shots/${shotId}/${videoFilename}`,
+        predictionId: result.predictionId,
+        duration: result.duration
+      });
+    } catch (err) {
+      sendJSON(res, err.statusCode || 500, { success: false, error: err.message });
     }
   }));
 }

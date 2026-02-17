@@ -295,6 +295,36 @@
             </div>
           </div>
         </div>
+        <!-- Pipeline Actions -->
+        <div class="collapsible-card" data-collapse-key="pipelineActions">
+          <div class="collapsible-header">
+            <div class="collapsible-title">
+              <span class="collapsible-icon">PA</span>
+              <span class="collapsible-label">Pipeline Actions</span>
+              <span class="collapsible-hint">Generate shot plan from music analysis, compile prompts</span>
+            </div>
+            <button class="collapse-toggle" type="button">
+              <span class="collapse-icon">-</span>
+            </button>
+          </div>
+          <div class="collapsible-body">
+            <div class="pipeline-actions-grid">
+              <div class="pipeline-action-card">
+                <h4>Generate Shot Plan</h4>
+                <p>Create shot scaffolds from your song analysis (Step 2). Reads sections, timing, and mood to build an 8-second shot grid.</p>
+                <button class="btn btn-primary btn-sm" id="generateShotPlanBtn">Generate Shot Plan</button>
+                <div class="text-input-status" id="shotPlanStatus"></div>
+              </div>
+              <div class="pipeline-action-card">
+                <h4>Compile & Index Prompts</h4>
+                <p>Compile canon + shot intents into platform-specific prompts and rebuild the prompt index for Step 5.</p>
+                <button class="btn btn-secondary btn-sm" id="autoCompileBtn">Compile Now</button>
+                <div class="text-input-status" id="compileStatus"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="step-footer">
           <a href="step2.html" class="btn-back">&larr; Step 2: Music</a>
           <a href="step4.html" class="btn btn-primary">Continue to Step 4: References &rarr;</a>

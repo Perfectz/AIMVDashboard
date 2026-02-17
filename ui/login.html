@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - AI Music Video</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .login-container { max-width: 400px; width: 100%; padding: 2rem; }
+    .login-card {
+      background: var(--bg-surface, rgba(255,255,255,0.03));
+      border: 1px solid var(--border-color, rgba(255,255,255,0.08));
+      border-radius: 12px; padding: 2rem;
+    }
+    .login-card h1 { font-family: 'Syne', sans-serif; font-size: 1.5rem; margin: 0 0 0.5rem; text-align: center; }
+    .login-card p { color: var(--text-secondary, #94a3b8); font-size: 0.85rem; text-align: center; margin: 0 0 1.5rem; }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; font-size: 0.82rem; font-weight: 500; margin-bottom: 0.4rem; color: var(--text-secondary); }
+    .form-group input {
+      width: 100%; padding: 0.6rem 0.8rem; border-radius: 6px; border: 1px solid var(--border-color);
+      background: var(--bg-input, rgba(0,0,0,0.2)); color: var(--text-primary); font-size: 0.9rem;
+      font-family: 'Outfit', sans-serif; box-sizing: border-box;
+    }
+    .form-group input:focus { outline: none; border-color: var(--accent-primary, #2f8bff); }
+    .login-btn {
+      width: 100%; padding: 0.7rem; border: none; border-radius: 6px; font-size: 0.9rem; font-weight: 600;
+      cursor: pointer; background: var(--accent-primary, #2f8bff); color: white; margin-top: 0.5rem;
+    }
+    .login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .login-error { color: #ea4335; font-size: 0.82rem; text-align: center; margin-top: 0.75rem; min-height: 1.2em; }
+    .login-toggle { text-align: center; margin-top: 1rem; font-size: 0.82rem; color: var(--text-secondary); }
+    .login-toggle a { color: var(--accent-primary, #2f8bff); text-decoration: none; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-card">
+      <h1 id="formTitle">Sign In</h1>
+      <p id="formSubtitle">Enter your credentials to access the workspace</p>
+      <form id="loginForm">
+        <div class="form-group" id="displayNameGroup" style="display:none;">
+          <label for="displayName">Display Name</label>
+          <input type="text" id="displayName" placeholder="Your Name">
+        </div>
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" placeholder="admin" autocomplete="username" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="password" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="login-btn" id="submitBtn">Sign In</button>
+        <div class="login-error" id="loginError"></div>
+      </form>
+      <div class="login-toggle">
+        <span id="toggleText">Don't have an account?</span>
+        <a id="toggleLink" onclick="toggleMode()">Register</a>
+      </div>
+    </div>
+  </div>
+  <script>
+    let isRegister = false;
+    function toggleMode() {
+      isRegister = !isRegister;
+      document.getElementById('formTitle').textContent = isRegister ? 'Create Account' : 'Sign In';
+      document.getElementById('formSubtitle').textContent = isRegister
+        ? 'Create a new account to get started'
+        : 'Enter your credentials to access the workspace';
+      document.getElementById('displayNameGroup').style.display = isRegister ? 'block' : 'none';
+      document.getElementById('submitBtn').textContent = isRegister ? 'Create Account' : 'Sign In';
+      document.getElementById('toggleText').textContent = isRegister ? 'Already have an account?' : "Don't have an account?";
+      document.getElementById('toggleLink').textContent = isRegister ? 'Sign In' : 'Register';
+      document.getElementById('loginError').textContent = '';
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      const errorEl = document.getElementById('loginError');
+      btn.disabled = true;
+      errorEl.textContent = '';
+
+      const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login';
+      const body = {
+        username: document.getElementById('username').value.trim(),
+        password: document.getElementById('password').value
+      };
+      if (isRegister) body.displayName = document.getElementById('displayName').value.trim();
+
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.location.href = '/home.html';
+        } else {
+          errorEl.textContent = data.error || 'Authentication failed';
+        }
+      } catch (err) {
+        errorEl.textContent = 'Network error: ' + err.message;
+      }
+      btn.disabled = false;
+    });
+
+    // Check if already authenticated
+    fetch('/api/auth/status').then(r => r.json()).then(data => {
+      if (data.authenticated) window.location.href = '/home.html';
+    }).catch(() => {});
+  </script>
+</body>
+</html>

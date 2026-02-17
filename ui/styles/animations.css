@@ -788,6 +788,43 @@
 }
 
 /* ───────────────────────────────────────────────
+   19a. PIPELINE ACTIONS GRID
+   ─────────────────────────────────────────────── */
+
+.pipeline-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacer-md, 1rem);
+}
+
+.pipeline-action-card {
+  background: var(--bg-surface, rgba(255,255,255,0.03));
+  border: 1px solid var(--border-color, rgba(255,255,255,0.08));
+  border-radius: 8px;
+  padding: var(--spacer-md, 1rem);
+}
+
+.pipeline-action-card h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary, #e2e8f0);
+}
+
+.pipeline-action-card p {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary, #94a3b8);
+  line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+  .pipeline-actions-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ───────────────────────────────────────────────
    19. RESPONSIVE — TABLET (768px–1024px)
    ─────────────────────────────────────────────── */
 

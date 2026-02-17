@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { createVideoAssemblyService } = require('../services/video_assembly_service');
 
 function registerStoryboardRoutes(router, ctx) {
   const {
@@ -209,6 +210,56 @@ function registerStoryboardRoutes(router, ctx) {
       shotId,
       reviewMetadata: normalized
     });
+  }));
+
+  // --- Video Assembly / Export ---
+  const videoAssembly = createVideoAssemblyService({ projectManager });
+
+  router.get('/api/storyboard/ffmpeg-status', wrapAsync(async (_req, res) => {
+    const status = await videoAssembly.checkFfmpeg();
+    sendJSON(res, 200, { success: true, ffmpeg: status });
+  }));
+
+  router.post('/api/storyboard/export-video', wrapAsync(async (req, res) => {
+    const data = await jsonBody(req, MAX_BODY_SIZE);
+    const projectId = resolveProjectId(
+      data.project || data.projectId || projectManager.getActiveProject(),
+      { required: true }
+    );
+
+    // Build shots list from sequence.json selections or from request
+    let shots = Array.isArray(data.shots) ? data.shots : [];
+    if (shots.length === 0) {
+      // Auto-build from sequence.json
+      const sequence = readSequenceFile(projectId);
+      const shotEntries = Array.isArray(sequence.shots) ? sequence.shots : [];
+      shots = shotEntries.map((entry) => ({
+        shotId: entry.shotId || entry.id,
+        variation: entry.selectedVariation || entry.variation || 'A',
+        duration: entry.duration || 8
+      })).filter((s) => s.shotId);
+    }
+
+    if (shots.length === 0) {
+      sendJSON(res, 400, {
+        success: false,
+        error: 'No shots found. Select variations in the storyboard first, or provide shots in the request.'
+      });
+      return;
+    }
+
+    try {
+      const result = await videoAssembly.assembleVideo(projectId, {
+        shots,
+        includeMusic: data.includeMusic !== false,
+        fps: data.fps || 24,
+        resolution: data.resolution || '1920x1080',
+        outputFilename: data.outputFilename || 'export.mp4'
+      });
+      sendJSON(res, 200, result);
+    } catch (err) {
+      sendJSON(res, 500, { success: false, error: err.message });
+    }
   }));
 }
 

@@ -9,6 +9,7 @@
  */
 
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { createRouter } = require('./router');
@@ -59,6 +60,8 @@ const { registerUploadRoutes } = require('./routes/uploads');
 const { registerGenerationRoutes } = require('./routes/generation');
 const { registerAiProviderRoutes } = require('./routes/ai-provider');
 const { registerStaticRoutes } = require('./routes/static');
+const { createDatabaseService } = require('./services/database_service');
+const { createAuthMiddleware } = require('./middleware/auth');
 const {
   MIME_TYPES,
   isPathInside,
@@ -95,6 +98,13 @@ const ALLOWED_ORIGINS = new Set([
 
 // ===== HTTP utilities (from middleware) =====
 const { sendJSON, sendSseEvent, corsHeadersForRequest, serveFile } = createHttpUtils(ALLOWED_ORIGINS);
+
+// ===== Database & Auth =====
+
+const databaseService = createDatabaseService({ dataDir: path.join(ROOT_DIR, 'data') });
+databaseService.init();
+
+const authMiddleware = createAuthMiddleware({ databaseService, sendJSON, jsonBody, MAX_BODY_SIZE });
 
 // ===== Instantiate services =====
 
@@ -198,6 +208,14 @@ function getProjectContext(req, { required = false } = {}) {
 
 const router = createRouter();
 router.use(requestLogger);
+
+// Auth middleware — checks session before other routes
+router.use((req, res) => {
+  return authMiddleware.requireAuth(req, res);
+});
+
+// Register auth API routes (login, logout, register)
+authMiddleware.registerAuthApiRoutes(router, wrapAsync);
 
 // ===== Domain-scoped route contexts =====
 // Each route module receives only the dependencies it actually uses.
@@ -348,7 +366,27 @@ registerStaticRoutes(router, {
   safeResolve, ROOT_DIR, UI_DIR, PROJECTS_DIR, serveFile
 });
 
-const server = http.createServer((req, res) => {
+// ===== HTTPS Support =====
+const HTTPS_ENABLED = String(process.env.HTTPS_ENABLED || '').trim().toLowerCase() === 'true';
+const HTTPS_KEY_PATH = process.env.HTTPS_KEY_PATH || './certs/key.pem';
+const HTTPS_CERT_PATH = process.env.HTTPS_CERT_PATH || './certs/cert.pem';
+
+function createServerInstance(handler) {
+  if (HTTPS_ENABLED) {
+    try {
+      const key = fs.readFileSync(path.resolve(ROOT_DIR, HTTPS_KEY_PATH));
+      const cert = fs.readFileSync(path.resolve(ROOT_DIR, HTTPS_CERT_PATH));
+      console.log('[HTTPS] TLS certificates loaded');
+      return https.createServer({ key, cert }, handler);
+    } catch (err) {
+      console.warn('[HTTPS] Failed to load certificates:', err.message);
+      console.warn('[HTTPS] Falling back to HTTP');
+    }
+  }
+  return http.createServer(handler);
+}
+
+const server = createServerInstance((req, res) => {
   // ===== CORS PREFLIGHT =====
   if (req.method === 'OPTIONS') {
     const corsHeaders = corsHeadersForRequest(req);
@@ -392,6 +430,19 @@ server.listen(PORT, HOST, () => {
   console.log('  - View lint status for each prompt');
   console.log('  - Search and filter prompts');
   console.log('  - Drag-and-drop file uploads (music + shots)\n');
+});
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+  console.log('\nShutting down...');
+  databaseService.close();
+  server.close();
+  process.exit(0);
+});
+process.on('SIGTERM', () => {
+  databaseService.close();
+  server.close();
+  process.exit(0);
 });
 
 server.on('error', (err) => {

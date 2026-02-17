@@ -278,6 +278,68 @@
     }
   }
 
+  // --- Pipeline action handlers ---
+
+  function setupPipelineActions() {
+    var generateBtn = document.getElementById('generateShotPlanBtn');
+    var compileBtn = document.getElementById('autoCompileBtn');
+    if (!generateBtn && !compileBtn) return;
+
+    var HttpClient = root.HttpClient;
+    var state = getAppState();
+    var projectId = state && state.get ? state.get('currentProject') : 'default';
+
+    if (generateBtn) {
+      generateBtn.addEventListener('click', async function() {
+        var statusEl = document.getElementById('shotPlanStatus');
+        generateBtn.disabled = true;
+        generateBtn.textContent = 'Generating...';
+        if (statusEl) statusEl.textContent = '';
+        try {
+          var res = await HttpClient.post('/api/pipeline/generate-shot-plan', { project: projectId });
+          if (res.success) {
+            if (statusEl) statusEl.textContent = 'Generated ' + res.totalShots + ' shots from ' + res.sectionCount + ' sections';
+            if (root.UILayer && root.UILayer.showToast) root.UILayer.showToast('Shot plan generated: ' + res.totalShots + ' shots', 'success');
+          } else {
+            if (statusEl) statusEl.textContent = 'Error: ' + (res.error || 'Unknown');
+            if (root.UILayer && root.UILayer.showToast) root.UILayer.showToast(res.error || 'Failed to generate shot plan', 'error');
+          }
+        } catch (err) {
+          if (statusEl) statusEl.textContent = 'Error: ' + (err.message || 'Request failed');
+        }
+        generateBtn.disabled = false;
+        generateBtn.textContent = 'Generate Shot Plan';
+      });
+    }
+
+    if (compileBtn) {
+      compileBtn.addEventListener('click', async function() {
+        var statusEl = document.getElementById('compileStatus');
+        compileBtn.disabled = true;
+        compileBtn.textContent = 'Compiling...';
+        if (statusEl) statusEl.textContent = '';
+        try {
+          var res = await HttpClient.post('/api/pipeline/auto-compile', { project: projectId });
+          if (res.success) {
+            var promptCount = res.status && res.status.promptCount ? res.status.promptCount : 0;
+            if (statusEl) statusEl.textContent = 'Compiled successfully (' + promptCount + ' prompts)';
+            if (root.UILayer && root.UILayer.showToast) root.UILayer.showToast('Prompts compiled successfully', 'success');
+          } else {
+            var errMsg = 'Compile failed';
+            if (res.compile && !res.compile.success) errMsg = 'Compile step failed';
+            if (res.reindex && !res.reindex.success) errMsg = 'Reindex step failed';
+            if (statusEl) statusEl.textContent = errMsg;
+            if (root.UILayer && root.UILayer.showToast) root.UILayer.showToast(errMsg, 'error');
+          }
+        } catch (err) {
+          if (statusEl) statusEl.textContent = 'Error: ' + (err.message || 'Request failed');
+        }
+        compileBtn.disabled = false;
+        compileBtn.textContent = 'Compile Now';
+      });
+    }
+  }
+
   root.CanonEditor = {
     setupCanonTabs: setupCanonTabs,
     normalizeShotLinks: normalizeShotLinks,
@@ -289,6 +351,7 @@
     renderShotCards: renderShotCards,
     syncScriptEditorViews: syncScriptEditorViews,
     buildScriptJsonFromViews: buildScriptJsonFromViews,
-    setupCanonShortcutLinks: setupCanonShortcutLinks
+    setupCanonShortcutLinks: setupCanonShortcutLinks,
+    setupPipelineActions: setupPipelineActions
   };
 })(typeof window !== 'undefined' ? window : globalThis);
