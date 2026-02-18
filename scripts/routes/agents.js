@@ -147,7 +147,7 @@ function registerAgentRoutes(router, ctx) {
 
     const heartbeatId = setInterval(() => {
       res.write(': ping\n\n');
-    }, 15000);
+    }, require('../config').SSE_HEARTBEAT_MS);
 
     req.on('close', () => {
       clearInterval(heartbeatId);

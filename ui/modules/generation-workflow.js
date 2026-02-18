@@ -369,15 +369,23 @@
     setGenerationControlsForActiveJob(true);
     setGenerationJobStatus('Generation job ' + resolvedJobId.slice(0, 8) + ' started... [' + (traceId || 'trace') + ']', 'running');
 
+    var SSE_MAX_RECONNECTS = 3;
+    var SSE_RECONNECT_BASE_MS = 1000;
+    var POLL_INTERVAL_MS = 3000;
+    var JOB_TIMEOUT_MS = 330000;
+
     return new Promise(function(resolve, reject) {
       var settled = false;
       var timeoutId = null;
       var pollTimerId = null;
       var source = null;
+      var sseReconnectCount = 0;
+      var reconnectTimerId = null;
 
       var cleanup = function() {
         if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
         if (pollTimerId) { clearTimeout(pollTimerId); pollTimerId = null; }
+        if (reconnectTimerId) { clearTimeout(reconnectTimerId); reconnectTimerId = null; }
         if (source) {
           source.close();
           if (gs.generationJobEventSource === source) gs.generationJobEventSource = null;
@@ -396,7 +404,7 @@
         pollTimerId = setTimeout(function() {
           pollTimerId = null;
           finishWithState();
-        }, 3000);
+        }, POLL_INTERVAL_MS);
       };
 
       var finishWithState = async function() {
@@ -450,52 +458,81 @@
         }
       };
 
-      closeGenerationJobStream();
-      source = getGenerationJobsService().createJobEventsSource(resolvedJobId);
-      gs.generationJobEventSource = source;
+      function attachSseHandlers(src) {
+        src.onmessage = function(event) {
+          // Reset reconnect count on successful message
+          sseReconnectCount = 0;
 
-      source.onmessage = function(event) {
-        var evt;
-        try { evt = JSON.parse(event.data || '{}'); } catch (e) { evt = {}; }
+          var evt;
+          try { evt = JSON.parse(event.data || '{}'); } catch (e) { evt = {}; }
 
-        if (typeof onEvent === 'function') {
-          try { onEvent(evt); } catch (e) { /* ignore */ }
-        }
+          if (typeof onEvent === 'function') {
+            try { onEvent(evt); } catch (e) { /* callback error ignored */ }
+          }
 
-        if (evt.event === 'job_progress') {
-          var stepLabel = String(evt.step || 'running').replace(/_/g, ' ');
-          var progress = Number(evt.progress);
-          var progressLabel = Number.isFinite(progress) ? Math.max(0, Math.min(100, Math.floor(progress))) + '%' : '';
-          setGenerationJobStatus('Generating: ' + stepLabel + (progressLabel ? ' (' + progressLabel + ')' : ''), 'running');
-          dispatchShotFlowEvent('JOB_PROGRESS', {
-            jobId: resolvedJobId,
-            traceId: traceId || '',
-            step: String(evt.step || ''),
-            progress: Number.isFinite(progress) ? Math.max(0, Math.min(100, progress)) : 0
-          });
-        } else if (evt.event === 'job_cancel_requested') {
-          setGenerationJobStatus('Cancel requested...', 'running');
-        }
+          if (evt.event === 'job_progress') {
+            var stepLabel = String(evt.step || 'running').replace(/_/g, ' ');
+            var progress = Number(evt.progress);
+            var progressLabel = Number.isFinite(progress) ? Math.max(0, Math.min(100, Math.floor(progress))) + '%' : '';
+            setGenerationJobStatus('Generating: ' + stepLabel + (progressLabel ? ' (' + progressLabel + ')' : ''), 'running');
+            dispatchShotFlowEvent('JOB_PROGRESS', {
+              jobId: resolvedJobId,
+              traceId: traceId || '',
+              step: String(evt.step || ''),
+              progress: Number.isFinite(progress) ? Math.max(0, Math.min(100, progress)) : 0
+            });
+          } else if (evt.event === 'job_cancel_requested') {
+            setGenerationJobStatus('Cancel requested...', 'running');
+          }
 
-        if (evt.event === 'job_completed' || evt.event === 'job_failed' || evt.event === 'job_canceled') {
-          finishWithState();
-        }
-      };
+          if (evt.event === 'job_completed' || evt.event === 'job_failed' || evt.event === 'job_canceled') {
+            finishWithState();
+          }
+        };
 
-      source.onerror = function() {
-        finishWithState();
-      };
+        src.onerror = function() {
+          if (settled) return;
+          // Close the broken connection
+          src.close();
+          if (gs.generationJobEventSource === src) gs.generationJobEventSource = null;
+          source = null;
+
+          if (sseReconnectCount < SSE_MAX_RECONNECTS) {
+            // Exponential backoff: 1s, 2s, 4s
+            var delay = SSE_RECONNECT_BASE_MS * Math.pow(2, sseReconnectCount);
+            sseReconnectCount++;
+            reconnectTimerId = setTimeout(function() {
+              reconnectTimerId = null;
+              if (settled) return;
+              connectSse();
+            }, delay);
+          } else {
+            // Exhausted SSE reconnects — fall back to polling
+            finishWithState();
+          }
+        };
+      }
+
+      function connectSse() {
+        if (settled) return;
+        closeGenerationJobStream();
+        source = getGenerationJobsService().createJobEventsSource(resolvedJobId);
+        gs.generationJobEventSource = source;
+        attachSseHandlers(source);
+      }
+
+      connectSse();
 
       timeoutId = setTimeout(async function() {
         if (settled) return;
         try {
           var job = await fetchGenerationJobState(resolvedJobId);
           if (job.status === 'completed') { settled = true; cleanup(); resolve(job); return; }
-        } catch (e) { /* ignore */ }
+        } catch (e) { /* timeout check failed */ }
         settled = true;
         cleanup();
         reject(new Error('Generation job timed out'));
-      }, 330000);
+      }, JOB_TIMEOUT_MS);
     });
   }
 
@@ -1007,7 +1044,7 @@
         label.classList.remove('is-chosen');
       }
     } catch (err) {
-      /* silently handled */
+      console.warn('[generation-workflow] loadVariationChosenState failed:', err.message || err);
       checkbox.checked = false;
       label.classList.remove('is-chosen');
     }
@@ -1090,7 +1127,7 @@
 
       renderReferenceSelectorList(options, activeSelections, maxSelectable);
     } catch (err) {
-      /* silently handled */
+      console.warn('[generation-workflow] loadReferenceOptions failed:', err.message || err);
       referenceSelectorList.innerHTML = '<div style="padding:0.5rem 0.75rem;color:var(--text-muted);font-size:12px;">Failed to load references.</div>';
     }
   }
@@ -1320,7 +1357,7 @@
       var projectParam = projectState.currentProject ? projectState.currentProject.id : 'default';
       if (promptsState.currentTool === 'seedream') {
         try { await loadPrevisMap(); } catch (mapErr) {
-          /* silently handled */
+          console.warn('[generation-workflow] loadPrevisMap failed:', mapErr.message || mapErr);
           reviewState.previsMapCache = {};
         }
       }
@@ -1407,7 +1444,7 @@
       loadVariationChosenState();
 
     } catch (err) {
-      /* silently handled */
+      console.warn('[generation-workflow] loadShotRenders failed:', err.message || err);
       shotRenders.style.display = 'none';
       if (shotGenerationLayout) {
         shotGenerationLayout.style.display = promptsState.currentShot ? 'grid' : 'none';

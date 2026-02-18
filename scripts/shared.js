@@ -1,5 +1,7 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+const crypto = require('crypto');
 
 const ROOT_DIR = path.join(__dirname, '..');
 const PROJECTS_DIR = path.join(ROOT_DIR, 'projects');
@@ -59,6 +61,10 @@ function detectFileEol(filePath) {
   }
 }
 
+/**
+ * Atomic JSON write: writes to a temp file in the same directory, then renames.
+ * This prevents data corruption if the process crashes mid-write.
+ */
 function writeJsonPreserveEol(filePath, data) {
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) {
@@ -67,8 +73,98 @@ function writeJsonPreserveEol(filePath, data) {
   const eol = detectFileEol(filePath);
   const raw = JSON.stringify(data, null, 2);
   const normalized = eol === '\r\n' ? raw.replace(/\n/g, '\r\n') : raw;
-  fs.writeFileSync(filePath, normalized, 'utf8');
+
+  // Write to temp file first, then atomic rename
+  const tmpFile = path.join(dir, `.tmp-${crypto.randomBytes(6).toString('hex')}-${path.basename(filePath)}`);
+  try {
+    fs.writeFileSync(tmpFile, normalized, 'utf8');
+    fs.renameSync(tmpFile, filePath);
+  } catch (err) {
+    // Clean up temp file on failure
+    try { fs.unlinkSync(tmpFile); } catch { /* ignore cleanup error */ }
+    throw err;
+  }
 }
+
+// --- File Locking ---
+// Simple cooperative file lock to prevent concurrent write races on the same JSON file.
+// Uses lock files with stale detection (locks older than LOCK_STALE_MS are broken).
+
+const {
+  LOCK_STALE_MS,
+  LOCK_RETRY_MS,
+  LOCK_MAX_RETRIES
+} = require('./config');
+
+const _activeLocks = new Map();
+
+function _lockPath(filePath) {
+  return filePath + '.lock';
+}
+
+function acquireFileLock(filePath) {
+  const lockFile = _lockPath(filePath);
+
+  for (let attempt = 0; attempt < LOCK_MAX_RETRIES; attempt++) {
+    try {
+      // O_EXCL ensures atomic create — fails if file exists
+      const fd = fs.openSync(lockFile, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY);
+      fs.writeSync(fd, JSON.stringify({ pid: process.pid, ts: Date.now() }));
+      fs.closeSync(fd);
+      _activeLocks.set(filePath, lockFile);
+      return true;
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+
+      // Check if lock is stale
+      try {
+        const stat = fs.statSync(lockFile);
+        if (Date.now() - stat.mtimeMs > LOCK_STALE_MS) {
+          fs.unlinkSync(lockFile);
+          continue; // retry immediately after breaking stale lock
+        }
+      } catch { /* lock file gone, retry */ continue; }
+
+      // Wait and retry
+      if (attempt < LOCK_MAX_RETRIES - 1) {
+        const waitMs = LOCK_RETRY_MS + Math.random() * LOCK_RETRY_MS;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, waitMs);
+      }
+    }
+  }
+  return false;
+}
+
+function releaseFileLock(filePath) {
+  const lockFile = _lockPath(filePath);
+  _activeLocks.delete(filePath);
+  try { fs.unlinkSync(lockFile); } catch { /* already removed */ }
+}
+
+/**
+ * Execute a function while holding a file lock.
+ * Ensures only one writer at a time per file path.
+ */
+function withFileLock(filePath, fn) {
+  const acquired = acquireFileLock(filePath);
+  if (!acquired) {
+    throw new Error(`Failed to acquire lock for ${path.basename(filePath)} after ${LOCK_MAX_RETRIES} retries`);
+  }
+  try {
+    return fn();
+  } finally {
+    releaseFileLock(filePath);
+  }
+}
+
+// Clean up any locks on process exit
+function _cleanupLocks() {
+  for (const [, lockFile] of _activeLocks) {
+    try { fs.unlinkSync(lockFile); } catch { /* ignore */ }
+  }
+  _activeLocks.clear();
+}
+process.on('exit', _cleanupLocks);
 
 function getContentType(filePath) {
   return MIME_TYPES[path.extname(filePath).toLowerCase()] || 'text/plain';
@@ -97,5 +193,8 @@ module.exports = {
   writeJsonPreserveEol,
   getContentType,
   sanitizePathSegment,
-  sanitizeFilename
+  sanitizeFilename,
+  acquireFileLock,
+  releaseFileLock,
+  withFileLock
 };

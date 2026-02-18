@@ -59,7 +59,7 @@ function registerEntityRoutes(router, ctx, config) {
 
   router.post(uploadPath, wrapAsync(async (req, res) => {
     try {
-      const parsed = await parseBusboyUpload(req, { maxFileSize: 20 * 1024 * 1024 });
+      const parsed = await parseBusboyUpload(req, { maxFileSize: require('../config').MAX_UPLOAD_SIZE });
       const uploadProject = parsed.fields.project || projectManager.getActiveProject();
       const projectId = resolveProjectId(uploadProject, { required: true });
       const slot = parsed.fields.slot;

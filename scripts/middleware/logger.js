@@ -1,13 +1,25 @@
+const logger = require('../logger');
+
 function requestLogger(req, res, next) {
   const start = Date.now();
   const method = String(req.method || 'GET').toUpperCase();
-  const path = (req.path || req.url || '').split('?')[0];
+  const urlPath = (req.path || req.url || '').split('?')[0];
+
+  // Attach a request ID for correlation across middleware/routes/services
+  req._requestId = logger.generateRequestId();
 
   res.on('finish', () => {
     const durationMs = Date.now() - start;
-    const timestamp = new Date().toISOString();
     const status = res.statusCode || 0;
-    console.log(`[${timestamp}] ${method} ${path} ${status} ${durationMs}ms`);
+    const level = status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info';
+
+    logger.log(level, `${method} ${urlPath} ${status} ${durationMs}ms`, {
+      method,
+      path: urlPath,
+      status,
+      durationMs,
+      requestId: req._requestId
+    });
   });
 
   if (typeof next === 'function') {

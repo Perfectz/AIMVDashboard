@@ -4,9 +4,9 @@
  */
 
 const crypto = require('crypto');
+const { SESSION_TTL_MS, SESSION_CLEANUP_MS } = require('../config');
 
 const SESSION_COOKIE_NAME = 'amv_sid';
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
 function createSessionService({ host, port }) {
   const sessionStore = new Map();
@@ -195,7 +195,7 @@ function createSessionService({ host, port }) {
         sessionStore.delete(sessionId);
       }
     }
-  }, 10 * 60 * 1000);
+  }, SESSION_CLEANUP_MS);
   cleanupInterval.unref();
 
   return {

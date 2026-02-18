@@ -552,7 +552,7 @@
         return data;
       }
     } catch (e) {
-      /* silently handled */
+      console.warn('[agent-integration]', e.message || e);
     }
     return null;
   }
@@ -623,7 +623,7 @@
         getSharedUtils().showToast('Provider changed', 'Active AI provider set to ' + provider, 'success', 2500);
       }
     } catch (e) {
-      /* silently handled */
+      console.warn('[agent-integration]', e.message || e);
     }
   }
 
@@ -662,7 +662,7 @@
         getSharedUtils().showToast('Key cleared', provider + ' session key cleared.', 'info', 2500);
       }
     } catch (e) {
-      /* silently handled */
+      console.warn('[agent-integration]', e.message || e);
     }
   }
 

@@ -10,6 +10,7 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const logger = require('../logger');
 
 let Database;
 try {
@@ -221,7 +222,7 @@ function createDatabaseService({ dataDir }) {
       db.prepare('INSERT INTO audit_log (user_id, action, resource, details) VALUES (?, ?, ?, ?)').run(
         userId, action, resource, typeof details === 'string' ? details : JSON.stringify(details || {})
       );
-    } catch { /* audit failures should not break the app */ }
+    } catch (err) { logger.warn('Audit log write failed', { action, resource, error: err.message }); }
   }
 
   function close() {

@@ -100,7 +100,7 @@
         try {
           await window.loadIndex();
         } catch (refreshErr) {
-          /* silently handled */
+          console.warn('[pipeline] loadIndex refresh failed:', refreshErr.message || refreshErr);
         }
       }
       return result;

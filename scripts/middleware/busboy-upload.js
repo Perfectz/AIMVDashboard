@@ -1,8 +1,9 @@
 const path = require('path');
 const Busboy = require('busboy');
+const { MAX_UPLOAD_SIZE } = require('../config');
 
 function parseBusboyUpload(req, options = {}) {
-  const maxFileSize = Number.isFinite(options.maxFileSize) ? options.maxFileSize : 20 * 1024 * 1024;
+  const maxFileSize = Number.isFinite(options.maxFileSize) ? options.maxFileSize : MAX_UPLOAD_SIZE;
 
   return new Promise((resolve, reject) => {
     const busboy = Busboy({

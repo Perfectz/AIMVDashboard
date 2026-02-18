@@ -417,7 +417,7 @@ function registerGenerationRoutes(router, ctx) {
   }));
 
   router.post('/api/upload/shot-render', (req, res) => {
-    const busboy = Busboy({ headers: req.headers, limits: { fileSize: 20 * 1024 * 1024 } });
+    const busboy = Busboy({ headers: req.headers, limits: { fileSize: require('../config').MAX_UPLOAD_SIZE } });
     let projectId = projectManager.getActiveProject();
     let shotId = '';
     let variation = 'A';

@@ -374,7 +374,7 @@
         }
       })
       .catch(function(err) {
-        /* silently handled */
+        console.warn('[prompt-viewer] lint check failed:', err.message || err);
       });
   }
 

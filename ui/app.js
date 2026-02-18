@@ -472,7 +472,7 @@ async function loadProjects() {
 
     return true;
   } catch (err) {
-    /* silently handled */
+    console.warn('[app]', err.message || err);
     return false;
   }
 }
@@ -584,7 +584,7 @@ async function refreshReadyShotCount() {
     }
     cachedReadyShotCount = data.selections.filter(shotIsReadyForReview).length;
   } catch (err) {
-    /* silently handled */
+    console.warn('[app]', err.message || err);
     cachedReadyShotCount = 0;
   }
   return cachedReadyShotCount;
@@ -1112,7 +1112,7 @@ async function loadAnalysisPrompt() {
     if (!response.ok) throw new Error('Failed to load prompt');
     return await response.text();
   } catch (err) {
-    /* silently handled */
+    console.warn('[app]', err.message || err);
     return 'Error loading prompt. Please try again.';
   }
 }
@@ -1131,7 +1131,7 @@ async function checkUploadStatus() {
     updateStatusIndicator('Suno', status.sunoPrompt);
     updateStatusIndicator('SongInfo', status.songInfo);
   } catch (err) {
-    /* silently handled */
+    console.warn('[app]', err.message || err);
   }
 }
 
@@ -1366,7 +1366,7 @@ async function loadTextContent() {
       }
     }
   } catch (err) {
-    /* silently handled */
+    console.warn('[app]', err.message || err);
   }
 }
 
@@ -1400,7 +1400,7 @@ async function loadStep1Content() {
         }
       }
     } catch (err) {
-      /* silently handled */
+      console.warn('[app]', err.message || err);
     }
   }
 }
@@ -1502,7 +1502,7 @@ async function checkMusicFile() {
       if (musicControls) musicControls.style.display = 'none';
     }
   } catch (err) {
-    /* silently handled */
+    console.warn('[app]', err.message || err);
   }
 }
 
@@ -1568,7 +1568,7 @@ async function loadCanonData() {
         }
       }
     } catch (err) {
-      /* silently handled */
+      console.warn('[app]', err.message || err);
     }
   }
 }

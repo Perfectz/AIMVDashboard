@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const logger = require('../logger');
 const {
   initRunManifest,
   writeFileWithSnapshot,
@@ -170,7 +171,9 @@ class AgentRuntimeService {
 
     this.runs.set(runId, run);
     this.shotLocks.set(lockKey, runId);
-    setImmediate(() => this.executeRun(run).catch(() => {}));
+    setImmediate(() => this.executeRun(run).catch((err) => {
+      logger.error('Agent run failed', { runId, error: err.message, stack: err.stack });
+    }));
     return run;
   }
 

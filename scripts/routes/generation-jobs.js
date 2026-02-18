@@ -166,7 +166,7 @@ function registerGenerationJobRoutes(router, ctx) {
 
     const heartbeatId = setInterval(() => {
       if (!safeSseWrite(': ping\n\n')) cleanup();
-    }, 15000);
+    }, require('../config').SSE_HEARTBEAT_MS);
 
     req.on('close', cleanup);
     res.on('error', cleanup);

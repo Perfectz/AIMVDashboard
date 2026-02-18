@@ -5,7 +5,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { writeJsonPreserveEol } = require('../shared');
+const { writeJsonPreserveEol, withFileLock } = require('../shared');
+const logger = require('../logger');
 const { sanitizeReviewMetadata } = require('./review_metadata_service');
 
 const MAX_ASSIGNEE_LENGTH = 80;
@@ -88,6 +89,9 @@ function createStoryboardPersistenceService({ projectManager }) {
       }
       return sequence;
     } catch (err) {
+      if (err.code !== 'ENOENT') {
+        logger.warn('Failed to read sequence file', { projectId, error: err.message });
+      }
       return {
         version: "2026-02-07",
         projectName: "AI Music Video Project",
@@ -104,7 +108,9 @@ function createStoryboardPersistenceService({ projectManager }) {
   function writeSequenceFile(data, projectId = 'default') {
     const sequencePath = getStoryboardPersistencePath(projectId);
     data.lastUpdated = new Date().toISOString();
-    writeJsonPreserveEol(sequencePath, data);
+    withFileLock(sequencePath, () => {
+      writeJsonPreserveEol(sequencePath, data);
+    });
   }
 
   function getPrevisMapPath(projectId = 'default') {
@@ -117,14 +123,19 @@ function createStoryboardPersistenceService({ projectManager }) {
       if (!fs.existsSync(previsPath)) return {};
       const parsed = JSON.parse(fs.readFileSync(previsPath, 'utf8'));
       return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-    } catch {
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        logger.warn('Failed to read previs map', { projectId, error: err.message });
+      }
       return {};
     }
   }
 
   function writePrevisMapFile(previsMap, projectId = 'default') {
     const previsPath = getPrevisMapPath(projectId);
-    writeJsonPreserveEol(previsPath, previsMap || {});
+    withFileLock(previsPath, () => {
+      writeJsonPreserveEol(previsPath, previsMap || {});
+    });
   }
 
   function validatePrevisEntry(entry) {

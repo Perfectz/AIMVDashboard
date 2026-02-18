@@ -48,7 +48,7 @@ function createAuthMiddleware({ databaseService, sendJSON, jsonBody, MAX_BODY_SI
     const publicRoutes = [
       '/api/auth/login',
       '/api/auth/status',
-      '/health',
+      '/api/health',
       '/login.html'
     ];
     const publicPrefixes = [

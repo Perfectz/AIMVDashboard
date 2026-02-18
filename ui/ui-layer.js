@@ -418,7 +418,7 @@
         });
       }
     } catch (err) {
-      /* silently handled */
+      console.warn('[ui-layer] project switcher error:', err.message || err);
     }
   }
 

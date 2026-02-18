@@ -12,6 +12,7 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const logger = require('./logger');
 const { createRouter } = require('./router');
 const { requestLogger } = require('./middleware/logger');
 const { wrapAsync } = require('./middleware/error-handler');
@@ -81,7 +82,8 @@ const {
   ALLOWED_CANON_TYPES,
   MAX_MUSIC_SIZE, MAX_VIDEO_SIZE, MAX_IMAGE_SIZE,
   MAX_BODY_SIZE, MAX_REFERENCE_IMAGES,
-  AGENT_MODES, AGENT_TOOLS
+  AGENT_MODES, AGENT_TOOLS,
+  REQUEST_TIMEOUT_MS, LONG_RUNNING_TIMEOUT_MS, SHUTDOWN_TIMEOUT_MS
 } = require('./config');
 
 const parsedPort = Number(process.env.PORT);
@@ -208,6 +210,26 @@ function getProjectContext(req, { required = false } = {}) {
 
 const router = createRouter();
 router.use(requestLogger);
+
+// ===== Health Check (before auth — accessible for monitoring) =====
+const SERVER_START_TIME = Date.now();
+
+router.get('/api/health', wrapAsync(async (req, res) => {
+  const uptimeMs = Date.now() - SERVER_START_TIME;
+  const memUsage = process.memoryUsage();
+  sendJSON(res, 200, {
+    success: true,
+    status: 'ok',
+    uptime: Math.floor(uptimeMs / 1000),
+    uptimeFormatted: `${Math.floor(uptimeMs / 3600000)}h ${Math.floor((uptimeMs % 3600000) / 60000)}m`,
+    memory: {
+      rss: Math.round(memUsage.rss / 1024 / 1024) + 'MB',
+      heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024) + 'MB'
+    },
+    activeProject: projectManager.getActiveProject(),
+    timestamp: new Date().toISOString()
+  });
+}));
 
 // Auth middleware — checks session before other routes
 router.use((req, res) => {
@@ -387,7 +409,21 @@ function createServerInstance(handler) {
   return http.createServer(handler);
 }
 
+// ===== Global Request Timeout =====
+
 const server = createServerInstance((req, res) => {
+  // Set global request timeout (extended for SSE/generation routes)
+  const urlPath = String(req.url || '').split('?')[0];
+  const isLongRunning = urlPath.includes('/events') || urlPath.includes('/generate') || urlPath.includes('/export-video');
+  req.setTimeout(isLongRunning ? LONG_RUNNING_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
+  res.setTimeout(isLongRunning ? LONG_RUNNING_TIMEOUT_MS : REQUEST_TIMEOUT_MS, () => {
+    if (!res.writableEnded) {
+      logger.warn('Response timeout', { method: req.method, path: urlPath, requestId: req._requestId });
+      res.writeHead(408, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: 'Request timed out' }));
+    }
+  });
+
   // ===== CORS PREFLIGHT =====
   if (req.method === 'OPTIONS') {
     const corsHeaders = corsHeadersForRequest(req);
@@ -415,43 +451,69 @@ const server = createServerInstance((req, res) => {
   res.end('<h1>404 - File Not Found</h1>');
 });
 server.listen(PORT, HOST, () => {
+  logger.info('Server started', { host: HOST, port: PORT, https: HTTPS_ENABLED });
   console.log('\n╔═══════════════════════════════════════════════╗');
   console.log('║   PROMPT COMPILER UI SERVER                  ║');
-  console.log('║   Version: 2026-02-07 (with file uploads)   ║');
+  console.log('║   Version: 2026-02-17 (reliability update)  ║');
   console.log('╚═══════════════════════════════════════════════╝\n');
   console.log(`Server running at http://${HOST}:${PORT}/`);
   if (HOST === '0.0.0.0') {
     console.log(`Local access: http://127.0.0.1:${PORT}/`);
   }
+  console.log(`Health check: http://127.0.0.1:${PORT}/api/health`);
+  console.log(`Request timeout: ${REQUEST_TIMEOUT_MS}ms (long-running: ${LONG_RUNNING_TIMEOUT_MS}ms)`);
   console.log('\nPress Ctrl+C to stop the server.\n');
-  console.log('UI Features:');
-  console.log('  - Browse all prompts by shot and tool');
-  console.log('  - Toggle between A/B/C/D variations (Kling)');
-  console.log('  - Copy prompts to clipboard');
-  console.log('  - View lint status for each prompt');
-  console.log('  - Search and filter prompts');
-  console.log('  - Drag-and-drop file uploads (music + shots)\n');
 });
 
-// Graceful shutdown
-process.on('SIGINT', () => {
-  console.log('\nShutting down...');
-  databaseService.close();
-  server.close();
-  process.exit(0);
+// ===== Graceful shutdown =====
+let _shuttingDown = false;
+
+function gracefulShutdown(signal) {
+  if (_shuttingDown) return;
+  _shuttingDown = true;
+  logger.info('Graceful shutdown initiated', { signal });
+
+  // Stop accepting new connections
+  server.close(() => {
+    logger.info('All connections drained');
+    databaseService.close();
+    process.exit(0);
+  });
+
+  // Force exit after timeout if connections don't drain
+  setTimeout(() => {
+    logger.warn('Shutdown timeout reached, forcing exit', { timeoutMs: SHUTDOWN_TIMEOUT_MS });
+    databaseService.close();
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT_MS).unref();
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+// ===== Crash handlers =====
+process.on('uncaughtException', (err) => {
+  logger.fatal('Uncaught exception — initiating shutdown', {
+    error: err.message,
+    stack: err.stack
+  });
+  gracefulShutdown('uncaughtException');
 });
-process.on('SIGTERM', () => {
-  databaseService.close();
-  server.close();
-  process.exit(0);
+
+process.on('unhandledRejection', (reason) => {
+  const message = reason instanceof Error ? reason.message : String(reason);
+  const stack = reason instanceof Error ? reason.stack : undefined;
+  logger.error('Unhandled promise rejection', { error: message, stack });
+  // Don't crash on unhandled rejections, but log them loudly
 });
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
+    logger.fatal('Port already in use', { port: PORT });
     console.error(`\n❌ Port ${PORT} is already in use.`);
     console.error(`   Try stopping other servers or change the PORT in ${__filename}\n`);
   } else {
-    console.error('\n❌ Server error:', err.message, '\n');
+    logger.fatal('Server error', { error: err.message });
   }
   process.exit(1);
 });

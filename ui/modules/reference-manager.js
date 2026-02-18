@@ -109,7 +109,7 @@
         getSharedUtils().showToast('Error', result.error || 'Failed to load character references', 'error', 3000);
       }
     } catch (err) {
-      /* silently handled */
+      console.warn('[reference-manager]', err.message || err);
     }
   }
 
@@ -127,7 +127,7 @@
         getSharedUtils().showToast('Error', result.error || 'Failed to load location references', 'error', 3000);
       }
     } catch (err) {
-      /* silently handled */
+      console.warn('[reference-manager]', err.message || err);
     }
   }
 
