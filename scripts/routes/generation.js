@@ -18,7 +18,6 @@ function registerGenerationRoutes(router, ctx) {
     MAX_REFERENCE_IMAGES,
     projectManager,
     safeResolve,
-    parseRequestUrl,
     replicate,
     executeGenerateImageTask,
     executeGenerateShotTask,
@@ -520,18 +519,17 @@ function registerGenerationRoutes(router, ctx) {
   }));
 
   router.delete('/api/delete/shot-render', wrapAsync(async (req, res) => {
-    const urlObj = parseRequestUrl(req);
-    const shotId = urlObj.searchParams.get('shot');
-    const variation = urlObj.searchParams.get('variation') || 'A';
-    const frame = urlObj.searchParams.get('frame');
-    const tool = urlObj.searchParams.get('tool') || 'seedream';
+    const shotId = req.query.shot || '';
+    const variation = req.query.variation || 'A';
+    const frame = req.query.frame || '';
+    const tool = req.query.tool || 'seedream';
 
     if (!shotId || !frame) {
       sendJSON(res, 400, { success: false, error: 'shot and frame parameters are required' });
       return;
     }
 
-    const projectId = resolveProjectId(urlObj.searchParams.get('project') || projectManager.getActiveProject(), { required: true });
+    const projectId = resolveProjectId(req.query.project || projectManager.getActiveProject(), { required: true });
     sanitizePathSegment(shotId, SHOT_ID_REGEX, 'shot');
     sanitizePathSegment(variation, VARIATION_REGEX, 'variation');
     sanitizePathSegment(frame, /^(first|last)$/, 'frame');

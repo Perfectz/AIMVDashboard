@@ -2,7 +2,7 @@
 
 System-level documentation for architecture, workflows, modules, and troubleshooting.
 
-**Last updated:** 2026-02-15
+**Last updated:** 2026-02-17
 
 ---
 
@@ -17,6 +17,7 @@ System-level documentation for architecture, workflows, modules, and troubleshoo
 
 | Doc | Covers |
 |-----|--------|
+| `architecture/C4_ARCHITECTURE.md` | **C4 model**: System Context, Container, Component, and Code-level diagrams for the entire system |
 | `architecture/SERVER.md` | Server bootstrap, router, middleware, route modules, service instantiation, domain-scoped contexts |
 | `architecture/FRONTEND.md` | Pages, layering model (UI → Module → Feature → Domain → Service), state management, auto-save |
 | `architecture/deps.json` | Machine-readable dependency graph (86 edges across 6 layers) |
@@ -54,4 +55,4 @@ When debugging or implementing features:
 3. **Trace data flow** — validate against `deps.json` and workflow docs.
 4. **Use troubleshooting** — follow known failure signatures for common issues.
 
-For AI agents: start with `architecture/SERVER.md` and `architecture/FRONTEND.md` for system overview, then drill into `modules/SERVICES.md` and `modules/UI.md` for specific components.
+For AI agents: start with `architecture/C4_ARCHITECTURE.md` for the full system map, then drill into `modules/SERVICES.md` and `modules/UI.md` for specific component details.

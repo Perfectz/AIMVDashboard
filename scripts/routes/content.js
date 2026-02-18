@@ -87,15 +87,15 @@ function registerContentRoutes(router, ctx) {
       const { projectId } = getProjectContext(req);
       const contentType = forcedContentType || req.params.contentType;
       const content = contentFileService.load(projectId, contentType);
-      sendJSON(res, 200, { content });
+      sendJSON(res, 200, { success: true, content });
     } catch (loadErr) {
       if (isClientContentError(loadErr)) {
-        sendJSON(res, 400, { error: loadErr.message });
+        sendJSON(res, 400, { success: false, error: loadErr.message });
         return;
       }
       const contentType = forcedContentType || req.params.contentType;
       const fallbackMessage = LOAD_ERROR_MESSAGES[contentType] || 'Failed to load content';
-      sendJSON(res, 500, { error: fallbackMessage, details: loadErr.message });
+      sendJSON(res, 500, { success: false, error: fallbackMessage, details: loadErr.message });
     }
   }
 

@@ -11,12 +11,95 @@
   let charactersData = [];
   let locationsData = [];
   const activeGenerations = new Set();
+  const collapsedCards = new Set(); // Track collapsed entity cards
 
   // Prompt slot labels
   const PROMPT_SLOT_LABELS = ['Front View', '3/4 View', 'Close-Up'];
   const LOCATION_PROMPT_SLOT_LABELS = ['Wide Shot', 'Detail Shot', 'Atmosphere'];
   const DEFAULT_REFERENCE_SLOT_COUNT = 4;
   const MAX_REFERENCE_SLOT_COUNT = 14;
+
+  // --- Lightbox ---
+  function openLightbox(src, caption) {
+    var existing = document.querySelector('.ref-lightbox-overlay');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'ref-lightbox-overlay';
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay || e.target.classList.contains('ref-lightbox-close')) {
+        overlay.remove();
+      }
+    });
+
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'ref-lightbox-close';
+    closeBtn.textContent = '\u00d7';
+    closeBtn.title = 'Close';
+    overlay.appendChild(closeBtn);
+
+    var img = document.createElement('img');
+    img.src = src;
+    img.alt = caption || 'Reference image';
+    overlay.appendChild(img);
+
+    if (caption) {
+      var cap = document.createElement('div');
+      cap.className = 'ref-lightbox-caption';
+      cap.textContent = caption;
+      overlay.appendChild(cap);
+    }
+
+    document.body.appendChild(overlay);
+
+    // Close on Escape key
+    function onKeyDown(e) {
+      if (e.key === 'Escape') {
+        overlay.remove();
+        document.removeEventListener('keydown', onKeyDown);
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+  }
+
+  // --- Image count helpers ---
+  function countEntityImages(entity) {
+    var uploaded = Array.isArray(entity.images) ? entity.images.length : 0;
+    var generated = Array.isArray(entity.generatedImages) ? entity.generatedImages.length : 0;
+    return uploaded + generated;
+  }
+
+  function buildCountBadge(entity) {
+    var count = countEntityImages(entity);
+    var total = getVisibleSlotCount(entity);
+    var badge = document.createElement('span');
+    badge.className = 'ref-count-badge' + (count >= total ? ' complete' : '');
+    badge.textContent = count + '/' + total + ' images';
+    return badge;
+  }
+
+  function buildCompletenessBar(entity) {
+    var count = countEntityImages(entity);
+    var total = getVisibleSlotCount(entity);
+    var pct = total > 0 ? Math.min(100, Math.round((count / total) * 100)) : 0;
+    var bar = document.createElement('div');
+    bar.className = 'ref-completeness-bar';
+    var fill = document.createElement('div');
+    fill.className = 'ref-completeness-fill' + (pct >= 100 ? ' complete' : '');
+    fill.style.width = pct + '%';
+    bar.appendChild(fill);
+    return bar;
+  }
+
+  function toggleCardCollapse(entityKey, card) {
+    if (collapsedCards.has(entityKey)) {
+      collapsedCards.delete(entityKey);
+      card.classList.remove('collapsed');
+    } else {
+      collapsedCards.add(entityKey);
+      card.classList.add('collapsed');
+    }
+  }
 
   function fileListToArray(fileList) {
     return Array.prototype.slice.call(fileList || []);
@@ -217,6 +300,11 @@
     slot.style.position = 'relative';
 
     slot.addEventListener('click', function() {
+      if (image) {
+        var imgSrc = '/projects/' + encodeURIComponent(projectState.currentProject.id) + '/reference/locations/' + encodeURIComponent(location.name) + '/' + encodeURIComponent(image.filename);
+        openLightbox(imgSrc, location.name + ' - Ref ' + slotNum);
+        return;
+      }
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/png,image/jpeg,image/jpg,image/webp';
@@ -290,22 +378,34 @@
     container.innerHTML = '';
 
     locationsData.forEach(function(location) {
+      var entityKey = 'loc:' + location.name;
       const card = document.createElement('div');
-      card.className = 'character-reference-card';
+      card.className = 'character-reference-card' + (collapsedCards.has(entityKey) ? ' collapsed' : '');
       card.dataset.location = location.name;
 
-      // === Card Header ===
+      // === Card Header (clickable to collapse) ===
       const header = document.createElement('div');
       header.className = 'character-reference-header';
+
+      var chevron = document.createElement('span');
+      chevron.className = 'card-collapse-icon';
+      chevron.textContent = '\u25bc';
 
       const title = document.createElement('h3');
       title.className = 'character-reference-title';
       title.textContent = '\ud83d\udccd ' + location.name;
 
+      var titleWrap = document.createElement('div');
+      titleWrap.style.cssText = 'display:flex;align-items:center;gap:8px;flex:1;min-width:0';
+      titleWrap.appendChild(chevron);
+      titleWrap.appendChild(title);
+      titleWrap.appendChild(buildCountBadge(location));
+
       const delBtn = document.createElement('button');
       delBtn.className = 'character-reference-delete';
       delBtn.textContent = '\ud83d\uddd1\ufe0f Delete Location';
-      delBtn.addEventListener('click', async function() {
+      delBtn.addEventListener('click', async function(e) {
+        e.stopPropagation();
         if (!confirm('Delete location "' + location.name + '" and all references?')) return;
         const libraryService = getReferenceLibraryService();
         const result = await libraryService.deleteLocation(projectState.currentProject.id, location.name);
@@ -313,9 +413,17 @@
         else getSharedUtils().showToast('Error', result.error || 'Failed to delete location', 'error', 4000);
       });
 
-      header.appendChild(title);
+      header.appendChild(titleWrap);
       header.appendChild(delBtn);
+      header.addEventListener('click', function(e) {
+        if (e.target.closest('.character-reference-delete')) return;
+        toggleCardCollapse(entityKey, card);
+      });
       card.appendChild(header);
+      card.appendChild(buildCompletenessBar(location));
+
+      var cardBody = document.createElement('div');
+      cardBody.className = 'card-body';
 
       // === Section 1: Location Definition ===
       const defSection = document.createElement('div');
@@ -343,7 +451,7 @@
         defSection.appendChild(defPlaceholder);
       }
 
-      card.appendChild(defSection);
+      cardBody.appendChild(defSection);
 
       // === Section 2: Reference Image Prompts ===
       const promptsSection = document.createElement('div');
@@ -407,7 +515,7 @@
       });
 
       promptsSection.appendChild(promptsGrid);
-      card.appendChild(promptsSection);
+      cardBody.appendChild(promptsSection);
 
       // === Section 3: Reference Images ===
       const imagesSection = document.createElement('div');
@@ -420,8 +528,9 @@
       for (let i = 1; i <= locationSlotCount; i++) slotsWrap.appendChild(buildLocationImageSlot(location, i));
 
       imagesSection.appendChild(slotsWrap);
-      card.appendChild(imagesSection);
+      cardBody.appendChild(imagesSection);
 
+      card.appendChild(cardBody);
       container.appendChild(card);
     });
   }
@@ -664,7 +773,14 @@
     slot.className = 'reference-image-slot' + (displayImage ? ' has-image' : '') + (isGenerating ? ' generating' : '');
     slot.style.position = 'relative';
     if (!isGenerating) {
-      slot.addEventListener('click', function() { openReferenceImageUpload(char.name, slotNum); });
+      slot.addEventListener('click', function() {
+        if (displayImage) {
+          var imgSrc = '/projects/' + encodeURIComponent(projectState.currentProject.id) + '/reference/characters/' + encodeURIComponent(char.name) + '/' + encodeURIComponent(displayImage.filename);
+          openLightbox(imgSrc, char.name + ' - Ref ' + slotNum);
+        } else {
+          openReferenceImageUpload(char.name, slotNum);
+        }
+      });
     }
 
     // Drag-and-drop events
@@ -788,23 +904,46 @@
     }
 
     charactersData.forEach(function(char) {
+      var entityKey = 'char:' + char.name;
       const card = document.createElement('div');
-      card.className = 'character-reference-card';
+      card.className = 'character-reference-card' + (collapsedCards.has(entityKey) ? ' collapsed' : '');
       card.dataset.character = char.name;
 
-      // === Card Header ===
+      // === Card Header (clickable to collapse) ===
       const header = document.createElement('div');
       header.className = 'character-reference-header';
+
+      var chevron = document.createElement('span');
+      chevron.className = 'card-collapse-icon';
+      chevron.textContent = '\u25bc';
+
       const title = document.createElement('h3');
       title.className = 'character-reference-title';
       title.textContent = '\ud83d\udc64 ' + char.name;
+
+      var titleWrap = document.createElement('div');
+      titleWrap.style.cssText = 'display:flex;align-items:center;gap:8px;flex:1;min-width:0';
+      titleWrap.appendChild(chevron);
+      titleWrap.appendChild(title);
+      titleWrap.appendChild(buildCountBadge(char));
+
       const deleteBtn = document.createElement('button');
       deleteBtn.className = 'character-reference-delete';
       deleteBtn.textContent = '\ud83d\uddd1\ufe0f Delete Character';
-      deleteBtn.addEventListener('click', function() { deleteCharacterReference(char.name); });
-      header.appendChild(title);
+      deleteBtn.addEventListener('click', function(e) { e.stopPropagation(); deleteCharacterReference(char.name); });
+
+      header.appendChild(titleWrap);
       header.appendChild(deleteBtn);
+      header.addEventListener('click', function(e) {
+        if (e.target.closest('.character-reference-delete')) return;
+        toggleCardCollapse(entityKey, card);
+      });
       card.appendChild(header);
+      card.appendChild(buildCompletenessBar(char));
+
+      // Wrap all card body sections in a collapsible container
+      var cardBody = document.createElement('div');
+      cardBody.className = 'card-body';
 
       // === Section 1: Character Definition ===
       const defSection = document.createElement('div');
@@ -832,7 +971,7 @@
         defSection.appendChild(defPlaceholder);
       }
 
-      card.appendChild(defSection);
+      cardBody.appendChild(defSection);
 
       // === Section 2: Reference Image Prompts ===
       const promptsSection = document.createElement('div');
@@ -896,7 +1035,7 @@
       });
 
       promptsSection.appendChild(promptsGrid);
-      card.appendChild(promptsSection);
+      cardBody.appendChild(promptsSection);
 
       // === Section 3: Reference Images (with drag-and-drop) ===
       const imagesSection = document.createElement('div');
@@ -912,8 +1051,9 @@
       }
 
       imagesSection.appendChild(grid);
-      card.appendChild(imagesSection);
+      cardBody.appendChild(imagesSection);
 
+      card.appendChild(cardBody);
       container.appendChild(card);
     });
   }

@@ -225,7 +225,7 @@ function registerUploadRoutes(router, ctx) {
       status.analysis = files.includes('analysis.json');
     }
 
-    sendJSON(res, 200, status);
+    sendJSON(res, 200, { success: true, ...status });
   }));
 
   router.delete('/api/delete/music', wrapAsync(async (req, res) => {

@@ -130,6 +130,11 @@ function registerAgentRoutes(router, ctx) {
     Object.assign(headers, corsHeaders);
     res.writeHead(200, headers);
 
+    const safeSseWrite = (data) => {
+      if (res.writableEnded || res.destroyed) return false;
+      try { res.write(data); return true; } catch { return false; }
+    };
+
     sendSseEvent(res, {
       event: 'stream_open',
       runId,
@@ -138,21 +143,28 @@ function registerAgentRoutes(router, ctx) {
     });
     (run.events || []).forEach((evt) => sendSseEvent(res, evt));
 
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      clearInterval(heartbeatId);
+      unsubscribe();
+    };
+
     const unsubscribe = agentRuntime.subscribe(runId, (evt) => {
+      if (res.writableEnded || res.destroyed) { cleanup(); return; }
       sendSseEvent(res, evt);
       if (evt.event === 'run_completed' || evt.event === 'run_failed' || evt.event === 'run_reverted') {
-        res.write(': done\n\n');
+        safeSseWrite(': done\n\n');
       }
     });
 
     const heartbeatId = setInterval(() => {
-      res.write(': ping\n\n');
+      if (!safeSseWrite(': ping\n\n')) cleanup();
     }, require('../config').SSE_HEARTBEAT_MS);
 
-    req.on('close', () => {
-      clearInterval(heartbeatId);
-      unsubscribe();
-    });
+    req.on('close', cleanup);
+    res.on('error', cleanup);
   });
 
   router.post('/api/agents/prompt-runs/:runId/cancel', (req, res) => {

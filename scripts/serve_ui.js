@@ -359,7 +359,7 @@ registerUploadRoutes(router, {
 
 registerGenerationRoutes(router, {
   ...sharedCtx,
-  sanitizePathSegment, safeResolve, parseRequestUrl,
+  sanitizePathSegment, safeResolve,
   SHOT_ID_REGEX, VARIATION_REGEX,
   IMAGE_EXTENSIONS, MAX_REFERENCE_IMAGES,
   replicate,

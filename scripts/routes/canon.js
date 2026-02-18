@@ -45,9 +45,9 @@ function registerCanonRoutes(router, ctx) {
 
     if (fs.existsSync(filePath)) {
       const content = fs.readFileSync(filePath, 'utf8');
-      sendJSON(res, 200, { content });
+      sendJSON(res, 200, { success: true, content });
     } else {
-      sendJSON(res, 404, { content: null });
+      sendJSON(res, 404, { success: false, content: null });
     }
   }));
 }

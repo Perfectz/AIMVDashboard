@@ -90,7 +90,7 @@ function registerStoryboardRoutes(router, ctx) {
     }
 
     writeSequenceFile(sequence, projectId);
-    sendJSON(res, 200, sequence);
+    sendJSON(res, 200, { success: true, ...sequence });
   }));
 
   router.post('/api/storyboard/sequence', wrapAsync(async (req, res) => {
